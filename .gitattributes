@@ -1,0 +1,7 @@
+# Keep line endings LF in the repository and in the working tree, so the
+# generated index.html is byte-identical whichever machine builds it and
+# git stops warning about CRLF conversion on Windows.
+* text=auto eol=lf
+
+# Screenshots are binary; never try to diff or convert them.
+*.png binary
