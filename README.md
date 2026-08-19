@@ -97,9 +97,12 @@ file that carries the cut-outs with it.
 
 ## Running it
 
-Open `index.html` in Chrome. That is the whole thing.
+Open `index.html` in Chrome. That is the whole thing — no install, no server, no build
+step, nothing to sign into. Download the file on its own and it still works.
 
-Or use the hosted copy, which is the same file: <https://claude.ai/code/artifact/aea0ffb6-7857-461c-935e-525b52d39f8f>
+Your case is saved by the browser, not written into the file, so replacing `index.html`
+with a newer build keeps whatever you were working on. **Save file** writes a
+`.vitrine.json` you can keep, move between machines, or send to someone.
 
 ### Keys
 
