@@ -471,6 +471,49 @@
 
   S.view = 'front'; T = calcT();
 
+  /* --- 7l. nothing lands on top of anything else --- */
+  {
+    const keep = S.items;
+    S.items = []; S.sel = null;
+    select(null); addPanel(); const q1 = S.items[S.items.length - 1];
+    select(null); addPanel(); const q2 = S.items[S.items.length - 1];
+    select(null); addPanel(); const q3 = S.items[S.items.length - 1];
+    ok(!(q1.x === q2.x && q2.x === q3.x && q1.wallY === q2.wallY),
+      `three new panels step clear of each other (x ${q1.x}/${q2.x}/${q3.x})`);
+    addPlinth(); const b1 = S.items[S.items.length - 1];
+    addPlinth(); const b2 = S.items[S.items.length - 1];
+    ok(b1.x !== b2.x, `and two new plinths do too (x ${b1.x} vs ${b2.x})`);
+    addShelf(); const h1 = S.items[S.items.length - 1];
+    addShelf(); const h2 = S.items[S.items.length - 1];
+    ok(h1.y !== h2.y, `and shelves stack up the case rather than on one line (${h1.y} vs ${h2.y})`);
+
+    /* a click on a genuine stack must grab the one you can see */
+    q3.x = 0; q3.wallY = 0;              /* get the third out of the way first */
+    q2.x = q1.x; q2.wallY = q1.wallY;
+    VW = cvs.clientWidth; VH = cvs.clientHeight; S.view = 'front'; T = calcT();
+    const mid = w2s(q1.x + q1.w / 2, q1.wallY + q1.h / 2);
+    ok(hitTest(mid.x, mid.y) === q2, 'and clicking a stack grabs the one drawn on top, not the one beneath');
+
+    /* moving one leaves the rest alone */
+    const wasQ1 = q1.x, wasQ3 = q3.x;
+    q2.x = rnd(q2.x + 25, 2);
+    ok(q1.x === wasQ1 && q3.x === wasQ3, 'moving one panel moves only that panel');
+
+    S.items = keep; S.sel = null;
+  }
+
+  /* --- 7m. objects, panels and casework are listed apart --- */
+  renderLists();
+  const inObjects = $$('#listObj .item').length;
+  const inPanels = $$('#listPanel .item').length;
+  const realObjects = S.items.filter(i => i.type === 'object' && i.render !== 'panel').length;
+  const realPanels = S.items.filter(i => i.render === 'panel').length;
+  ok(inObjects === realObjects && realObjects > 0,
+    `the objects list holds only photographs and shapes (${inObjects})`);
+  ok(inPanels === realPanels, `panels have a list of their own (${inPanels})`);
+  ok($$('#listStruct .item').length === S.items.filter(i => i.type !== 'object').length,
+    'and shelves and plinths stay in Structure');
+
   /* --- 8. out-of-case detection --- */
   const n0 = outOfCase(astro).length;
   astro.x = 132;

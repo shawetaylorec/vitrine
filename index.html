@@ -371,11 +371,14 @@ body.preview .previewbar{display:flex}
     <section class="sect">
       <h2>Objects</h2>
       <button class="btn wide" id="btnAddImg2">+ From image<span class="k">paste / drop</span></button>
-      <div class="row">
-        <button class="btn" id="btnShape" style="flex:1">+ Shape</button>
-        <button class="btn" id="btnPanel" style="flex:1">+ Panel</button>
-      </div>
+      <button class="btn wide" id="btnShape">+ Shape<span class="k">stand-in</span></button>
       <div class="list" id="listObj"></div>
+    </section>
+
+    <section class="sect">
+      <h2>Panels</h2>
+      <button class="btn wide" id="btnPanel">+ Panel<span class="k">text</span></button>
+      <div class="list" id="listPanel"></div>
     </section>
 
     <section class="sect">
@@ -1767,7 +1770,13 @@ function hitTest(px, py) {
   const pt = s2w(px, py);
   const tol = T ? 5 / T.sc : 0.5;
   const rank = S.view === 'plan' ? planPickKey : depthKey;
-  const list = S.items.filter(visible).sort((a, b) => rank(b) - rank(a));
+  /* Ties go to the later item, because that is the one drawn last and so
+     the one you can actually see. Without this a click on two things at
+     the same depth always grabs the hidden one underneath. */
+  const list = S.items.filter(visible)
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => (rank(b.it) - rank(a.it)) || (b.i - a.i))
+    .map(e => e.it);
 
   for (const it of list) {
     if (it.type === 'object') {
@@ -2168,7 +2177,11 @@ document.addEventListener('keydown', e => {
 
 function addShelf() {
   const n = S.items.filter(i => i.type === 'shelf').length + 1;
-  const it = { id: uid(), type: 'shelf', name: `Shelf ${n}`, x: 1, w: S.cs.w - 2, y: rnd(S.cs.h * 0.5), t: 2, z: 1, d: S.cs.d - 2 };
+  /* step new shelves down the case rather than piling them all at half height */
+  const used = S.items.filter(i => i.type === 'shelf').map(i => i.y);
+  let y = rnd(S.cs.h * 0.5);
+  while (used.some(v => Math.abs(v - y) < 8) && y > 14) y = rnd(y - 18);
+  const it = { id: uid(), type: 'shelf', name: `Shelf ${n}`, x: 1, w: S.cs.w - 2, y, t: 2, z: 1, d: S.cs.d - 2 };
   S.items.push(it); select(it.id); commit(); toast('Shelf added');
 }
 function addPlinth() {
@@ -2178,7 +2191,31 @@ function addPlinth() {
     x: rnd(S.cs.w / 2 - 15), w: 30, h: 20, z: 5, d: Math.min(25, S.cs.d - 6),
     colour: '', png: null, fade: 100
   };
-  S.items.push(it); select(it.id); commit(); toast('Plinth added');
+  S.items.push(it); freeSpot(it); select(it.id); commit(); toast('Plinth added');
+}
+
+/* ---------------- not landing on top of each other ----------------
+   Everything new used to arrive at the same default spot, so a second
+   plinth or panel stacked invisibly on the first and dragging one looked
+   like nothing moved. Step each new arrival clear of its own kind. */
+
+function samePlace(a, b) {
+  if (Math.abs(a.x - b.x) > 1) return false;
+  if (a.mount === 'wall' && b.mount === 'wall') return Math.abs((a.wallY || 0) - (b.wallY || 0)) <= 1;
+  return Math.abs((a.z || 0) - (b.z || 0)) <= 1;
+}
+
+function freeSpot(it) {
+  const kin = S.items.filter(o => o.id !== it.id && o.type === it.type &&
+    (it.type !== 'object' || (o.render === 'panel') === (it.render === 'panel')));
+  for (let n = 0; n < 30 && kin.some(o => samePlace(o, it)); n++) {
+    it.x = rnd(clamp(it.x + 6, 0, Math.max(0, S.cs.w - (it.w || 10))), 1);
+    if (it.mount === 'wall') {
+      it.wallY = rnd(clamp((it.wallY || 0) - 5, 0, Math.max(0, S.cs.h - (it.h || 10))), 1);
+    } else {
+      it.z = rnd(clamp((it.z || 0) + 4, 0, Math.max(0, S.cs.d - (it.depth || it.d || 1))), 1);
+    }
+  }
 }
 
 function blankObject(extra) {
@@ -2255,6 +2292,7 @@ function choseShape(id) {
   const n = S.items.filter(i => i.type === 'object' && isShape(i)).length + 1;
   const it = blankObject({ name: `${s.name} ${n}`, render: id, w: s.w, h: s.h, depth: s.d });
   S.items.push(it);
+  freeSpot(it);
   select(it.id); commit();
   toast(`${s.name} added — set its size on the right`);
 }
@@ -2276,7 +2314,7 @@ function addPanel() {
     it.h = rnd(Math.min(it.h, host.h - 4));
   }
   S.items.push(it);
-  if (host) landOnFace(it);
+  if (host) landOnFace(it); else freeSpot(it);
   select(it.id); commit();
   toast(host ? `Panel added to the front of ${host.name}` : 'Panel added to the back wall');
 }
@@ -2293,8 +2331,8 @@ async function duplicate(id) {
   const it = byId(id); if (!it) return;
   const c = JSON.parse(JSON.stringify(it));
   c.id = uid(); c.name = it.name + ' copy';
-  c.x = rnd(clamp(it.x + 5, 0, S.cs.w));
   S.items.push(c);
+  freeSpot(c);
   if (c.png) BMP.set(c.id, await loadImage(c.png));
   if (c.topPng) TOP.set(c.id, await loadImage(c.topPng));
   select(c.id); commit();
@@ -2395,8 +2433,12 @@ function syncChrome() {
 
 function renderLists() {
   syncChrome();
+  /* an object is a real thing in the case — a photograph or a stand-in
+     shape. Panels are captions, and casework is casework: each gets its
+     own list rather than being lumped together. */
   const structs = S.items.filter(i => i.type !== 'object');
-  const objs = S.items.filter(i => i.type === 'object');
+  const objs = S.items.filter(i => i.type === 'object' && i.render !== 'panel');
+  const panels = S.items.filter(i => i.render === 'panel');
 
   $('#listStruct').innerHTML = structs.length ? structs.map(it => `
     <div class="item${it.hide ? ' off' : ''}" data-id="${it.id}" aria-selected="${it.id === S.sel}">
@@ -2413,6 +2455,17 @@ function renderLists() {
       <span class="mt">${objBadge(it)}</span>
       <button class="eye" data-eye="${it.id}" title="Show / hide">${it.hide ? '&#9676;' : '&#9679;'}</button>
     </div>`).join('') : '<p class="empty">No objects yet &mdash; add one from an image, or drop a shape in.</p>';
+
+  $('#listPanel').innerHTML = panels.length ? panels.map(it => {
+    const f = faceOf(it);
+    return `
+    <div class="item${it.hide ? ' off' : ''}" data-id="${it.id}" aria-selected="${it.id === S.sel}">
+      <span class="sw">&#9646;</span>
+      <span class="nm">${esc(it.name)}</span>
+      <span class="mt">${f ? esc(f.name) : it.mount === 'hanging' ? 'wire' : 'wall'}</span>
+      <button class="eye" data-eye="${it.id}" title="Show / hide">${it.hide ? '&#9676;' : '&#9679;'}</button>
+    </div>`;
+  }).join('') : '<p class="empty">No panels yet.</p>';
 
   for (const el of $$('.item')) {
     el.onclick = ev => { if (ev.target.dataset.eye) return; select(el.dataset.id); };
@@ -2445,7 +2498,8 @@ function renderInspector() {
   $('#hudSel').textContent = o ? o.name : 'Nothing selected';
 
   if (!o) {
-    const n = S.items.filter(i => i.type === 'object').length;
+    const n = S.items.filter(i => i.type === 'object' && i.render !== 'panel').length;
+    const np = S.items.filter(i => i.render === 'panel').length;
     box.innerHTML = `
       <section class="sect">
         <h2>Case</h2>
@@ -3668,6 +3722,8 @@ function finishWizard() {
       o.x = rnd(sup.x + (sup.w - o.w) / 2, 1);
       const f = footprint(o);
       o.z = rnd(clamp(sup.z + (sup.d - f.d) / 2, sup.z, Math.max(sup.z, sup.z + sup.d - f.d)), 1);
+      /* on the open floor, step clear of anything already centred there */
+      if (sup.id === 'floor') freeSpot(o);
     } else {
       landOn(o, sup);
     }

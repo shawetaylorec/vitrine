@@ -84,6 +84,11 @@ cylinder reads as a circle from above without being told.
 
 ![The shape picker](docs/images/shapes.png)
 
+**Objects, panels and casework are kept apart.** An object is a real thing in the case,
+a photograph or a stand-in shape; a panel is a caption for one; a shelf or plinth is
+casework. Each has its own list. And anything new steps clear of whatever is already
+there, so a second plinth never lands invisibly on the first.
+
 **Interpretation panels carry real type.** Text size is set in centimetres and shown in
 points, so the panel tells you whether that wording actually fits at 16 pt on a
 30 × 20 cm board before anyone sets it. Paste wording straight in from a label document;

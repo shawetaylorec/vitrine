@@ -36,12 +36,13 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 120 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 128 assertions covering the
 cut-out crop, support heights, stand footprints, wire tilt, lean maths in both
 reference frames, rotation, plan-shape selection, panels fixed to plinth faces, depth
 ordering, overhang detection, the shape picker, panel text fitting, support stickiness
-while dragging, alignment snapping, plan pick order, undo and redo, the case library,
-the save/open round trip, opening a file written by an older build, and PNG export.
+while dragging, alignment snapping, plan pick order, cascade placement, undo and redo,
+the case library, the save/open round trip, opening a file written by an older build,
+and PNG export.
 
 Append a hash to the URL to screenshot a different state:
 
@@ -292,3 +293,23 @@ on every selection change, so fold state would not survive.
 soft outline costs nothing while the mouse is still. `frame()` draws both it and the
 selection: a hairline box with corner ticks rather than a dashed marquee, which sits
 still over artwork instead of crawling.
+
+## Not landing on top of each other
+
+Every `add*` helper used to place its item at one fixed default, so a second plinth or
+panel arrived exactly on the first and the pile looked like a single item. `freeSpot(it)`
+steps a new arrival along until it no longer coincides with one of its own kind —
+sideways plus either up the wall or back across the deck. `addShelf` staggers by height
+instead, since shelves share their x by definition.
+
+The other half of the same fault was in `hitTest`: `sort` is stable, so items with equal
+rank kept array order and a descending sort handed back the *earliest* — the one drawn
+first, and therefore the one underneath. It now breaks ties by array index descending,
+so a click on a stack takes the item you can actually see.
+
+## What counts as an object
+
+`renderLists()` splits three ways: `type !== 'object'` is casework, `render === 'panel'`
+is a caption, and what remains — photographs and shapes — is the objects list. They are
+all still the same underlying item type, sharing placement, mounting and undo; only the
+listing and the buttons that create them are separate.

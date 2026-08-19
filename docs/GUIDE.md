@@ -33,6 +33,9 @@ Add shelves and plinths first, so that objects have something to land on.
   what objects rest on.
 - **Plinth** — a block on the floor with its own width, depth and height.
 
+Anything new steps clear of whatever is already there rather than landing on top of it,
+so a second plinth never hides behind the first.
+
 Both can be dragged in either view, and the two views do different jobs:
 
 - **In elevation**, moving a plinth takes everything standing on it — and anything stuck
@@ -208,11 +211,14 @@ drawn by the same routine that draws them in the case, so what you pick is what 
 get. Each arrives at a plausible size and already knows its own footprint: a cylinder
 reads as a circle from above, a box as a rectangle.
 
-Use them to block a case out before the photography is done, and swap them for the real
+Shapes sit in **Objects** alongside your photographs, since both are things in the case.
+Use them to block one out before the photography is done, and swap them for the real
 thing later. **Change shape…** in the inspector swaps one for another without losing
 its position, and there are buttons to turn a shape into a panel and back.
 
-**+ Panel** adds an interpretation panel. A panel is a flat card stuck to a vertical
+Panels live in their own **Panels** section of the left rail, not among the objects —
+an object is a real thing in the case, a panel is a caption for one, and casework is
+casework. **+ Panel** adds an interpretation panel: a flat card stuck to a vertical
 surface, so its mounting is **Fixed** (or **Wires**) — never *Placed*.
 
 - With **a plinth selected**, the new panel goes straight onto that plinth's front face,

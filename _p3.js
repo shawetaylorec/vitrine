@@ -765,6 +765,8 @@ function finishWizard() {
       o.x = rnd(sup.x + (sup.w - o.w) / 2, 1);
       const f = footprint(o);
       o.z = rnd(clamp(sup.z + (sup.d - f.d) / 2, sup.z, Math.max(sup.z, sup.z + sup.d - f.d)), 1);
+      /* on the open floor, step clear of anything already centred there */
+      if (sup.id === 'floor') freeSpot(o);
     } else {
       landOn(o, sup);
     }
