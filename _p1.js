@@ -37,6 +37,7 @@ const BMPSRC = new Map();
 const TOPSRC = new Map();
 let BGIMG = null;           // back-wall image
 let PREVIEW = false;        // full-screen, no drafting furniture
+let HOVER = null;           // what the pointer is over, for a soft outline
 
 function loadImage(src) {
   return new Promise((res, rej) => {
@@ -513,16 +514,7 @@ function paint() {
   ctx.fillRect(tl.x, tl.y, cw2, ch2);
   ctx.restore();
 
-  if (!isPlan && BGIMG) {
-    ctx.save();
-    ctx.beginPath(); ctx.rect(tl.x, tl.y, cw2, ch2); ctx.clip();
-    ctx.globalAlpha = clamp((S.bg.fade ?? 100) / 100, 0, 1);
-    /* cover the wall without distorting the picture */
-    const sc = Math.max(cw2 / BGIMG.width, ch2 / BGIMG.height);
-    const dw = BGIMG.width * sc, dh = BGIMG.height * sc;
-    ctx.drawImage(BGIMG, tl.x + (cw2 - dw) / 2, tl.y + (ch2 - dh) / 2, dw, dh);
-    ctx.restore();
-  }
+  if (!isPlan && BGIMG) coverImage(BGIMG, tl.x, tl.y, cw2, ch2, (S.bg.fade ?? 100) / 100);
 
   if (S.opt.grid && !PREVIEW) drawGrid(tl, br);
 
@@ -554,10 +546,30 @@ function paint() {
     return;
   }
 
+  drawGuides(tl, br);
   if (S.opt.dims) drawCaseDims(tl, br);
   drawSelectionDims();
   drawSpinHandle();
   if (S.opt.rulers !== false) drawRulers();
+}
+
+/* the lines something has just snapped to, so you can see why it stopped */
+function drawGuides(tl, br) {
+  if (!GUIDES || !GUIDES.length) return;
+  ctx.save();
+  ctx.strokeStyle = C.accent; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.globalAlpha = .95;
+  for (const g of GUIDES) {
+    ctx.beginPath();
+    if (g.axis === 'x') {
+      const x = w2s(g.v, 0).x;
+      ctx.moveTo(x + .5, tl.y); ctx.lineTo(x + .5, br.y);
+    } else {
+      const y = w2s(0, g.v).y;
+      ctx.moveTo(tl.x, y + .5); ctx.lineTo(br.x, y + .5);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawGrid(tl, br) {
@@ -608,14 +620,31 @@ function depthKey(it) {
   return f.z + f.d;
 }
 
+/* fill a rect with a picture, cropped to cover rather than squashed */
+function coverImage(img, x, y, w, h, alpha) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.globalAlpha = clamp(alpha ?? 1, 0, 1);
+  const sc = Math.max(w / img.width, h / img.height);
+  const dw = img.width * sc, dh = img.height * sc;
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  ctx.restore();
+}
+
 function drawPlinthFront(p) {
   const a = w2s(p.x, p.h), b = w2s(p.x + p.w, 0);
-  ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
+  const w = b.x - a.x, h = b.y - a.y;
+  const img = BMP.get(p.id);
+  ctx.fillStyle = p.colour || C.struct;
+  ctx.fillRect(a.x, a.y, w, h);
+  if (img) coverImage(img, a.x, a.y, w, h, (p.fade ?? 100) / 100);
   ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
-  ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
-  hatch(a.x, a.y, b.x - a.x, b.y - a.y);
-  if (p.id === S.sel) outline(a.x, a.y, b.x - a.x, b.y - a.y);
-  label(p.name, (a.x + b.x) / 2, a.y + 12, { size: 10, font: UIFONT, fill: C.ink3 });
+  ctx.strokeRect(a.x + .5, a.y + .5, w - 1, h - 1);
+  /* the hatch says "no material given" — once it has one, drop it */
+  if (!p.colour && !img) hatch(a.x, a.y, w, h);
+  if (p.id === S.sel) outline(a.x, a.y, w, h);
+  else if (p.id === HOVER) frame(a.x, a.y, w, h, 'hover');
+  label(p.name, (a.x + b.x) / 2, a.y + 12, { size: 10, font: UIFONT, fill: p.colour || img ? C.ink2 : C.ink3, box: !!(p.colour || img), bg: p.colour || C.struct });
 }
 
 function drawShelfFront(s) {
@@ -625,6 +654,7 @@ function drawShelfFront(s) {
   ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
   ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, hgt - 1);
   if (s.id === S.sel) outline(a.x, a.y, b.x - a.x, hgt);
+  else if (s.id === HOVER) frame(a.x, a.y, b.x - a.x, hgt, 'hover');
   label(`${s.name} · ${rnd(s.y)}`, b.x - 4, a.y - 8, { size: 10, font: MONO, fill: C.ink3, align: 'right' });
 }
 
@@ -645,13 +675,29 @@ function hatch(x, y, w, h) {
   for (let i = -h; i < w; i += 7) { ctx.beginPath(); ctx.moveTo(x + i, y + h); ctx.lineTo(x + i + h, y); ctx.stroke(); }
   ctx.restore();
 }
-function outline(x, y, w, h) {
+/* A drafting frame rather than a marching dash: a hairline box with
+   corner ticks. Reads as precise, and does not crawl over the artwork.
+   Hover uses the same shape, quieter and without the ticks. */
+function frame(x, y, w, h, mode) {
   if (PREVIEW) return;
+  const t = Math.max(4, Math.min(11, Math.abs(w) / 3, Math.abs(h) / 3));
   ctx.save();
-  ctx.strokeStyle = C.accent; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
-  ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
+  ctx.strokeStyle = C.accent;
+  ctx.globalAlpha = mode === 'hover' ? .45 : 1;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x - 1.5, y - 1.5, w + 3, h + 3);
+  if (mode !== 'hover') {
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    for (const [cx, cy, sx, sy] of [[x - 1.5, y - 1.5, 1, 1], [x + w + 1.5, y - 1.5, -1, 1],
+    [x - 1.5, y + h + 1.5, 1, -1], [x + w + 1.5, y + h + 1.5, -1, -1]]) {
+      ctx.moveTo(cx, cy + sy * t); ctx.lineTo(cx, cy); ctx.lineTo(cx + sx * t, cy);
+    }
+    ctx.stroke();
+  }
   ctx.restore();
 }
+const outline = (x, y, w, h) => frame(x, y, w, h, 'sel');
 
 /* From the front every stand is just the base it raises the object on.
    A V stand's splay runs front to back, so it only reads as a V from
@@ -690,9 +736,10 @@ function drawStandPlan(o) {
     ctx.setLineDash([]);
   }
   if (st.kind === 'stand') {
+    /* the point is at the back, arms opening towards the glass */
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo((a.x + b.x) / 2, b.y); ctx.lineTo(b.x, a.y);
+    ctx.moveTo(a.x, b.y); ctx.lineTo((a.x + b.x) / 2, a.y); ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
   ctx.restore();
@@ -813,11 +860,10 @@ function drawObjectFront(o) {
   ctx.globalAlpha = 1;
   ctx.restore();
 
-  if (sel) {
+  if (sel || (!PREVIEW && o.id === HOVER)) {
     ctx.save();
     ctx.translate(p.x, p.y); ctx.rotate(-L.rot);
-    ctx.strokeStyle = C.accent; ctx.lineWidth = 1.6; ctx.setLineDash([5, 3]);
-    ctx.strokeRect(dx - 1, dy - 1, wpx + 2, hpx + 2);
+    frame(dx, dy, wpx, hpx, sel ? 'sel' : 'hover');
     ctx.restore();
   }
 
@@ -865,15 +911,17 @@ function drawPlan() {
     ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
     ctx.setLineDash([]);
     if (it.id === S.sel) outline(a.x, a.y, b.x - a.x, b.y - a.y);
+    else if (it.id === HOVER) frame(a.x, a.y, b.x - a.x, b.y - a.y, 'hover');
     label(`${it.name} @ ${rnd(it.y)} cm`, a.x + 5, a.y + 11, { size: 10, font: MONO, fill: C.ink3, align: 'left', box: true, bg: caseGround() });
   }
   for (const it of S.items.filter(i => i.type === 'plinth' && visible(i))) {
     const a = w2s(it.x, it.z), b = w2s(it.x + it.w, it.z + it.d);
-    ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
-    hatch(a.x, a.y, b.x - a.x, b.y - a.y);
+    ctx.fillStyle = it.colour || C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
+    if (!it.colour) hatch(a.x, a.y, b.x - a.x, b.y - a.y);
     ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
     ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
     if (it.id === S.sel) outline(a.x, a.y, b.x - a.x, b.y - a.y);
+    else if (it.id === HOVER) frame(a.x, a.y, b.x - a.x, b.y - a.y, 'hover');
     label(it.name, a.x + 5, a.y + 11, { size: 10, font: UIFONT, fill: C.ink3, align: 'left', box: true, bg: caseGround() });
   }
 
@@ -934,6 +982,7 @@ function drawPlan() {
       label(o.name, a.x + w / 2, a.y + h / 2, { size: 10, font: UIFONT, fill: C.ink2, box: true, bg: caseGround() });
     }
     if (sel) outline(a.x, a.y, w, h);
+    else if (o.id === HOVER) frame(a.x, a.y, w, h, 'hover');
   }
 }
 

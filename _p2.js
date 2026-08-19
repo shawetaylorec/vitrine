@@ -2,13 +2,24 @@
    Interaction — hit testing, dragging, keyboard
    ============================================================ */
 
-/* Nearest the glass first, which is the drawing order reversed — so a
-   click lands on whatever is actually on top. A few pixels of slack,
-   so something thin is still catchable at any zoom. */
+/* Looking down, "on top" means highest — an object standing on a plinth
+   is above that plinth, so it takes the click. Furniture is tiered below
+   objects so a shelf spanning the whole case never steals one, and a
+   plinth beats the shelf it may overlap. */
+function planPickKey(it) {
+  if (it.type === 'object') return 3000 + bbox(it).y1;
+  if (it.type === 'plinth') return 2000 + it.h;
+  return 1000 + it.y;                       /* shelf */
+}
+
+/* Elevation asks a different question: what is nearest the glass, which
+   is the drawing order reversed. A few pixels of slack either way, so
+   something thin is still catchable at any zoom. */
 function hitTest(px, py) {
   const pt = s2w(px, py);
   const tol = T ? 5 / T.sc : 0.5;
-  const list = S.items.filter(visible).sort((a, b) => depthKey(b) - depthKey(a));
+  const rank = S.view === 'plan' ? planPickKey : depthKey;
+  const list = S.items.filter(visible).sort((a, b) => rank(b) - rank(a));
 
   for (const it of list) {
     if (it.type === 'object') {
@@ -36,6 +47,73 @@ function hitTest(px, py) {
 }
 
 let drag = null;
+
+/* ---------------- lining things up ----------------
+   While dragging, look for a line the thing wants to sit on: the centre
+   or either edge of anything else, and of the case itself. Match any of
+   the dragged item's own three lines against any of those, take the
+   nearest within a few pixels, and note it so a guide can be drawn. */
+
+const SNAP_PX = 7;
+let GUIDES = [];
+
+function itemExtent(it, axis) {
+  if (axis === 'x') {
+    if (it.type === 'object') { const b = bbox(it); return [b.x0, b.x1]; }
+    return [it.x, it.x + it.w];
+  }
+  if (axis === 'z') {
+    if (it.type === 'object') { const f = footprint(it); return [f.z, f.z + f.d]; }
+    return [it.z, it.z + it.d];
+  }
+  if (it.type === 'object') { const b = bbox(it); return [b.y0, b.y1]; }
+  if (it.type === 'shelf') return [it.y - it.t, it.y];
+  return [0, it.h];
+}
+
+/* how far to move along `axis` to line up; 0 if nothing is near */
+function alignSnap(it, axis) {
+  if (!S.opt.snap || !T) return 0;
+  const tol = SNAP_PX / T.sc;
+  const [lo, hi] = itemExtent(it, axis);
+  const mine = [lo, (lo + hi) / 2, hi];
+  const span = axis === 'z' ? S.cs.d : axis === 'y' ? S.cs.h : S.cs.w;
+  const targets = [{ v: 0 }, { v: span / 2, mid: true }, { v: span }];
+  for (const o of S.items) {
+    if (o.id === it.id || !visible(o)) continue;
+    const [a, b] = itemExtent(o, axis);
+    targets.push({ v: a }, { v: (a + b) / 2, mid: true }, { v: b });
+  }
+  let best = null;
+  for (const t of targets) {
+    for (let i = 0; i < 3; i++) {
+      const d = t.v - mine[i];
+      if (Math.abs(d) > tol) continue;
+      /* centre-to-centre wins ties: it is the one people mean */
+      const score = Math.abs(d) - (t.mid && i === 1 ? tol * 0.35 : 0);
+      if (!best || score < best.score) best = { d, v: t.v, score };
+    }
+  }
+  if (!best) return 0;
+  GUIDES.push({ axis, v: best.v });
+  return best.d;
+}
+
+/* line the dragged item up on both axes of the current view */
+function applyAlign(it) {
+  GUIDES = [];
+  it.x = rnd(it.x + alignSnap(it, 'x'), 2);
+  if (S.view === 'plan') {
+    it.z = rnd(it.z + alignSnap(it, 'z'), 2);
+  } else if (it.type === 'shelf') {
+    it.y = rnd(it.y + alignSnap(it, 'y'), 2);
+  } else if (it.type === 'object' && it.mount === 'wall') {
+    it.wallY = rnd((it.wallY || 0) + alignSnap(it, 'y'), 2);
+  } else if (it.type === 'object' && it.mount === 'hanging') {
+    const d = alignSnap(it, 'y');
+    if (d) it.wires.forEach(w => { w.len = Math.max(0, rnd(w.len - d, 2)); });
+  }
+}
 
 /* supports the object is standing over, low to high */
 function supportsUnder(o) {
@@ -185,10 +263,14 @@ cvs.addEventListener('pointermove', e => {
   if (!drag) {
     if (PREVIEW) { cvs.style.cursor = 'default'; return; }
     const h = spinHandlePos();
-    cvs.style.cursor = (h && Math.hypot(px - h.x, py - h.y) < 11) ? 'grab'
-      : hitTest(px, py) ? 'grab' : 'default';
+    const over = hitTest(px, py);
+    const onHandle = h && Math.hypot(px - h.x, py - h.y) < 11;
+    cvs.style.cursor = onHandle ? 'grab' : over ? 'grab' : 'default';
+    const nh = over ? over.id : null;
+    if (nh !== HOVER) { HOVER = nh; draw(); }
     return;
   }
+  if (HOVER) { HOVER = null; draw(); }
 
   if (drag.pan) {
     S.pan.x = drag.px + (px - drag.sx);
@@ -219,10 +301,9 @@ cvs.addEventListener('pointermove', e => {
   if (S.view === 'plan') {
     it.x = q(clamp(drag.snap.x + da, -50, S.cs.w + 50));
     it.z = q(clamp(drag.snap.z + db, -20, S.cs.d + 20));
-    for (const k of drag.kids) {
-      const kid = byId(k.id); if (!kid) continue;
-      kid.x = q(k.x + da); kid.z = q(k.z + db);
-    }
+    /* In plan you are arranging things ON the plinth, so moving the
+       plinth leaves them where they are — that is how you slide an
+       object about its top. Elevation still carries them. */
   } else if (it.type === 'shelf') {
     it.x = q(drag.snap.x + da);
     it.y = q(clamp(drag.snap.y + db, 0, S.cs.h));
@@ -240,6 +321,7 @@ cvs.addEventListener('pointermove', e => {
     it.x = q(drag.snap.x + da);
     it.support = supportAfterDrag(it, drag.snap.support, db);
   }
+  applyAlign(it);
   syncInspector();
   draw();
 });
@@ -247,7 +329,9 @@ cvs.addEventListener('pointermove', e => {
 function endDrag() {
   if (drag && !drag.pan && drag.moved) commit();
   drag = null;
+  GUIDES = [];
   cvs.style.cursor = 'default';
+  draw();
 }
 cvs.addEventListener('pointerup', endDrag);
 cvs.addEventListener('pointercancel', endDrag);
@@ -341,7 +425,11 @@ function addShelf() {
 }
 function addPlinth() {
   const n = S.items.filter(i => i.type === 'plinth').length + 1;
-  const it = { id: uid(), type: 'plinth', name: `Plinth ${n}`, x: rnd(S.cs.w / 2 - 15), w: 30, h: 20, z: 5, d: Math.min(25, S.cs.d - 6) };
+  const it = {
+    id: uid(), type: 'plinth', name: `Plinth ${n}`,
+    x: rnd(S.cs.w / 2 - 15), w: 30, h: 20, z: 5, d: Math.min(25, S.cs.d - 6),
+    colour: '', png: null, fade: 100
+  };
   S.items.push(it); select(it.id); commit(); toast('Plinth added');
 }
 
@@ -474,6 +562,8 @@ function setView(v) {
   S.view = v; S.pan = { x: 0, y: 0 };
   $$('#viewSeg button, #pvSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
   $('#viewNote').textContent = v === 'front' ? 'looking at the back wall' : 'looking down from above';
+  syncChrome();
+  syncChrome();
   renderInspector(); draw();
 }
 function fitView() { S.zoom = 1; S.pan = { x: 0, y: 0 }; updateZoomLabel(); draw(); }
@@ -500,6 +590,7 @@ function enterPreview() {
   PREVIEW = true;
   select(null);
   document.body.classList.add('preview');
+  syncChrome();
   $('#pvName').textContent = S.name;
   $$('#pvSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === S.view)));
   const el = document.documentElement;
@@ -512,6 +603,7 @@ function exitPreview() {
   if (!PREVIEW) return;
   PREVIEW = false;
   document.body.classList.remove('preview');
+  syncChrome();
   clearTimeout(barIdleT);
   if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => { });
   requestAnimationFrame(() => { fitView(); draw(); });
@@ -540,7 +632,21 @@ function objGlyph(o) {
   return `<img src="${shapeThumb(o.render)}" alt="">`;
 }
 
+/* the bits of chrome that track the case rather than the selection */
+function syncChrome() {
+  const chip = $('#caseChipName');
+  if (chip) chip.textContent = S.name || 'Untitled case';
+  const es = $('#emptyState');
+  if (es) {
+    const bare = S.items.length === 0 && !PREVIEW;
+    es.hidden = !bare;
+    if (bare) $('#emptyTitle').textContent =
+      `An empty ${rnd(S.cs.w)} × ${rnd(S.cs.h)} cm case`;
+  }
+}
+
 function renderLists() {
+  syncChrome();
   const structs = S.items.filter(i => i.type !== 'object');
   const objs = S.items.filter(i => i.type === 'object');
 
@@ -820,7 +926,22 @@ function renderInspector() {
         <label class="f"><span>&nbsp;</span><button class="btn" id="iCentre" style="padding:4px">Centre</button></label>
       </div>
       <div class="readout"><span>top at <b>${rnd(o.h)}</b> cm</span><span>carrying <b>${childrenOf(o.id).length}</b> objects</span></div>
-      <p class="note">Moving it takes whatever is standing on it along too.</p>
+      <p class="note">Dragging it in elevation takes whatever is on it along. In plan it moves alone, so you can slide things about its top.</p>
+    </section>
+
+    <section class="sect">
+      <h2>Its face</h2>
+      <div class="swatchrow">
+        <input type="color" id="iPlinthColour" title="Front colour" value="${o.colour || '#cdc5b2'}">
+        <button class="btn sm" id="iPlinthImg" style="flex:1">${o.png ? 'Replace' : 'Image'}&hellip;</button>
+        <button class="btn sm ghost" id="iPlinthClear">Clear</button>
+      </div>
+      ${o.png ? `<div class="slid">
+        <label>Image strength <b>${o.fade ?? 100}%</b></label>
+        <input type="range" id="iPlinthFade" min="10" max="100" value="${o.fade ?? 100}">
+      </div>` : ''}
+      <button class="btn sm" id="iPlinthGraphic">+ Graphic on this face&hellip;</button>
+      <p class="note">A colour or picture for the front. Add a graphic and it becomes a normal object fixed to this plinth, so it can be moved and resized.</p>
     </section>
     <section class="sect">
       <div class="row">
@@ -950,7 +1071,20 @@ function bindInspector(o) {
       const b = e.target.closest('[data-mount]'); if (!b) return;
       setMount(o, b.dataset.mount); commit();
     });
-    on('iCentre', 'click', () => { o.x = rnd((S.cs.w - o.w) / 2); commit(); });
+    /* centre on whatever it belongs to — its plinth face, the shelf it
+       stands on — falling back to the case */
+    on('iCentre', 'click', () => {
+      const host = faceOf(o) || (o.mount === 'placed' ? supportOf(o) : null);
+      const b = bbox(o), w = b.x1 - b.x0;
+      const lo = host ? host.x : 0, span = host ? host.w : S.cs.w;
+      o.x = rnd(o.x + (lo + (span - w) / 2 - b.x0), 1);
+      if (S.view === 'plan' && o.mount === 'placed' && host) {
+        const f = footprint(o);
+        o.z = rnd(clamp(host.z + (host.d - f.d) / 2, host.z, Math.max(host.z, host.z + host.d - f.d)), 1);
+      }
+      commit();
+      toast(host ? `Centred on ${host.name}` : 'Centred in the case');
+    });
     on('iEditCut', 'click', () => openWizard({ edit: o.id, step: 1 }));
     on('iEditScale', 'click', () => openWizard({ edit: o.id, step: 2 }));
     on('iEditMount', 'click', () => openWizard({ edit: o.id, step: 3 }));
@@ -966,6 +1100,20 @@ function bindInspector(o) {
     setNum('iD', v => o.d = Math.max(1, v));
     setNum('iH', v => o.h = Math.max(0.5, v));
     on('iCentre', 'click', () => { o.x = rnd((S.cs.w - o.w) / 2); commit(); });
+    on('iPlinthColour', 'input', e => { o.colour = e.target.value; draw(); });
+    on('iPlinthColour', 'change', () => commit());
+    on('iPlinthFade', 'input', e => { o.fade = +e.target.value; draw(); });
+    on('iPlinthFade', 'change', () => commit());
+    on('iPlinthImg', 'click', () => { structImgFor = o.id; $('#fileBg').click(); });
+    on('iPlinthClear', 'click', () => {
+      o.png = null; o.colour = ''; o.fade = 100;
+      BMP.delete(o.id); BMPSRC.delete(o.id);
+      commit();
+    });
+    on('iPlinthGraphic', 'click', () => {
+      wallGraphicNext = { mount: 'wall', face: o.id, planShape: 'rect' };
+      $('#fileImg').click();
+    });
   }
 
   on('iDup', 'click', () => duplicate(o.id));

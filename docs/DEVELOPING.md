@@ -36,12 +36,12 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 107 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 120 assertions covering the
 cut-out crop, support heights, stand footprints, wire tilt, lean maths in both
 reference frames, rotation, plan-shape selection, panels fixed to plinth faces, depth
 ordering, overhang detection, the shape picker, panel text fitting, support stickiness
-while dragging, undo and redo, the case library, the save/open round trip, opening a
-file written by an older build, and PNG export.
+while dragging, alignment snapping, plan pick order, undo and redo, the case library,
+the save/open round trip, opening a file written by an older build, and PNG export.
 
 Append a hash to the URL to screenshot a different state:
 
@@ -134,7 +134,8 @@ or a `stand` keeps its own footprint, which is usually deeper than the object an
 what has to fit on the plinth. Every kind lifts the object by `h`.
 
 Only the plan view distinguishes the kinds: a V stand splays front to back, so
-`drawStandPlan` draws a V and `drawStandFront` draws the base and its notches.
+`drawStandPlan` draws it apex-to-the-back opening towards the glass, and
+`drawStandFront` draws only the base and its notches.
 
 ## Depth order
 
@@ -150,8 +151,29 @@ that is what let a panel float in front of a plinth.
   rule, not a comparison: a graphic on the wall cannot get in front of an object in the
   case however far it stands proud. Among themselves they still order by stand-off.
 
-`hitTest()` walks the same list reversed, so a click lands on whatever is visually on
-top, with a few pixels of slack so thin things stay catchable.
+`hitTest()` walks the same list reversed in **elevation**. **Plan** asks a different
+question and so uses `planPickKey()`: looking down, "on top" means highest, and the
+tiers matter — objects (3000 + top height), then plinths (2000 + height), then shelves
+(1000 + height). Without the tiers a shelf spanning the whole case would swallow every
+click, and a plinth would beat the object standing on it, because a plinth reaches
+further towards the glass than the small thing on top of it.
+
+## Lining things up
+
+`alignSnap(it, axis)` collects candidate lines — the centre and both edges of every other
+visible item, plus the case — and matches them against the dragged item's own left,
+centre and right. Nearest within `SNAP_PX` screen pixels wins, with a bias of about a
+third of the tolerance towards centre-to-centre, since that is the intent nearly every
+time. The winner is pushed onto `GUIDES` so `drawGuides()` can show it.
+
+Working in screen pixels rather than centimetres is deliberate: it makes the snap scale
+with zoom, so close in you get fine control and far out you get help.
+
+`applyAlign(it)` runs it on both axes of the current view, and knows which property
+carries "vertical" for each mount — `y` for a shelf, `wallY` for a fixed panel, wire
+lengths for a hung object, and nothing for a placed object, whose base is decided by its
+support. It runs after the drag quantiser, so an aligned position is exact rather than
+rounded to the nudge grid.
 
 ## Panel text
 
@@ -254,3 +276,19 @@ keeps opening as the model grows.
 `download()` tries the artifact `downloads` capability first and falls back to a plain
 anchor. The hosted copy is sandboxed and ordinary download links are inert there, so
 both paths are needed.
+
+## Chrome and first run
+
+`syncChrome()` keeps the two bits of interface that follow the case rather than the
+selection: the name on the toolbar chip, and the first-run card, which shows only while
+`S.items` is empty and preview is off. It is called from `renderLists()`, so every
+`commit()` refreshes it.
+
+The left rail folds section by section — each `h2` is a control, and the folded set is
+remembered in `localStorage`. The inspector is deliberately not foldable: it is rebuilt
+on every selection change, so fold state would not survive.
+
+`HOVER` holds whatever the pointer is over and is redrawn only when it changes, so the
+soft outline costs nothing while the mouse is still. `frame()` draws both it and the
+selection: a hairline box with corner ticks rather than a dashed marquee, which sits
+still over artwork instead of crawling.

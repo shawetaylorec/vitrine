@@ -386,6 +386,91 @@
     S.name = 'Kepler case';
   }
 
+  /* --- 7j. plinths wear a colour, and keep their objects put in plan ---
+     re-fetched from S.items: the library section above reopened the case,
+     so every item is a fresh copy and the old handles are stale */
+  const pl2 = S.items.find(i => i.type === 'plinth');
+  const shelfNow = S.items.find(i => i.type === 'shelf');
+  pl2.colour = '#5a4632';
+  ok(byId(pl2.id).colour === '#5a4632', 'a plinth takes a colour of its own');
+  pl2.png = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACwAAAAAAQABAAACAkQBADs=';
+  await syncBitmaps();
+  ok(BMP.has(pl2.id), 'and a picture for its face, cached like any other bitmap');
+  pl2.png = null; pl2.colour = '';
+  await syncBitmaps();
+  ok(!BMP.has(pl2.id), 'clearing it drops the bitmap again');
+
+  /* the elevation drag carries passengers; the plan drag does not */
+  const rider = S.items.find(i => i.name === 'Astrolabe');
+  rider.mount = 'placed'; rider.support = pl2.id;
+  const riderWasX = rider.x, riderWasZ = rider.z;
+  S.view = 'front';
+  for (const k of childrenOf(pl2.id)) k.x = rnd(k.x + 8, 2);   /* what the elevation drag does */
+  ok(Math.abs(rider.x - (riderWasX + 8)) < 0.01, 'in elevation a plinth still takes its objects with it');
+  rider.x = riderWasX;
+  S.view = 'plan';
+  pl2.z += 6;                                                  /* what the plan drag does: plinth only */
+  ok(Math.abs(rider.z - riderWasZ) < 0.01,
+    'in plan the plinth moves alone, so you can place things on its top');
+  pl2.z -= 6;
+
+  /* looking down, the thing standing on the plinth takes the click */
+  S.view = 'plan'; VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
+  rider.x = rnd(pl2.x + (pl2.w - rider.w) / 2);
+  rider.z = rnd(pl2.z + 4);
+  const over = w2s(rider.x + rider.w / 2, footprint(rider).z + footprint(rider).d / 2);
+  ok(hitTest(over.x, over.y) === rider,
+    'clicking an object on a plinth in plan picks the object, not the plinth beneath');
+  const beside = w2s(pl2.x + 1, pl2.z + pl2.d - 1);
+  ok(hitTest(beside.x, beside.y) === pl2, 'and clicking clear of it still picks the plinth');
+  ok(planPickKey(rider) > planPickKey(pl2) && planPickKey(pl2) > planPickKey(shelfNow),
+    'the plan pick order is objects, then plinths, then shelves');
+
+  /* --- 7k. lining up --- */
+  S.view = 'front'; VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
+  const label2 = S.items.find(i => i.render === 'panel') ||
+    (select(pl2.id), addPanel(), S.items[S.items.length - 1]);
+  label2.mount = 'wall'; label2.face = pl2.id; label2.w = 14;
+  const plinthMid = pl2.x + pl2.w / 2;
+
+  /* nudge it a hair off centre, as a hand would */
+  label2.x = rnd(plinthMid - label2.w / 2 + 0.6, 2);
+  GUIDES = [];
+  applyAlign(label2);
+  ok(Math.abs((label2.x + label2.w / 2) - plinthMid) < 0.02,
+    `a panel dropped near the plinth centre snaps onto it (${rnd(label2.x + label2.w / 2, 2)} vs ${rnd(plinthMid, 2)})`);
+  ok(GUIDES.some(g => g.axis === 'x' && Math.abs(g.v - plinthMid) < 0.02),
+    'and a guide is recorded so the line can be drawn');
+
+  /* somewhere provably clear of every line, it is left alone */
+  const lines = [0, S.cs.w / 2, S.cs.w];
+  for (const o of S.items) {
+    if (o.id === label2.id) continue;
+    const [a, b] = itemExtent(o, 'x');
+    lines.push(a, (a + b) / 2, b);
+  }
+  const clearOf = x => [x, x + label2.w / 2, x + label2.w]
+    .every(m => lines.every(l => Math.abs(l - m) > 4));
+  let freeX = null;
+  for (let x = 0; x <= S.cs.w - label2.w; x += 0.5) if (clearOf(x)) { freeX = x; break; }
+  ok(freeX !== null, `there is somewhere clear of every line to test against (x ${freeX})`);
+  label2.x = freeX;
+  GUIDES = [];
+  applyAlign(label2);
+  ok(Math.abs(label2.x - freeX) < 0.001 && !GUIDES.some(g => g.axis === 'x'),
+    'but nothing is dragged sideways when there is no line nearby');
+
+  /* the toggle governs it */
+  S.opt.snap = false;
+  label2.x = rnd(plinthMid - label2.w / 2 + 0.6, 2);
+  const offX = label2.x;
+  applyAlign(label2);
+  ok(Math.abs(label2.x - offX) < 0.001, 'and turning Snap off stops it lining up at all');
+  S.opt.snap = true;
+  GUIDES = [];
+
+  S.view = 'front'; T = calcT();
+
   /* --- 8. out-of-case detection --- */
   const n0 = outOfCase(astro).length;
   astro.x = 132;

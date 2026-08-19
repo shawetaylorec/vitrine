@@ -36,23 +36,38 @@ $('#bgColour').addEventListener('input', e => { S.bg.colour = e.target.value; dr
 $('#bgColour').addEventListener('change', () => commit());
 $('#bgFade').addEventListener('input', e => { S.bg.fade = +e.target.value; $('#bgFadeVal').textContent = S.bg.fade + '%'; draw(); });
 $('#bgFade').addEventListener('change', () => commit());
-$('#btnBgImg').onclick = () => $('#fileBg').click();
+/* the same picker serves the back wall and any plinth face */
+let structImgFor = null;
+$('#btnBgImg').onclick = () => { structImgFor = null; $('#fileBg').click(); };
 $('#fileBg').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
+  const target = structImgFor; structImgFor = null;
   if (!f) return;
   if (/\.tiff?$/i.test(f.name) || f.type === 'image/tiff') { toast('Chrome cannot read TIFF — save it as PNG or JPEG first'); return; }
   try {
     const cv = await fileToCanvas(f);
-    S.bg.img = cv.toDataURL('image/jpeg', 0.85);
-    BGIMG = await loadImage(S.bg.img);
-    commit(); toast('Back wall image set');
+    const url = cv.toDataURL('image/jpeg', 0.85);
+    if (target) {
+      const p = byId(target);
+      if (!p) return;
+      p.png = url; p.fade = p.fade ?? 100;
+      BMP.set(p.id, await loadImage(url)); BMPSRC.set(p.id, url);
+      commit(); toast(`Picture set on ${p.name}`);
+    } else {
+      S.bg.img = url;
+      BGIMG = await loadImage(url);
+      commit(); toast('Back wall image set');
+    }
   } catch (err) { toast('Could not read that image'); }
 });
 $('#btnBgClear').onclick = () => { S.bg.img = null; S.bg.colour = ''; BGIMG = null; syncCaseFields(); commit(); };
 /* a graphic is an ordinary object that happens to be fixed to the wall,
    so it goes through the same cut-out and sizing steps */
-let wallGraphicNext = false;
-$('#btnWallGraphic').onclick = () => { wallGraphicNext = true; $('#fileImg').click(); };
+let wallGraphicNext = null;
+$('#btnWallGraphic').onclick = () => {
+  wallGraphicNext = { mount: 'wall', face: 'back', planShape: 'rect' };
+  $('#fileImg').click();
+};
 
 /* structure and objects */
 $('#btnShelf').onclick = addShelf;
@@ -85,8 +100,8 @@ const pickImages = () => $('#fileImg').click();
 $('#btnAddImg').onclick = pickImages;
 $('#btnAddImg2').onclick = pickImages;
 $('#fileImg').addEventListener('change', e => {
-  const preset = wallGraphicNext ? { mount: 'wall', planShape: 'rect' } : null;
-  wallGraphicNext = false;
+  const preset = wallGraphicNext;
+  wallGraphicNext = null;
   if (e.target.files.length) openWizardFiles(e.target.files, preset);
   e.target.value = '';
 });
@@ -322,6 +337,37 @@ $('#casesClose').onclick = closeCases;
 $('#casesBack').addEventListener('pointerdown', e => { if (e.target.id === 'casesBack') closeCases(); });
 $('#btnNewCase').onclick = async () => { await newCase(); renderCases(); };
 $('#btnImportCase').onclick = () => $('#fileJson').click();
+
+/* ---------- empty state ---------- */
+$('#esPhoto').onclick = pickImages;
+$('#esShape').onclick = addShape;
+$('#esShelf').onclick = addShelf;
+$('#esPlinth').onclick = addPlinth;
+$('#esCases').onclick = openCases;
+
+/* ---------- folding the left rail ---------- */
+{
+  const folded = new Set(JSON.parse(localStorage.getItem('vitrine-folded') || '[]'));
+  $$('.rail-left .sect').forEach((sect, i) => {
+    const h = sect.querySelector('h2');
+    if (!h) return;
+    const key = h.textContent.trim() || String(i);
+    const chev = document.createElement('i');
+    chev.className = 'chev';
+    chev.textContent = '▼';
+    h.insertBefore(chev, h.firstChild);
+    if (folded.has(key)) sect.classList.add('folded');
+    h.setAttribute('role', 'button');
+    h.setAttribute('tabindex', '0');
+    const toggle = () => {
+      sect.classList.toggle('folded');
+      sect.classList.contains('folded') ? folded.add(key) : folded.delete(key);
+      localStorage.setItem('vitrine-folded', JSON.stringify([...folded]));
+    };
+    h.addEventListener('click', toggle);
+    h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  });
+}
 
 /* undo */
 $('#btnUndoStep').onclick = undo;

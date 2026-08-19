@@ -42,9 +42,10 @@ of and give that. Depth you type, because a flat photograph cannot tell you.
 | Fixed | Stuck flat to a vertical surface — the back wall, or the front face of any plinth. |
 
 **Stands and cradles belong to the object.** A V stand, a plain block or a book cradle
-is always centred underneath and travels with it. A V stand only splays into a V seen
-from *above* — from the front you get its base and its notches. A book cradle is cut to
-fit its book, so it takes the object's own width and depth and you give only the height.
+is always centred underneath and travels with it. A V stand only splays seen from
+*above*, where it points to the back and opens towards the glass — from the front you
+get its base and its notches. A book cradle is cut to fit its book, so it takes the
+object's own width and depth and you give only the height.
 Whatever the stand, its own footprint is what has to fit on the plinth, and the overhang
 warnings use it.
 
@@ -59,6 +60,14 @@ halfway to flat the plan draws the picture itself rather than a rectangle.
 one pass, so what is nearer the glass covers what is behind it. Anything fixed to the
 back wall sits behind everything else outright — a graphic on the wall cannot get in
 front of an object in the case, whatever its stand-off.
+
+**Things line themselves up.** Drag anything and it looks for a line to settle on — the
+centre or either edge of any other item, or of the case — and shows you which one it
+found. Centre-to-centre wins ties, because that is the one people mean. The tolerance is
+in screen pixels, so zooming in gives finer control automatically.
+
+**Plinths have a face.** A colour, a picture, or a graphic cut out and fixed to the
+front, exactly as the back wall works.
 
 **It tells you when things do not fit** — past the case sides, above the top, deeper
 than the case, overhanging whatever it stands on, or wider than the plinth face it is

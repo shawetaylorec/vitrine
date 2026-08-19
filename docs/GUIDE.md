@@ -33,8 +33,22 @@ Add shelves and plinths first, so that objects have something to land on.
   what objects rest on.
 - **Plinth** — a block on the floor with its own width, depth and height.
 
-Both can be dragged in either view. Moving one takes everything standing on it — and
-anything stuck to its front — along with it.
+Both can be dragged in either view, and the two views do different jobs:
+
+- **In elevation**, moving a plinth takes everything standing on it — and anything stuck
+  to its front — along with it. You are moving the plinth *and its contents* as a unit.
+- **In plan**, the plinth moves alone. That is how you slide an object about its top, or
+  work out where on the deck the plinth itself should sit.
+
+### A plinth's face
+
+Select a plinth and there is an **Its face** section: a colour, a picture with a strength
+slider, and **+ Graphic on this face** — which runs the same cut-out and sizing steps as
+any object and then fixes the result to that plinth, so it can be moved and resized
+afterwards. The same three things the back wall has.
+
+A plinth with no colour or picture is drawn hatched. The hatch means "no material
+given", so it disappears once you give it one.
 
 ## 3. Adding an object
 
@@ -113,8 +127,9 @@ Give a block or a V stand its own width and depth. This is the important part: a
 is usually deeper than the object it holds, and it is the *stand* that has to fit on the
 plinth. The overhang warnings use whichever is bigger.
 
-A V stand's splay runs front to back, so it only reads as a V in the **plan** view. From
-the front you see its base and the little notches that stop the object sliding off.
+A V stand's splay runs front to back, so it only shows in the **plan** view, where it
+points to the back and opens towards the glass. From the front you see its base and the
+little notches that stop the object sliding off.
 
 The stand is always centred under its object and moves with it. With no stand, nothing
 at all is drawn beneath the object.
@@ -150,6 +165,29 @@ Drag in either view.
 
 **Arrow up and down step between surfaces** — from the floor to a plinth to a shelf and
 back — rather than guessing from how far you nudged.
+
+### Lining things up
+
+Drag anything and it looks for a line to settle on: the centre or either edge of any
+other item, and of the case itself. It matches the dragged item's own left, centre and
+right against all of those and takes the nearest.
+
+A dashed line appears across the case showing what it found, so you can see why it
+stopped where it did. Centre-to-centre is given a deliberate nudge over the alternatives,
+since that is nearly always the one you meant — a label on the centre line of its plinth,
+an object on the centre line of the case.
+
+The tolerance is a few *screen* pixels, so zooming in gives you finer control and zooming
+out makes it grabbier. It works sideways in both views, front-to-back in plan, and
+vertically in elevation for the things that can move vertically — shelves, wall-fixed
+panels, and hung objects, which shorten or lengthen their wires to match.
+
+**Snap** in the case panel governs all of this, along with the surface snapping above.
+Turn it off and everything moves freely.
+
+**Centre**, in the inspector, centres an object on whatever it belongs to — its plinth
+face, the shelf it stands on — and only falls back to the case if it belongs to nothing.
+In plan it centres front-to-back on that surface too.
 
 To turn something, drag the round handle above it, press <kbd>R</kbd>, or type an angle
 in **Turn**. A turned object still settles properly onto its support.
