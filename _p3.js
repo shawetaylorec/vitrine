@@ -747,12 +747,15 @@ function finishWizard() {
     o.rail = o.rail || S.rail;
     for (const wr of o.wires) if (!wr.len) wr.len = rnd(10 + wr.ay * o.h, 1);
   } else if (o.mount === 'placed') {
-    /* land it on the thing you said it stands on */
+    /* a new object lands centred on whatever it stands on; one you are
+       re-editing keeps the place you put it unless it is now off it */
     const sup = supportOf(o);
-    if (isNew || sup.id !== 'floor') {
+    if (isNew) {
       o.x = rnd(sup.x + (sup.w - o.w) / 2, 1);
       const f = footprint(o);
       o.z = rnd(clamp(sup.z + (sup.d - f.d) / 2, sup.z, Math.max(sup.z, sup.z + sup.d - f.d)), 1);
+    } else {
+      landOn(o, sup);
     }
     if (o.stand && o.stand.kind !== 'none' && !o.stand.w) {
       const f = footprint(o);

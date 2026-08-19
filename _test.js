@@ -158,6 +158,46 @@
   ok(layoutText(panel.text, 9999).length === 2, 'typed line breaks are kept, not collapsed');
   ok(ptOf(0.55) === 16, '0.55 cm reads as 16 pt');
 
+  /* --- 7c. putting a panel on a plinth and keeping it there --- */
+  setMount(panel, 'placed');
+  panel.w = 14; panel.h = 9; panel.depth = 1;
+  panel.support = plinth.id;
+  landOn(panel, supportOf(panel));
+  ok(Math.abs(bbox(panel).y0 - plinth.h) < 0.01, `choosing the plinth puts the panel on top of it (${rnd(bbox(panel).y0)} cm)`);
+  const env = envelope(panel);
+  ok(env.x >= plinth.x - 0.01 && env.x + env.w <= plinth.x + plinth.w + 0.01,
+    'and brings it over the plinth rather than leaving it dangling');
+
+  /* slide it to the very edge — it must stay on the plinth */
+  panel.x = rnd(plinth.x + plinth.w - panel.w);
+  ok(supportAfterDrag(panel, plinth.id, 0) === plinth.id,
+    'sliding it sideways to the plinth edge does not drop it to the floor');
+  panel.x = rnd(plinth.x + plinth.w - 2);          /* centre now past the edge */
+  ok(supportAfterDrag(panel, plinth.id, 0) === plinth.id,
+    'nor does overhanging the edge — it is flagged, not re-homed');
+  ok(supportAfterDrag(panel, plinth.id, 0.8) === plinth.id,
+    'a small vertical wobble does not re-home it either');
+  panel.x = rnd(plinth.x + (plinth.w - panel.w) / 2);
+  ok(supportAfterDrag(panel, plinth.id, -40) === 'floor',
+    'but dragging it properly downwards does put it on the floor');
+  ok(supportAfterDrag(panel, 'floor', 44) === plinth.id,
+    'and dragging up from the floor lifts it back onto the plinth');
+
+  /* arrow keys step between supports rather than guessing */
+  ok(stepSupport(panel, -1) === 'floor', 'down steps to the next surface below — the floor');
+  ok(stepSupport(panel, 1) === shelf.id, 'up steps to the next surface above — the shelf');
+  const onShelf = { ...panel, support: shelf.id };
+  ok(stepSupport(onShelf, 1) === shelf.id, 'and stops at the top rather than wrapping round');
+
+  /* the plinth carries it */
+  const panelWasAt = panel.x, plinthWasAt = plinth.x;
+  ok(childrenOf(plinth.id).some(k => k.id === panel.id), 'the plinth counts the panel among its passengers');
+  for (const k of childrenOf(plinth.id)) k.x = rnd(k.x + 12, 2);
+  plinth.x += 12;
+  ok(Math.abs(panel.x - (panelWasAt + 12)) < 0.01, 'so moving the plinth moves the panel with it');
+  plinth.x = plinthWasAt;
+  for (const k of childrenOf(plinth.id)) k.x = rnd(k.x - 12, 2);
+
   /* --- 8. out-of-case detection --- */
   const n0 = outOfCase(astro).length;
   astro.x = 132;

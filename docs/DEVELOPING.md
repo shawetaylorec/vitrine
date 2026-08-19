@@ -36,10 +36,11 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 37 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 49 assertions covering the
 cut-out crop, support heights, stand footprints, wire tilt, lean maths in both
 reference frames, rotation, plan-shape selection, overhang detection, the save/open
-round trip, opening a file written by an older build, the shape picker, panel text fitting, and PNG export.
+round trip, opening a file written by an older build, the shape picker, panel text
+fitting, support stickiness while dragging, and PNG export.
 
 Append a hash to the URL to screenshot a different state:
 
@@ -115,6 +116,22 @@ the top edge at the back to the base at the front.
 
 `envelope(o)` is the footprint unioned with the stand's, and is what the overhang
 warnings use.
+
+## Choosing a support
+
+An object's support is deliberately sticky. `supportAfterDrag()` ignores sideways
+movement entirely and only re-homes on a vertical drag of more than `REHOME_CM`; if
+nothing is under the object to land on it stays put rather than falling to the floor.
+Without that, an object worked along its plinth drops off the moment its centre passes
+the edge and picks the plinth back up on the way in, which reads as random snapping.
+
+`landOn()` is the other half: choosing a support from the dropdown brings the object
+over it only if it is not already on it, so a label can sit anywhere on a plinth
+rather than being yanked to the middle. New objects from the wizard are still centred,
+because that is a good default for something that has no position yet.
+
+`stepSupport()` backs the up and down arrows, walking the surfaces the object is over
+in height order.
 
 ## Background removal
 

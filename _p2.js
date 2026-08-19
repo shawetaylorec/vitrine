@@ -33,16 +33,61 @@ function hitTest(px, py) {
 
 let drag = null;
 
-function bestSupport(o, wantTop) {
+/* supports the object is standing over, low to high */
+function supportsUnder(o) {
   const b = bbox(o);
   const cx = (b.x0 + b.x1) / 2;
+  return supportList()
+    .filter(s => cx >= s.x - 1 && cx <= s.x + s.w + 1)
+    .sort((a, c) => a.top - c.top);
+}
+
+function bestSupport(o, wantTop) {
   let best = null, bd = Infinity;
-  for (const s of supportList()) {
-    if (cx < s.x - 1 || cx > s.x + s.w + 1) continue;
+  for (const s of supportsUnder(o)) {
     const d = Math.abs(s.top - wantTop);
     if (d < bd) { bd = d; best = s; }
   }
   return best ? { s: best, d: bd } : null;
+}
+
+/* Which support an object belongs on after being dragged `db` cm
+   vertically away from `fromId`.
+
+   Sliding sideways must never re-home it, or an object worked along
+   its plinth drops to the floor the moment its centre passes the
+   edge — and picks the plinth back up on the way in. Only a real
+   vertical move counts, and if there is nothing under it to land on
+   it stays where it was rather than falling. */
+const REHOME_CM = 2;
+function supportAfterDrag(o, fromId, db) {
+  if (!S.opt.snap || Math.abs(db) < REHOME_CM) return fromId;
+  const startTop = supportList().find(s => s.id === fromId)?.top ?? 0;
+  const b = bestSupport(o, startTop + db);
+  return b ? b.s.id : fromId;
+}
+
+/* the next support up or down from the one it is on */
+function stepSupport(o, dir) {
+  const cur = supportOf(o).top;
+  const under = supportsUnder(o);
+  const next = dir > 0
+    ? under.find(s => s.top > cur + 0.01)
+    : under.filter(s => s.top < cur - 0.01).pop();
+  return next ? next.id : o.support;
+}
+
+/* Bring an object over a support if it is not already on it, and
+   otherwise leave it exactly where it is — so anything can sit
+   wherever you want on a plinth, not only in the middle. */
+function landOn(o, s) {
+  const e = envelope(o), f = footprint(o);
+  if (e.x < s.x - 0.01 || e.x + e.w > s.x + s.w + 0.01) {
+    o.x = rnd(o.x + (s.x + (s.w - e.w) / 2 - e.x), 1);
+  }
+  if (e.z < s.z - 0.01 || e.z + e.d > s.z + s.d + 0.01) {
+    o.z = rnd(clamp(s.z + (s.d - f.d) / 2, s.z, Math.max(s.z, s.z + s.d - f.d)), 1);
+  }
 }
 
 /* everything that travels with a shelf or plinth */
@@ -165,13 +210,7 @@ cvs.addEventListener('pointermove', e => {
     it.wallY = q((drag.snap.wallY || 0) + db);
   } else {
     it.x = q(drag.snap.x + da);
-    /* dragging up or down lifts the object onto whichever support
-       is nearest the height you let go at */
-    if (S.opt.snap) {
-      const startTop = supportList().find(s => s.id === drag.snap.support)?.top ?? 0;
-      const b = bestSupport(it, startTop + db);
-      if (b) it.support = b.s.id;
-    }
+    it.support = supportAfterDrag(it, drag.snap.support, db);
   }
   syncInspector();
   draw();
@@ -243,10 +282,7 @@ document.addEventListener('keydown', e => {
       else if (o.type === 'plinth') o.h = Math.max(0.5, rnd(o.h + dv, 1));
       else if (o.mount === 'hanging') o.wires.forEach(w => { w.len = Math.max(0, rnd(w.len - dv, 1)); });
       else if (o.mount === 'wall') o.wallY = rnd((o.wallY || 0) + dv, 1);
-      else {
-        const b = bestSupport(o, supportOf(o).top + dv * 3);
-        if (b) o.support = b.s.id;
-      }
+      else o.support = stepSupport(o, dv);   /* up and down step between supports */
     }
     commit(); return;
   }
@@ -748,7 +784,11 @@ function bindInspector(o) {
     setNum('iSpin', v => o.spin = rnd(((v % 360) + 360) % 360, 1));
     on('iSpin90', 'click', () => { o.spin = rnd((((o.spin || 0) + 90) % 360), 1); commit(); });
     on('iFlip', 'click', () => { o.flip = !o.flip; commit(); });
-    on('iSupport', 'change', e => { o.support = e.target.value; commit(); });
+    on('iSupport', 'change', e => {
+      o.support = e.target.value;
+      landOn(o, supportOf(o));     /* bring it over, if it is not already */
+      commit();
+    });
     on('iThumb', 'click', () => openWizard({ edit: o.id, step: 1 }));
 
     const applyLean = shown => {
@@ -838,6 +878,7 @@ function setMount(o, mount) {
     const best = bestSupport(o, b.y0);
     o.support = best ? best.s.id : 'floor';
     o.lean = o.lean || 0;
+    landOn(o, supportOf(o));
   }
 }
 

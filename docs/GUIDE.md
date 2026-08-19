@@ -125,15 +125,20 @@ Add a book cradle underneath and give the arm height.
 
 Drag in either view.
 
-- Elevation, placed object: sideways moves it; up and down lifts it onto whichever
-  shelf or plinth is nearest the height you let go at.
+- Elevation, placed object: sideways moves it, and only sideways — an object worked
+  along its plinth stays on that plinth even when it overhangs the edge, which is
+  flagged rather than corrected. Dragging up or down by more than a couple of
+  centimetres is what lifts it onto a different shelf or plinth.
 - Elevation, hung object: sideways moves it; up and down changes both wire lengths at
   once.
 - Plan: sideways and back-to-front.
-- Arrow keys nudge 1 cm, <kbd>Shift</kbd> 0.1 cm, <kbd>Ctrl</kbd> 5 cm.
+- Arrow left and right nudge 1 cm, <kbd>Shift</kbd> 0.1 cm, <kbd>Ctrl</kbd> 5 cm.
 
 To turn something, drag the round handle above it, press <kbd>R</kbd>, or type an angle
 in **Turn**. A turned object still settles properly onto its support.
+
+**Arrow up and down step between surfaces** — from the floor to a plinth to a
+shelf and back — rather than guessing from how far you nudged.
 
 **Plan filter**, bottom left, limits both views to one level at a time. Working out
 depth on a crowded shelf is much easier with everything else hidden.
