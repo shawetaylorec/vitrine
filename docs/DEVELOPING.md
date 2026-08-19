@@ -36,10 +36,10 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 26 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 37 assertions covering the
 cut-out crop, support heights, stand footprints, wire tilt, lean maths in both
 reference frames, rotation, plan-shape selection, overhang detection, the save/open
-round trip, opening a file written by an older build, and PNG export.
+round trip, opening a file written by an older build, the shape picker, panel text fitting, and PNG export.
 
 Append a hash to the URL to screenshot a different state:
 
@@ -51,6 +51,7 @@ Append a hash to the URL to screenshot a different state:
 | `#wiz` | the cut-out step, erase brush selected |
 | `#wiz3` | the mounting step — also asserts the cursor is visible there |
 | `#sched` | the schedule |
+| `#shapes` | the shape picker |
 | `#shot` / `#shotplan` | the README screenshots |
 
 `_t.html` is a build artefact and is git-ignored.
@@ -66,6 +67,26 @@ Centimetres everywhere.
 which view is active. `ctx`, `VW` and `VH` are module-level and get swapped out when
 rendering to an offscreen canvas for PNG export — that is why `paint()` is separate
 from `render()`.
+
+## The shape library
+
+`SHAPES` in `_p1.js` lists each stand-in with its default dimensions and its plan
+footprint. `shapeDraw(c, id, x, y, w, h, fill, stroke)` renders one into any 2D context,
+and is called from three places: `paintBody` for the sheet, `shapeThumb` for the list
+glyphs, and `openShapePicker` for the picker cells. One routine, so a thumbnail cannot
+drift from what actually gets drawn.
+
+Shape ids double as `render` values, so `render` stays a single discriminator across
+`image`, `panel` and every shape, and files written before the library existed still
+open — `rect` and `ellipse` were already valid.
+
+## Panel text
+
+Panel type is sized in centimetres (`textSize`), converted to pixels at draw time by
+the current scale. That is what makes the fit warning meaningful: it is asking whether
+the wording fits at that point size on a board of that real size, not whether it fits
+on screen. `layoutText` wraps to a width while keeping authored line breaks;
+`panelFits` runs the same wrap and compares against the panel height.
 
 ## Geometry
 

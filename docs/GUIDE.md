@@ -138,7 +138,32 @@ in **Turn**. A turned object still settles properly onto its support.
 **Plan filter**, bottom left, limits both views to one level at a time. Working out
 depth on a crowded shelf is much easier with everything else hidden.
 
-## 7. Seen from above
+## 7. Shapes and panels
+
+**+ Shape** opens a picker of twelve stand-ins — box, disc, cylinder, sphere, cone,
+bowl, triangle, hexagon, arched tablet, book, ring, tapered block. The thumbnails are
+drawn by the same routine that draws them in the case, so what you pick is what you
+get. Each arrives at a plausible size and already knows its own footprint: a cylinder
+reads as a circle from above, a box as a rectangle.
+
+Use them to block a case out before the photography is done, and swap them for the real
+thing later. **Change shape…** in the inspector swaps one for another without losing
+its position, and there are buttons to turn a shape into a panel and back.
+
+**+ Panel** adds an interpretation panel, fixed flat to the back wall by default. You
+can also put one on a plinth by switching its mounting to *Placed*.
+
+Panel text is set in **real centimetres**, with the equivalent in points shown beside
+it. This is the point of it: a 30 × 20 cm panel at 0.55 cm (16 pt) holds about ninety
+words, and the panel will tell you when your wording runs past the bottom — a red
+warning in the inspector and an ellipsis on the drawing. Shrink the type or grow the
+panel until it stops complaining.
+
+To get wording in, either type into the box, or **select the panel and press
+<kbd>Ctrl</kbd>+<kbd>V</kbd>** with text on the clipboard. Line breaks you type or
+paste are kept.
+
+## 8. Seen from above
 
 Each object has a **plan shape**:
 
@@ -147,7 +172,7 @@ Each object has a **plan shape**:
 - **The picture itself** — force it
 - **Top-view picture** — cut out a separate photograph taken from above
 
-## 8. Getting it out
+## 9. Getting it out
 
 - **Export PNG** — the current view, at twice screen resolution, captioned with the
   case dimensions.

@@ -258,19 +258,149 @@ function label(text, x, y, { size = 11, font = MONO, fill = C.ink2, align = 'cen
   ctx.fillText(text, x, y);
 }
 
-function wrapText(text, x, y, maxW, lineH, maxLines) {
-  const words = String(text).split(/\s+/).filter(Boolean);
+/* wrap to a width, keeping the line breaks the writer typed.
+   ctx.font must already be set — the caller owns the measuring. */
+function layoutText(text, maxW) {
   const lines = [];
-  let cur = '';
-  for (const wd of words) {
-    const test = cur ? cur + ' ' + wd : wd;
-    if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = wd; }
-    else cur = test;
-    if (lines.length >= maxLines) break;
+  for (const para of String(text).split(/\r?\n/)) {
+    if (!para.trim()) { lines.push(''); continue; }
+    let cur = '';
+    for (const wd of para.split(/\s+/).filter(Boolean)) {
+      const test = cur ? cur + ' ' + wd : wd;
+      if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = wd; }
+      else cur = test;
+    }
+    if (cur) lines.push(cur);
   }
-  if (cur && lines.length < maxLines) lines.push(cur);
-  lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineH));
-  return lines.length;
+  return lines;
+}
+
+/* ---------------- the shape library ----------------
+   One draw routine per shape, used both on the sheet and for the
+   thumbnails in the picker, so what you choose is what you get. */
+
+const SHAPES = [
+  { id: 'rect', name: 'Box', plan: 'rect', w: 20, h: 25, d: 12 },
+  { id: 'ellipse', name: 'Disc', plan: 'ellipse', w: 22, h: 22, d: 3 },
+  { id: 'cylinder', name: 'Cylinder', plan: 'ellipse', w: 14, h: 24, d: 14 },
+  { id: 'sphere', name: 'Sphere', plan: 'ellipse', w: 18, h: 18, d: 18 },
+  { id: 'cone', name: 'Cone', plan: 'ellipse', w: 16, h: 22, d: 16 },
+  { id: 'bowl', name: 'Bowl', plan: 'ellipse', w: 20, h: 9, d: 20 },
+  { id: 'triangle', name: 'Triangle', plan: 'rect', w: 20, h: 18, d: 10 },
+  { id: 'hex', name: 'Hexagon', plan: 'ellipse', w: 18, h: 18, d: 18 },
+  { id: 'arch', name: 'Arched tablet', plan: 'rect', w: 20, h: 30, d: 5 },
+  { id: 'book', name: 'Book', plan: 'rect', w: 18, h: 24, d: 5 },
+  { id: 'ring', name: 'Ring', plan: 'ellipse', w: 24, h: 24, d: 3 },
+  { id: 'taper', name: 'Tapered block', plan: 'rect', w: 24, h: 20, d: 18 }
+];
+const shapeById = id => SHAPES.find(s => s.id === id) || SHAPES[0];
+const isShape = o => o.render !== 'image' && o.render !== 'panel';
+
+function shapeDraw(c, id, x, y, w, h, fill, stroke) {
+  const W = Math.abs(w), H = Math.abs(h);
+  const cx = x + w / 2, cy = y + h / 2;
+  c.fillStyle = fill; c.strokeStyle = stroke; c.lineWidth = 1.2;
+  const solid = fn => { c.beginPath(); fn(); c.closePath(); c.fill(); c.stroke(); };
+
+  switch (id) {
+    case 'ellipse':
+    case 'sphere':
+      solid(() => c.ellipse(cx, cy, W / 2, H / 2, 0, 0, 7));
+      if (id === 'sphere') {   /* a meridian, so it does not read as a flat disc */
+        c.beginPath(); c.ellipse(cx, cy, W / 6, H / 2, 0, 0, 7); c.stroke();
+      }
+      break;
+
+    case 'triangle':
+      solid(() => { c.moveTo(cx, y); c.lineTo(x + w, y + h); c.lineTo(x, y + h); });
+      break;
+
+    case 'hex':
+      solid(() => {
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+          const px = cx + Math.cos(a) * W / 2, py = cy + Math.sin(a) * H / 2;
+          i ? c.lineTo(px, py) : c.moveTo(px, py);
+        }
+      });
+      break;
+
+    case 'taper':
+      solid(() => {
+        const inset = W * 0.16;
+        c.moveTo(x + inset, y); c.lineTo(x + w - inset, y);
+        c.lineTo(x + w, y + h); c.lineTo(x, y + h);
+      });
+      break;
+
+    case 'cylinder': {
+      const ry = Math.min(H * 0.13, W * 0.36);
+      c.beginPath(); c.rect(x, y + ry, w, h - 2 * ry); c.fill();
+      c.beginPath(); c.ellipse(cx, y + h - ry, W / 2, ry, 0, 0, 7); c.fill();
+      c.beginPath(); c.ellipse(cx, y + ry, W / 2, ry, 0, 0, 7); c.fill();
+      c.beginPath();
+      c.moveTo(x, y + ry); c.lineTo(x, y + h - ry);
+      c.moveTo(x + w, y + ry); c.lineTo(x + w, y + h - ry);
+      c.stroke();
+      c.beginPath(); c.ellipse(cx, y + ry, W / 2, ry, 0, 0, 7); c.stroke();
+      c.beginPath(); c.ellipse(cx, y + h - ry, W / 2, ry, 0, 0, Math.PI); c.stroke();
+      break;
+    }
+
+    case 'cone': {
+      const ry = Math.min(H * 0.12, W * 0.34);
+      c.beginPath();
+      c.moveTo(cx, y); c.lineTo(x + w, y + h - ry);
+      c.ellipse(cx, y + h - ry, W / 2, ry, 0, 0, Math.PI);
+      c.lineTo(x, y + h - ry); c.closePath();
+      c.fill(); c.stroke();
+      c.beginPath(); c.ellipse(cx, y + h - ry, W / 2, ry, 0, Math.PI, 0); c.stroke();
+      break;
+    }
+
+    case 'bowl': {
+      const ry = Math.min(H * 0.42, W * 0.2);
+      c.beginPath();
+      c.moveTo(x, y + ry);
+      c.ellipse(cx, y + ry, W / 2, h - ry, 0, 0, Math.PI);
+      c.closePath(); c.fill(); c.stroke();
+      c.beginPath(); c.ellipse(cx, y + ry, W / 2, ry, 0, 0, 7); c.stroke();
+      break;
+    }
+
+    case 'arch': {
+      const r = Math.min(W / 2, H * 0.45);
+      c.beginPath();
+      c.moveTo(x, y + h); c.lineTo(x, y + r);
+      c.ellipse(cx, y + r, W / 2, r, 0, Math.PI, 0);
+      c.lineTo(x + w, y + h); c.closePath();
+      c.fill(); c.stroke();
+      break;
+    }
+
+    case 'ring': {
+      c.beginPath();
+      c.ellipse(cx, cy, W / 2, H / 2, 0, 0, Math.PI * 2);
+      c.ellipse(cx, cy, W / 3.4, H / 3.4, 0, 0, Math.PI * 2, true);
+      c.fill('evenodd');
+      c.beginPath(); c.ellipse(cx, cy, W / 2, H / 2, 0, 0, 7); c.stroke();
+      c.beginPath(); c.ellipse(cx, cy, W / 3.4, H / 3.4, 0, 0, 7); c.stroke();
+      break;
+    }
+
+    case 'book': {
+      const sp = Math.max(2, W * 0.1);
+      c.beginPath(); c.rect(x, y, w, h); c.fill(); c.stroke();
+      c.beginPath();
+      c.moveTo(x + sp, y); c.lineTo(x + sp, y + h);
+      c.moveTo(x + sp * 0.45, y + h * 0.06); c.lineTo(x + sp * 0.45, y + h * 0.94);
+      c.stroke();
+      break;
+    }
+
+    default:   /* rect, and anything unrecognised */
+      c.beginPath(); c.rect(x, y, w, h); c.fill(); c.stroke();
+  }
 }
 
 function arrowDim(x1, y1, x2, y2, text, col) {
@@ -459,34 +589,63 @@ function objectFill(o) {
   return o.colour || C.struct;
 }
 
+/* text on a panel is set in real centimetres, so what you see is
+   whether that wording actually fits at that size */
+const PANEL_PAD = 1.0;                    // cm of margin inside the panel
+const textSizeOf = o => o.textSize || 0.55;
+const ptOf = cm => Math.round(cm * 28.35);
+
+function panelLines(o, wpx, sizePx) {
+  ctx.font = `${sizePx}px ${UIFONT}`;
+  const padPx = PANEL_PAD * (T ? T.sc : 1);
+  return layoutText(o.text || '', Math.abs(wpx) - padPx * 2);
+}
+function panelFits(o) {
+  if (!T || o.render !== 'panel' || !o.text) return true;
+  const sizePx = textSizeOf(o) * T.sc;
+  const lines = panelLines(o, o.w * T.sc, sizePx);
+  const padPx = PANEL_PAD * T.sc;
+  return lines.length * sizePx * 1.32 <= o.h * T.sc - padPx * 2 + 0.5;
+}
+
 /* draw the object's own body into a rect in its own rotated frame */
 function paintBody(o, dx, dy, wpx, hpx, forPlan) {
   const img = forPlan ? (TOP.get(o.id) || BMP.get(o.id)) : BMP.get(o.id);
-  if (o.render === 'image' && img) {
-    ctx.drawImage(img, dx, dy, wpx, hpx);
+  if (o.render === 'image') {
+    if (img) ctx.drawImage(img, dx, dy, wpx, hpx);
+    else { ctx.fillStyle = C.struct; ctx.fillRect(dx, dy, wpx, hpx); }
     return;
   }
-  if (o.render === 'ellipse') {
-    ctx.fillStyle = objectFill(o);
-    ctx.beginPath(); ctx.ellipse(dx + wpx / 2, dy + hpx / 2, Math.abs(wpx) / 2, Math.abs(hpx) / 2, 0, 0, 7); ctx.fill();
-    ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1; ctx.stroke();
+
+  if (o.render !== 'panel') {
+    shapeDraw(ctx, o.render, dx, dy, wpx, hpx, objectFill(o), C.structEdge);
     return;
   }
+
   ctx.fillStyle = objectFill(o);
   ctx.fillRect(dx, dy, wpx, hpx);
-  ctx.strokeStyle = o.render === 'panel' ? C.ink3 : C.structEdge;
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = C.ink3; ctx.lineWidth = 1;
   ctx.strokeRect(dx + .5, dy + .5, wpx - 1, hpx - 1);
-  if (o.render === 'panel' && o.text && Math.abs(hpx) > 22 && Math.abs(wpx) > 40) {
-    ctx.save();
-    ctx.beginPath(); ctx.rect(dx, dy, wpx, hpx); ctx.clip();
-    const size = clamp(hpx / 9, 7, 13);
-    ctx.font = `${size}px ${UIFONT}`;
-    ctx.fillStyle = C.ink;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    wrapText(o.text, dx + 6, dy + 6, wpx - 12, size * 1.25, Math.floor((hpx - 12) / (size * 1.25)));
-    ctx.restore();
+  if (!o.text) return;
+
+  const sizePx = Math.max(3, textSizeOf(o) * (T ? T.sc : 1));
+  if (sizePx < 3.5) return;                       /* too small on screen to be worth it */
+  const padPx = PANEL_PAD * (T ? T.sc : 1);
+  const lineH = sizePx * 1.32;
+  const lines = panelLines(o, wpx, sizePx);
+  const room = Math.floor((Math.abs(hpx) - padPx * 2) / lineH);
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(dx, dy, wpx, hpx); ctx.clip();
+  ctx.font = `${sizePx}px ${UIFONT}`;
+  ctx.fillStyle = C.ink;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  lines.slice(0, Math.max(room, 0)).forEach((l, i) => ctx.fillText(l, dx + padPx, dy + padPx + i * lineH));
+  if (lines.length > room) {
+    ctx.fillStyle = C.warn;
+    ctx.fillText('…', dx + padPx, dy + padPx + Math.max(room - 1, 0) * lineH + lineH);
   }
+  ctx.restore();
 }
 
 function drawObjectFront(o) {
@@ -560,7 +719,7 @@ function planMode(o) {
   const ps = o.planShape || 'auto';
   if (ps === 'top') return o.topPng ? 'top' : 'rect';
   if (ps !== 'auto') return ps;
-  if (o.render === 'ellipse') return 'ellipse';
+  if (isShape(o)) return shapeById(o.render).plan;
   /* past halfway to flat you are looking at the object itself */
   if (o.render === 'image' && o.png && o.mount === 'placed' && (o.lean || 0) > 45) return 'image';
   return 'rect';

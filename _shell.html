@@ -184,6 +184,14 @@ table.sched th{text-align:left;font-size:9px;letter-spacing:.12em;text-transform
 table.sched td{padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 table.sched tr:hover td{background:var(--panel-2)}
 .scroller{overflow:auto;max-height:56vh}
+.shapegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;padding:15px;overflow-y:auto}
+.shapecell{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);cursor:pointer;color:var(--ink-2)}
+.shapecell:hover{border-color:var(--accent);color:var(--ink)}
+.shapecell[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.shapecell canvas{display:block}
+.shapecell b{font-size:12px;font-weight:500}
+.shapecell i{font-style:normal;font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+@media (max-width:620px){.shapegrid{grid-template-columns:repeat(3,1fr)}}
 @media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
 </style>
 
@@ -465,6 +473,20 @@ table.sched tr:hover td{background:var(--panel-2)}
       <div class="spacer"></div>
       <button class="btn ghost" id="wizBack1">Back</button>
       <button class="btn primary" id="wizNext">Next</button>
+    </footer>
+  </div>
+</div>
+
+<div class="backdrop" id="shapeBack" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shapeTitle" style="width:min(760px,100%)">
+    <header>
+      <h3 id="shapeTitle">Choose a shape</h3>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="shapeClose">Cancel</button>
+    </header>
+    <div class="shapegrid" id="shapeGrid"></div>
+    <footer>
+      <span class="note">Stand-ins for anything you have not photographed. Every one arrives with sensible dimensions and the right footprint in plan &mdash; change them afterwards on the right.</span>
     </footer>
   </div>
 </div>

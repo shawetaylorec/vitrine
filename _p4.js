@@ -99,12 +99,29 @@ stage.addEventListener('drop', e => {
 
 document.addEventListener('paste', e => {
   const tag = document.activeElement?.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;   /* let fields paste normally */
+
   const files = Array.from(e.clipboardData?.files || []).filter(f => f.type.startsWith('image/'));
-  if (!files.length) return;
-  e.preventDefault();
-  if (W.pendingTopFor) { openTopWizard(W.pendingTopFor, files[0]); W.pendingTopFor = null; return; }
-  openWizardFiles(files);
+  if (files.length) {
+    e.preventDefault();
+    if (W.pendingTopFor) { openTopWizard(W.pendingTopFor, files[0]); W.pendingTopFor = null; return; }
+    openWizardFiles(files);
+    return;
+  }
+
+  /* text goes into the selected panel, so you can lift wording
+     straight out of a label document */
+  const text = (e.clipboardData?.getData('text/plain') || '').trim();
+  if (!text) return;
+  const o = byId(S.sel);
+  if (o && o.type === 'object' && o.render === 'panel') {
+    e.preventDefault();
+    o.text = text;
+    commit();
+    toast(panelFits(o) ? 'Text pasted into the panel' : 'Pasted — it runs past the bottom of the panel');
+  } else {
+    toast('Select a panel first to paste text into it');
+  }
 });
 
 /* ---------- wizard ---------- */
@@ -240,6 +257,10 @@ $('#fileJson').addEventListener('change', async e => {
   } catch (err) { toast('Could not read that file'); }
 });
 $('#btnExportPng').onclick = () => exportPNG(2);
+
+/* shape picker */
+$('#shapeClose').onclick = closeShapePicker;
+$('#shapeBack').addEventListener('pointerdown', e => { if (e.target.id === 'shapeBack') closeShapePicker(); });
 
 /* schedule */
 $('#btnSchedule').onclick = () => { buildSchedule(); $('#schedBack').hidden = false; };

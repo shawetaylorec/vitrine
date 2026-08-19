@@ -120,15 +120,43 @@
   ok(Math.abs(bbox(astro).y0 - (46 + 5)) < 0.05, 'and it still rests on its support');
   astro.spin = 0;
 
-  /* --- 7. shapes and panels --- */
-  addShape();
-  const shape = S.items.find(i => i.name.startsWith('Shape'));
-  shape.render = 'ellipse';
-  ok(planMode(shape) === 'ellipse', 'a round shape reads as round in plan');
+  /* --- 7. the shape picker --- */
+  ok(SHAPES.length >= 12, `the picker offers ${SHAPES.length} shapes`);
+  openShapePicker('new');
+  ok($('#shapeBack').hidden === false && $$('#shapeGrid .shapecell').length === SHAPES.length,
+    'the picker opens with a thumbnail for every shape');
+  ok($('#shapeGrid canvas').width === 76, 'each one is drawn by the same routine that draws it in the case');
+  choseShape('cylinder');
+  const shape = S.items.find(i => i.render === 'cylinder');
+  ok($('#shapeBack').hidden === true && shape, 'choosing one closes the picker and adds it');
+  ok(shape.w === 14 && shape.h === 24 && shape.depth === 14, `it arrives at a sensible size (${shape.w}×${shape.h}×${shape.depth})`);
+  ok(planMode(shape) === 'ellipse', 'a cylinder reads as a circle from above');
+  select(shape.id);
+  const wasAt = shape.x;
+  shapePickMode = 'change';
+  choseShape('sphere');
+  ok(byId(shape.id).render === 'sphere' && byId(shape.id).x === wasAt,
+    'and can be changed afterwards without losing its place');
+  shape.render = 'cylinder';
+
+  /* --- 7b. panels and their text --- */
   addPanel();
   const panel = S.items.find(i => i.render === 'panel');
   panel.wallY = 110; panel.x = 20;
   ok(panel.mount === 'wall' && Math.abs(bbox(panel).y0 - 110) < 0.01, 'a panel fixes flat to the wall at the height you give it');
+  T = calcT();
+  panel.w = 30; panel.h = 20; panel.textSize = 0.55;
+  panel.text = new Array(90).fill('Rudolphine').join(' ');
+  ok(panelFits(panel), 'ninety words fit a 30 by 20 cm panel at 16 pt');
+  panel.w = 20; panel.h = 6;
+  ok(!panelFits(panel), 'the same words on a 20 by 6 cm panel are reported as overflowing');
+  panel.textSize = 0.3;
+  ok(panelFits(panel), `and setting the type to ${ptOf(0.3)} pt brings them back inside`);
+  panel.w = 30; panel.h = 20; panel.textSize = 0.55;
+  panel.text = 'Line one.\nLine two.';
+  ctx.font = `${panel.textSize * T.sc}px ${UIFONT}`;
+  ok(layoutText(panel.text, 9999).length === 2, 'typed line breaks are kept, not collapsed');
+  ok(ptOf(0.55) === 16, '0.55 cm reads as 16 pt');
 
   /* --- 8. out-of-case detection --- */
   const n0 = outOfCase(astro).length;
@@ -176,7 +204,7 @@
   if (location.hash.startsWith('#shot')) {
     S.name = 'Kepler case';
     S.bg.colour = '#3b2a1c';
-    byId(S.items.find(i => i.name === 'Shape 1').id).hide = true;
+    byId(S.items.find(i => isShape(i)).id).hide = true;
     const m = S.items.find(i => i.name === 'Manuscript');
     m.x = 16; m.z = 2; m.stand.w = 36; m.stand.d = 30;
     const a = S.items.find(i => i.name === 'Astrolabe');
@@ -204,6 +232,7 @@
     ok(getComputedStyle(wizCv).cursor === 'crosshair', 'the wire step always shows a cursor, whatever brush was last used');
   }
   if (location.hash === '#sched') { buildSchedule(); $('#schedBack').hidden = false; }
+  if (location.hash === '#shapes') { render(); openShapePicker('new'); }
   render();
   log('done');
 })();

@@ -205,6 +205,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') document.activeElement.blur();
     return;
   }
+  if (!$('#shapeBack').hidden) { if (e.key === 'Escape') closeShapePicker(); return; }
   if (!$('#wizBack').hidden) {
     if (e.key === 'Escape') minimiseWizard();
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); wizUndo(); }
@@ -269,7 +270,7 @@ function addPlinth() {
 function blankObject(extra) {
   return Object.assign({
     id: uid(), type: 'object', render: 'rect',
-    name: 'Object', text: '', colour: '',
+    name: 'Object', text: '', textSize: 0.55, colour: '',
     png: null, raw: null, topPng: null, planShape: 'auto',
     w: 20, h: 15, depth: 5,
     x: rnd(S.cs.w / 2 - 10), z: 4, wallY: 100, spin: 0,
@@ -279,17 +280,78 @@ function blankObject(extra) {
   }, extra || {});
 }
 
-function addShape() {
-  const n = S.items.filter(i => i.render === 'rect' || i.render === 'ellipse').length + 1;
-  const it = blankObject({ name: `Shape ${n}`, render: 'rect', w: 20, h: 25, depth: 8 });
-  S.items.push(it); select(it.id); commit(); toast('Shape added — set its size on the right');
+/* ---- the shape picker ---- */
+
+const thumbCache = new Map();
+function shapeThumb(id, px = 26) {
+  if (!C.struct) readPalette();          /* the lists can run before the first paint */
+  const theme = document.documentElement.getAttribute('data-theme') || 'sys';
+  const key = `${id}|${px}|${theme}|${C.struct}`;
+  if (thumbCache.has(key)) return thumbCache.get(key);
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = px;
+  const c = cv.getContext('2d');
+  shapeDraw(c, id, 3, 3, px - 6, px - 6, C.struct || '#cdc5b2', C.structEdge || '#8c8471');
+  const url = cv.toDataURL();
+  thumbCache.set(key, url);
+  return url;
 }
+
+let shapePickMode = 'new';
+function openShapePicker(mode) {
+  readPalette();
+  shapePickMode = mode || 'new';
+  const cur = byId(S.sel);
+  $('#shapeTitle').textContent = shapePickMode === 'change' ? 'Change shape' : 'Choose a shape';
+  const grid = $('#shapeGrid');
+  grid.innerHTML = '';
+  for (const s of SHAPES) {
+    const cell = document.createElement('button');
+    cell.className = 'shapecell';
+    cell.type = 'button';
+    cell.dataset.shape = s.id;
+    if (shapePickMode === 'change' && cur && cur.render === s.id) cell.setAttribute('aria-pressed', 'true');
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 76;
+    shapeDraw(cv.getContext('2d'), s.id, 8, 8, 60, 60, C.struct, C.structEdge);
+    cell.appendChild(cv);
+    const b = document.createElement('b'); b.textContent = s.name; cell.appendChild(b);
+    const i = document.createElement('i'); i.textContent = `${s.w}×${s.h}×${s.d}`; cell.appendChild(i);
+    cell.onclick = () => choseShape(s.id);
+    grid.appendChild(cell);
+  }
+  $('#shapeBack').hidden = false;
+  grid.querySelector('.shapecell')?.focus();
+}
+function closeShapePicker() { $('#shapeBack').hidden = true; }
+
+function choseShape(id) {
+  const s = shapeById(id);
+  closeShapePicker();
+  if (shapePickMode === 'change') {
+    const o = byId(S.sel);
+    if (o) {
+      const wasPanel = o.render === 'panel';
+      o.render = id;
+      if (wasPanel) { o.w = s.w; o.h = s.h; o.depth = s.d; }
+      commit(); toast(`Now a ${s.name.toLowerCase()}`);
+    }
+    return;
+  }
+  const n = S.items.filter(i => i.type === 'object' && isShape(i)).length + 1;
+  const it = blankObject({ name: `${s.name} ${n}`, render: id, w: s.w, h: s.h, depth: s.d });
+  S.items.push(it);
+  select(it.id); commit();
+  toast(`${s.name} added — set its size on the right`);
+}
+
+function addShape() { openShapePicker('new'); }
 function addPanel() {
   const n = S.items.filter(i => i.render === 'panel').length + 1;
   const it = blankObject({
     name: `Panel ${n}`, render: 'panel', mount: 'wall',
     w: 30, h: 21, depth: 0.4, wallY: rnd(S.cs.h * 0.55), z: 0,
-    text: 'Interpretation text goes here.'
+    text: 'Interpretation text goes here.', textSize: 0.55
   });
   S.items.push(it); select(it.id); commit(); toast('Panel added');
 }
@@ -347,8 +409,7 @@ function objBadge(o) {
 function objGlyph(o) {
   if (o.png) return `<img src="${o.png}" alt="">`;
   if (o.render === 'panel') return '&#9646;';
-  if (o.render === 'ellipse') return '&#9679;';
-  return '&#9633;';
+  return `<img src="${shapeThumb(o.render)}" alt="">`;
 }
 
 function renderLists() {
@@ -442,15 +503,21 @@ function renderInspector() {
       <h2>${o.render === 'panel' ? 'Panel' : isImg ? 'Object' : 'Shape'}</h2>
       ${isImg ? `<div class="thumb" id="iThumb" title="Click to reopen the cut-out">${o.png ? `<img src="${o.png}" alt="">` : ''}</div>` : ''}
       <label class="f full"><span>Name</span><input type="text" id="iName" value="${esc(o.name)}"></label>
-      ${o.render === 'panel' ? `<label class="f full"><span>Text</span><textarea id="iText">${esc(o.text || '')}</textarea></label>` : ''}
-      ${!isImg ? `<div class="row">
-        <label class="f" style="flex:1"><span>Shape</span><select id="iRender">
-          <option value="rect"${o.render === 'rect' ? ' selected' : ''}>Rectangle</option>
-          <option value="ellipse"${o.render === 'ellipse' ? ' selected' : ''}>Circle / oval</option>
-          <option value="panel"${o.render === 'panel' ? ' selected' : ''}>Interpretation panel</option>
-        </select></label>
+      ${o.render === 'panel' ? `
+        <label class="f full"><span>Text &mdash; paste straight in</span><textarea id="iText" rows="4" placeholder="Interpretation text">${esc(o.text || '')}</textarea></label>
+        <div class="fields">
+          ${fld('Text size cm', 'iTextSize', rnd(textSizeOf(o), 2), { step: 0.05, min: 0.1 })}
+          <label class="f"><span>&asymp; points</span><input type="text" id="iTextPt" value="${ptOf(textSizeOf(o))} pt" disabled></label>
+          <label class="f"><span>Fill</span><input type="color" id="iColour" value="${o.colour || '#ffffff'}"></label>
+        </div>
+        ${panelFits(o) ? '' : '<p class="warnbox">The text runs past the bottom of the panel. Make the panel taller, or the type smaller.</p>'}
+        <button class="btn sm ghost" id="iToShape">Turn it into a shape&hellip;</button>` : ''}
+      ${isShape(o) ? `<div class="row">
+        <span class="sw" style="width:36px;height:36px;flex:none;border:1px solid var(--line);border-radius:4px;overflow:hidden;display:grid;place-items:center"><img src="${shapeThumb(o.render, 36)}" alt="" style="width:100%;height:100%"></span>
+        <button class="btn" id="iShape" style="flex:1">Change shape&hellip;</button>
         <label class="f" style="width:56px"><span>Fill</span><input type="color" id="iColour" value="${o.colour || '#b9b2a0'}"></label>
-      </div>` : ''}
+      </div>
+      <button class="btn sm ghost" id="iToPanel">Turn it into a panel</button>` : ''}
       <div class="readout">
         <span>occupies <b>${rnd(b.x1 - b.x0)} &times; ${rnd(b.y1 - b.y0)}</b> cm</span>
         <span>base <b>${rnd(b.y0)}</b> · top <b>${rnd(b.y1)}</b></span>
@@ -629,9 +696,26 @@ function bindInspector(o) {
   const setNum = (id, fn) => on(id, 'change', e => { fn(num(e.target.value)); commit(); });
 
   on('iName', 'change', e => { o.name = e.target.value || o.name; commit(); });
-  on('iText', 'change', e => { o.text = e.target.value; commit(); });
-  on('iColour', 'change', e => { o.colour = e.target.value; commit(); });
-  on('iRender', 'change', e => { o.render = e.target.value; commit(); });
+  /* live on input so a paste shows up at once, saved on blur —
+     commit() rebuilds this panel and would steal the caret */
+  on('iText', 'input', e => { o.text = e.target.value; draw(); });
+  on('iText', 'change', () => commit());
+  on('iTextSize', 'input', e => {
+    o.textSize = Math.max(0.1, num(e.target.value));
+    const pt = $('#iTextPt'); if (pt) pt.value = ptOf(o.textSize) + ' pt';
+    draw();
+  });
+  on('iTextSize', 'change', () => commit());
+  on('iColour', 'input', e => { o.colour = e.target.value; draw(); });
+  on('iColour', 'change', () => commit());
+  on('iShape', 'click', () => openShapePicker('change'));
+  on('iToShape', 'click', () => openShapePicker('change'));
+  on('iToPanel', 'click', () => {
+    o.render = 'panel';
+    if (!o.text) o.text = 'Interpretation text goes here.';
+    o.depth = Math.min(o.depth, 1);
+    commit();
+  });
   setNum('iT', v => o.t = Math.max(0.1, v));
   setNum('iY', v => o.y = clamp(v, 0, S.cs.h));
   setNum('iRail', v => o.rail = v);

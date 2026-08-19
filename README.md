@@ -59,10 +59,21 @@ than the case, or overhanging whatever it stands on.
 distance from the left and back, lean and wire lengths, copyable straight into a
 spreadsheet.
 
-Also: shelves and plinths, plain shapes for things you have not photographed,
-interpretation panels with text on them, a back wall colour or image, a plan-level
-filter, a turn handle for rotating objects, PNG export of either view, light and dark,
-and save/open to a `.vitrine.json` file that carries the cut-outs with it.
+**Stand-in shapes for anything not yet photographed.** A picker of twelve — box, disc,
+cylinder, sphere, cone, bowl, triangle, hexagon, arched tablet, book, ring, tapered
+block — each arriving at a sensible size and with the right footprint in plan, so a
+cylinder reads as a circle from above without being told.
+
+![The shape picker](docs/images/shapes.png)
+
+**Interpretation panels carry real type.** Text size is set in centimetres and shown in
+points, so the panel tells you whether that wording actually fits at 16 pt on a
+30 × 20 cm board before anyone sets it. Paste wording straight in from a label document;
+line breaks are kept.
+
+Also: shelves and plinths, a back wall colour or image, a plan-level filter, a turn
+handle for rotating objects, PNG export of either view, light and dark, and save/open to
+a `.vitrine.json` file that carries the cut-outs with it.
 
 ## Running it
 
