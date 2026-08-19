@@ -135,4 +135,22 @@ Or use the hosted copy, which is the same file: <https://claude.ai/code/artifact
 
 ## Licence
 
-None. All rights reserved — this is a private working tool, not a released project.
+MIT — see [LICENSE](LICENSE). Copyright © 2026 Shawe Taylor.
+
+You may use, change, redistribute and sell this, including commercially, provided the
+copyright notice travels with it.
+
+### Third-party material
+
+No third-party code: no libraries, no packages, no build tooling. The only outside
+material is two typefaces, loaded from Google Fonts and not redistributed here:
+
+| Typeface | Licence |
+| --- | --- |
+| [Barlow Semi Condensed](https://fonts.google.com/specimen/Barlow+Semi+Condensed) | SIL Open Font License 1.1 |
+| [IBM Plex Mono](https://fonts.google.com/specimen/IBM+Plex+Mono) | SIL Open Font License 1.1 |
+
+Both permit commercial use, including bundling the font files into a product. If you
+ever ship this so that it works offline, embed the fonts rather than linking them and
+include their OFL text alongside. Everything falls back to a system stack if the fonts
+do not load, so nothing breaks without them.
