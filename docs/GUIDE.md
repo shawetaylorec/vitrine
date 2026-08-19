@@ -40,8 +40,10 @@ Both can be dragged in either view, and the two views do different jobs:
 
 - **In elevation**, moving a plinth takes everything standing on it — and anything stuck
   to its front — along with it. You are moving the plinth *and its contents* as a unit.
-- **In plan**, the plinth moves alone. That is how you slide an object about its top, or
-  work out where on the deck the plinth itself should sit.
+- **In plan**, things *resting* on the plinth stay where they are — that is how you slide
+  an object about its top, or work out where on the deck the plinth itself should sit.
+  Anything *stuck to a face* still travels with it: it is glued on, and it is barely more
+  than a line in plan, so leaving it behind would only strand it off the plinth.
 
 ### A plinth's face
 

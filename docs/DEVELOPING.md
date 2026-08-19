@@ -36,7 +36,7 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 128 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 132 assertions covering the
 cut-out crop, support heights, stand footprints, wire tilt, lean maths in both
 reference frames, rotation, plan-shape selection, panels fixed to plinth faces, depth
 ordering, overhang detection, the shape picker, panel text fitting, support stickiness
@@ -313,3 +313,17 @@ so a click on a stack takes the item you can actually see.
 is a caption, and what remains — photographs and shapes — is the objects list. They are
 all still the same underlying item type, sharing placement, mounting and undo; only the
 listing and the buttons that create them are separate.
+
+## What travels with a plinth
+
+`childrenOf(id)` returns both the objects resting on a support and anything stuck to its
+face, but the two behave differently when the support is dragged.
+
+- **Elevation** carries everything: you are moving the plinth and its contents as a unit.
+- **Plan** carries only the stuck ones. Things resting on top are left alone so they can
+  be positioned on the surface, which is the whole point of arranging in plan. A face
+  panel is glued on and is barely more than a line from above, so leaving it behind would
+  only strand it off the plinth.
+
+The drag snapshot marks each child with `stuck: k.mount === 'wall'` to tell them apart.
+Only `x` needs carrying — a face-mounted item derives its `z` from the plinth front.

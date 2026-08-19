@@ -1990,7 +1990,11 @@ cvs.addEventListener('pointerdown', e => {
     drag = {
       id: hit.id, sx: px, sy: py, a0: pt.a, b0: pt.b,
       snap: pick(hit), moved: false,
-      kids: hit.type !== 'object' ? childrenOf(hit.id).map(k => ({ id: k.id, x: k.x, z: k.z })) : []
+      /* `stuck` marks the ones glued to a face rather than resting on top —
+         they travel in both views, since you cannot see them in plan */
+      kids: hit.type !== 'object'
+        ? childrenOf(hit.id).map(k => ({ id: k.id, x: k.x, z: k.z, stuck: k.mount === 'wall' }))
+        : []
     };
   } else {
     drag = { pan: true, sx: px, sy: py, px: S.pan.x, py: S.pan.y };
@@ -2058,9 +2062,16 @@ cvs.addEventListener('pointermove', e => {
   if (S.view === 'plan') {
     it.x = q(clamp(drag.snap.x + da, -50, S.cs.w + 50));
     it.z = q(clamp(drag.snap.z + db, -20, S.cs.d + 20));
-    /* In plan you are arranging things ON the plinth, so moving the
-       plinth leaves them where they are — that is how you slide an
-       object about its top. Elevation still carries them. */
+    /* In plan you are arranging things ON the plinth, so anything resting
+       on top stays put — that is how you slide an object about its face.
+       Anything stuck to a face is a different matter: it is glued on, and
+       it is barely visible in plan, so it goes where the plinth goes.
+       (Its z follows the face by itself; only x needs carrying.) */
+    for (const k of drag.kids) {
+      if (!k.stuck) continue;
+      const kid = byId(k.id);
+      if (kid) kid.x = q(k.x + da);
+    }
   } else if (it.type === 'shelf') {
     it.x = q(drag.snap.x + da);
     it.y = q(clamp(drag.snap.y + db, 0, S.cs.h));

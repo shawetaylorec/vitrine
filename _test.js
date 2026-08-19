@@ -409,10 +409,25 @@
   ok(Math.abs(rider.x - (riderWasX + 8)) < 0.01, 'in elevation a plinth still takes its objects with it');
   rider.x = riderWasX;
   S.view = 'plan';
-  pl2.z += 6;                                                  /* what the plan drag does: plinth only */
+  pl2.z += 6;                                                  /* what the plan drag does */
   ok(Math.abs(rider.z - riderWasZ) < 0.01,
-    'in plan the plinth moves alone, so you can place things on its top');
+    'in plan things resting on the plinth stay put, so you can place them on its top');
   pl2.z -= 6;
+
+  /* but anything stuck to a face is glued on and goes with it */
+  const stuck = S.items.find(i => i.render === 'panel' && faceOf(i)) ||
+    (select(pl2.id), addPanel(), S.items[S.items.length - 1]);
+  stuck.mount = 'wall'; stuck.face = pl2.id;
+  const stuckWasX = stuck.x;
+  const kids = childrenOf(pl2.id).map(k => ({ id: k.id, x: k.x, stuck: k.mount === 'wall' }));
+  ok(kids.some(k => k.stuck) && kids.some(k => !k.stuck),
+    'the plinth is carrying both a resting object and a stuck panel');
+  for (const k of kids) { if (k.stuck) byId(k.id).x = rnd(k.x + 9, 2); }   /* what the plan drag does */
+  pl2.x += 9;
+  ok(Math.abs(stuck.x - (stuckWasX + 9)) < 0.01, 'so the face panel travels with the plinth in plan');
+  ok(Math.abs(rider.x - riderWasX) < 0.01, 'while the object on top still does not');
+  pl2.x -= 9; stuck.x = stuckWasX;
+  ok(Math.abs(footprint(stuck).z - (pl2.z + pl2.d)) < 0.01, 'and it stays on the face front to back');
 
   /* looking down, the thing standing on the plinth takes the click */
   S.view = 'plan'; VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
