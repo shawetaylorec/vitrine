@@ -23,14 +23,19 @@ const S = {
   view: 'front',
   zoom: 1,
   pan: { x: 0, y: 0 },
-  opt: { grid: true, dims: true, snap: true },
+  opt: { grid: true, dims: true, snap: true, rulers: true },
   level: 'all'
 };
 
-/* bitmap caches, keyed by item id */
+/* bitmap caches, keyed by item id. The SRC maps record which data URL
+   each decoded bitmap came from, so undo can tell whether it still
+   holds the right picture without re-decoding everything. */
 const BMP = new Map();      // the cut-out
 const TOP = new Map();      // optional top-view picture
+const BMPSRC = new Map();
+const TOPSRC = new Map();
 let BGIMG = null;           // back-wall image
+let PREVIEW = false;        // full-screen, no drafting furniture
 
 function loadImage(src) {
   return new Promise((res, rej) => {
@@ -54,10 +59,18 @@ function supportList() {
 const supportOf = o => supportList().find(s => s.id === o.support) || supportList()[0];
 const byId = id => S.items.find(i => i.id === id);
 
+/* A fixed panel is stuck flat to a vertical surface: the back wall, or
+   the front face of a plinth. Same relationship either way — only the
+   surface differs. Returns the plinth, or null for the back wall. */
+function faceOf(o) {
+  if (o.mount !== 'wall' || !o.face || o.face === 'back') return null;
+  return supportList().find(s => s.id === o.face) || null;
+}
+
 function levelKey(o) {
   if (o.type !== 'object') return o.id;
   if (o.mount === 'hanging') return 'hung';
-  if (o.mount === 'wall') return 'wall';
+  if (o.mount === 'wall') return faceOf(o) ? o.face : 'wall';
   return o.support || 'floor';
 }
 function visible(o) {
@@ -68,31 +81,37 @@ function visible(o) {
 }
 
 /* ---------------- stands and cradles ----------------
-   A stand belongs to its object: it is always centred under it
-   and travels with it. `h` is the end height for a cradle (the
-   V arms) and the lift for everything else. */
+   A stand belongs to its object: it is always centred under it and
+   travels with it. `h` is the height of the base it stands the object
+   on, whatever the kind. Only the plan view distinguishes them — a V
+   stand splays front to back, so that is the only place a V shows. */
 
 const STAND_NONE = { kind: 'none', w: 0, d: 0, h: 0 };
 const standOf = o => (o.stand && o.stand.kind && o.stand.kind !== 'none') ? o.stand : null;
 
-/* how far the stand raises the object's underside */
+/* how far the stand raises the object's underside — for every kind
+   this is simply the height of the base it sits on */
 function standLift(o) {
   const st = standOf(o);
-  if (!st) return 0;
-  /* a book cradle holds the block in its valley, so the middle is
-     effectively on the deck — only the arms stand proud */
-  return st.kind === 'cradle' ? 0 : st.h;
+  return st ? st.h : 0;
 }
+
+/* A book cradle is made to fit its book, so it takes the object's own
+   width and depth and you only give the height. A stand or a block is
+   a separate thing with its own footprint. */
+const cradleFits = kind => kind === 'cradle';
 
 function standBox(o) {
   const st = standOf(o);
   if (!st || o.mount !== 'placed') return null;
   const b = bbox(o), f = footprint(o);
+  const w = cradleFits(st.kind) ? b.x1 - b.x0 : st.w;
+  const d = cradleFits(st.kind) ? f.d : st.d;
   const cx = (b.x0 + b.x1) / 2, cz = f.z + f.d / 2;
   return {
     kind: st.kind,
-    x: cx - st.w / 2, w: st.w,
-    z: cz - st.d / 2, d: st.d,
+    x: cx - w / 2, w,
+    z: cz - d / 2, d,
     h: st.h,
     base: supportOf(o).top
   };
@@ -102,6 +121,20 @@ function standBox(o) {
    layout() places the artwork in world space: the point (u,v) on
    the picture — u across, v down from the top, both normalised —
    is pinned to `pivot`, and the picture is rotated by `rot`. */
+
+/* A leaning object is a slab h tall and `depth` thick tipped back by
+   `lean`. In elevation you see the foreshortened face and nothing
+   else — drawing the block's edge as well just puts an unexplained
+   bar under everything. On the deck it covers sin of its length plus
+   cos of its thickness. */
+function leanParts(o) {
+  const th = (o.lean || 0) * DEG;
+  return {
+    height: o.h * Math.cos(th),
+    deck: o.h * Math.sin(th) + (o.depth || 0) * Math.cos(th)
+  };
+}
+const isFlat = o => o.mount === 'placed' && (o.lean || 0) > 45;
 
 function layout(o) {
   const spin = (o.spin || 0) * DEG;
@@ -123,11 +156,12 @@ function layout(o) {
     return { w: o.w, h: o.h, rot: spin, pivot: { x: o.x + o.w / 2, y: o.wallY || 0 }, u: 0.5, v: 1 };
   }
 
-  /* placed: lean foreshortens the height, spin turns it in the
-     picture plane, then the whole thing drops until its lowest
-     corner rests on the support */
-  const lean = (o.lean || 0) * DEG;
-  const hEff = o.h * Math.cos(lean);
+  /* placed: leaning back turns the object's face away and brings its
+     thickness into view, so in elevation you see a foreshortened face
+     with the edge of the block below it. Lying flat that is all edge —
+     which is exactly what a label card on a plinth looks like. */
+  const p = leanParts(o);
+  const hEff = p.height;
   const base = supportOf(o).top + standLift(o);
   const c = Math.cos(spin), s = Math.sin(spin);
   let minY = Infinity;
@@ -160,8 +194,12 @@ function bbox(o) {
    front of that span. */
 function footprint(o) {
   const b = bbox(o);
-  const lean = o.mount === 'placed' ? (o.lean || 0) * DEG : 0;
-  return { x: b.x0, w: b.x1 - b.x0, z: o.z, d: o.depth + o.h * Math.sin(lean) };
+  const f = faceOf(o);
+  /* stuck to a plinth front it sits at that face, proud by its own
+     thickness — so from above it is barely a line */
+  if (f) return { x: b.x0, w: b.x1 - b.x0, z: f.z + f.d, d: o.depth || 0.4 };
+  const d = o.mount === 'placed' ? leanParts(o).deck : (o.depth || 0);
+  return { x: b.x0, w: b.x1 - b.x0, z: o.z, d };
 }
 
 /* everything the object needs room for, stand included */
@@ -186,6 +224,11 @@ function outOfCase(o) {
     if (e.x < s.x - 0.05 || e.x + e.w > s.x + s.w + 0.05) msgs.push('overhanging ' + s.name);
     if (e.z < s.z - 0.05 || e.z + e.d > s.z + s.d + 0.05) msgs.push('deeper than ' + s.name);
   }
+  const f = faceOf(o);
+  if (f) {
+    if (b.x0 < f.x - 0.05 || b.x1 > f.x + f.w + 0.05) msgs.push('wider than the front of ' + f.name);
+    if (b.y1 > f.top + 0.05) msgs.push('above the top of ' + f.name);
+  }
   return msgs;
 }
 
@@ -196,7 +239,7 @@ const mainCtx = cvs.getContext('2d');
 /* ctx / VW / VH are swapped out when rendering to an export canvas */
 let ctx = mainCtx;
 let VW = 0, VH = 0;
-const GUT = 26;   // ruler gutter, px
+let GUT = 26;   // ruler gutter, px — collapses when the rulers are off
 let T = null;
 
 function fitScale() {
@@ -205,6 +248,7 @@ function fitScale() {
 }
 function calcT() {
   if (ctx === mainCtx) { VW = cvs.clientWidth; VH = cvs.clientHeight; }
+  GUT = PREVIEW ? 0 : S.opt.rulers === false ? 8 : 26;
   const W = S.cs.w, H = S.view === 'front' ? S.cs.h : S.cs.d;
   const sc = fitScale() * S.zoom;
   return {
@@ -235,7 +279,8 @@ function readPalette() {
     ink: g('--ink'), ink2: g('--ink-2'), ink3: g('--ink-3'),
     accent: g('--accent'), plan: g('--plan'), warn: g('--warn'),
     caseFill: g('--case-fill'), caseEdge: g('--case-edge'),
-    struct: g('--struct'), structEdge: g('--struct-edge'), panel: g('--panel')
+    struct: g('--struct'), structEdge: g('--struct-edge'), panel: g('--panel'),
+    previewBg: g('--preview-bg')
   };
 }
 /* the back-wall colour dresses the elevation only — in plan you are
@@ -246,6 +291,7 @@ const UIFONT = '"Barlow Semi Condensed",system-ui,sans-serif';
 const MONO = '"IBM Plex Mono",ui-monospace,monospace';
 
 function label(text, x, y, { size = 11, font = MONO, fill = C.ink2, align = 'center', base = 'middle', box = false, pad = 3, bg = null } = {}) {
+  if (PREVIEW) return;          /* no annotation on the finished view */
   ctx.font = `${size}px ${font}`;
   ctx.textAlign = align; ctx.textBaseline = base;
   if (box) {
@@ -446,15 +492,25 @@ function render() {
 function paint() {
   const cw = VW, ch = VH;
   ctx.clearRect(0, 0, cw, ch);
-  ctx.fillStyle = C.sheet; ctx.fillRect(0, 0, cw, ch);
+  ctx.fillStyle = PREVIEW ? C.previewBg : C.sheet;
+  ctx.fillRect(0, 0, cw, ch);
 
   const isPlan = S.view === 'plan';
   const tl = w2s(0, isPlan ? 0 : S.cs.h);
   const br = w2s(S.cs.w, isPlan ? S.cs.d : 0);
   const cw2 = br.x - tl.x, ch2 = br.y - tl.y;
 
+  ctx.save();
+  if (PREVIEW) {
+    /* lift the case off the surround, the way a lit vitrine reads
+       in a dim gallery */
+    ctx.shadowColor = 'rgba(0,0,0,.6)';
+    ctx.shadowBlur = 46;
+    ctx.shadowOffsetY = 14;
+  }
   ctx.fillStyle = caseGround();
   ctx.fillRect(tl.x, tl.y, cw2, ch2);
+  ctx.restore();
 
   if (!isPlan && BGIMG) {
     ctx.save();
@@ -467,7 +523,7 @@ function paint() {
     ctx.restore();
   }
 
-  if (S.opt.grid) drawGrid(tl, br);
+  if (S.opt.grid && !PREVIEW) drawGrid(tl, br);
 
   ctx.save();
   ctx.beginPath(); ctx.rect(tl.x, tl.y, cw2, ch2); ctx.clip();
@@ -476,17 +532,31 @@ function paint() {
 
   ctx.strokeStyle = C.caseEdge; ctx.lineWidth = 1.8;
   ctx.strokeRect(tl.x + 0.5, tl.y + 0.5, cw2 - 1, ch2 - 1);
-  if (isPlan) {
+  if (isPlan && !PREVIEW) {
     ctx.lineWidth = 4; ctx.beginPath();
     ctx.moveTo(tl.x, tl.y + 1.5); ctx.lineTo(br.x, tl.y + 1.5); ctx.stroke();
     label('BACK WALL', (tl.x + br.x) / 2, tl.y - 10, { size: 9, font: UIFONT, fill: C.ink3 });
     label('GLASS FRONT', (tl.x + br.x) / 2, br.y + 11, { size: 9, font: UIFONT, fill: C.ink3 });
   }
 
+  if (PREVIEW) {
+    /* the faintest fall-off into the corners of the case */
+    const g = ctx.createRadialGradient(
+      tl.x + cw2 / 2, tl.y + ch2 / 2, Math.min(cw2, ch2) * 0.25,
+      tl.x + cw2 / 2, tl.y + ch2 / 2, Math.hypot(cw2, ch2) * 0.62);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,.22)');
+    ctx.save();
+    ctx.beginPath(); ctx.rect(tl.x, tl.y, cw2, ch2); ctx.clip();
+    ctx.fillStyle = g; ctx.fillRect(tl.x, tl.y, cw2, ch2);
+    ctx.restore();
+    return;
+  }
+
   if (S.opt.dims) drawCaseDims(tl, br);
   drawSelectionDims();
   drawSpinHandle();
-  drawRulers();
+  if (S.opt.rulers !== false) drawRulers();
 }
 
 function drawGrid(tl, br) {
@@ -518,33 +588,56 @@ function drawCaseDims(tl, br) {
 
 /* ---------------- elevation ---------------- */
 
-function drawFront() {
-  const structs = S.items.filter(i => i.type !== 'object' && visible(i));
-  for (const p of structs.filter(i => i.type === 'plinth')) {
-    const a = w2s(p.x, p.h), b = w2s(p.x + p.w, 0);
-    ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
-    ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
-    ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
-    hatch(a.x, a.y, b.x - a.x, b.y - a.y);
-    if (p.id === S.sel) outline(a.x, a.y, b.x - a.x, b.y - a.y);
-    label(p.name, (a.x + b.x) / 2, a.y + 12, { size: 10, font: UIFONT, fill: C.ink3 });
-  }
-  for (const s of structs.filter(i => i.type === 'shelf')) {
-    const a = w2s(s.x, s.y), b = w2s(s.x + s.w, s.y - s.t);
-    const hgt = Math.max(2, b.y - a.y);
-    ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, hgt);
-    ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
-    ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, hgt - 1);
-    if (s.id === S.sel) outline(a.x, a.y, b.x - a.x, hgt);
-    label(`${s.name} · ${rnd(s.y)}`, b.x - 4, a.y - 8, { size: 10, font: MONO, fill: C.ink3, align: 'right' });
-  }
+/* How near the glass a thing reaches. Everything in the case — plinths
+   included — goes into one painter's-algorithm pass on this, so a panel
+   on the back wall ends up behind a plinth and an object standing in
+   front of a plinth ends up in front of whatever is stuck to its face.
+   A shelf is a plane rather than a volume, so it is keyed by its back
+   edge and stays behind what stands on it. */
+const BEHIND_ALL = -1e6;
+function depthKey(it) {
+  if (it.type === 'shelf') return it.z;
+  if (it.type === 'plinth') return it.z + it.d;
+  /* Anything fixed to the back wall is on the rearmost plane there is.
+     It cannot get in front of an object in the case, however small its
+     stand-off, so it is not a matter of comparing depths — it is a rule.
+     Among themselves they still order by how far they stand proud. */
+  if (it.mount === 'wall' && !faceOf(it)) return BEHIND_ALL + (it.z || 0);
+  const f = footprint(it);
+  return f.z + f.d;
+}
 
-  /* furthest from the glass drawn first */
-  const objs = S.items.filter(i => i.type === 'object' && visible(i)).sort((a, b) => a.z - b.z);
-  for (const o of objs) { drawStandFront(o); drawObjectFront(o); }
+function drawPlinthFront(p) {
+  const a = w2s(p.x, p.h), b = w2s(p.x + p.w, 0);
+  ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
+  ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
+  ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
+  hatch(a.x, a.y, b.x - a.x, b.y - a.y);
+  if (p.id === S.sel) outline(a.x, a.y, b.x - a.x, b.y - a.y);
+  label(p.name, (a.x + b.x) / 2, a.y + 12, { size: 10, font: UIFONT, fill: C.ink3 });
+}
+
+function drawShelfFront(s) {
+  const a = w2s(s.x, s.y), b = w2s(s.x + s.w, s.y - s.t);
+  const hgt = Math.max(2, b.y - a.y);
+  ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, hgt);
+  ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
+  ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, hgt - 1);
+  if (s.id === S.sel) outline(a.x, a.y, b.x - a.x, hgt);
+  label(`${s.name} · ${rnd(s.y)}`, b.x - 4, a.y - 8, { size: 10, font: MONO, fill: C.ink3, align: 'right' });
+}
+
+function drawFront() {
+  const items = S.items.filter(visible).sort((a, b) => depthKey(a) - depthKey(b));
+  for (const it of items) {
+    if (it.type === 'plinth') drawPlinthFront(it);
+    else if (it.type === 'shelf') drawShelfFront(it);
+    else { drawStandFront(it); drawObjectFront(it); }
+  }
 }
 
 function hatch(x, y, w, h) {
+  if (PREVIEW) return;
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   ctx.strokeStyle = C.structEdge; ctx.globalAlpha = .3; ctx.lineWidth = 1;
@@ -552,34 +645,54 @@ function hatch(x, y, w, h) {
   ctx.restore();
 }
 function outline(x, y, w, h) {
+  if (PREVIEW) return;
   ctx.save();
   ctx.strokeStyle = C.accent; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
   ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
   ctx.restore();
 }
 
+/* From the front every stand is just the base it raises the object on.
+   A V stand's splay runs front to back, so it only reads as a V from
+   above — see drawStandPlan. */
 function drawStandFront(o) {
   const st = standBox(o);
-  if (!st) return;
-  const l = w2s(st.x, st.base), r = w2s(st.x + st.w, st.base);
-  const topY = w2s(st.x, st.base + st.h).y;
+  if (!st || st.h <= 0) return;
+  const l = w2s(st.x, st.base + st.h), r = w2s(st.x + st.w, st.base);
+  const w = r.x - l.x, h = r.y - l.y;
   ctx.save();
-  ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1.4; ctx.fillStyle = C.struct;
-  if (st.kind === 'block') {
-    ctx.fillRect(l.x, topY, r.x - l.x, l.y - topY);
-    ctx.strokeRect(l.x + .5, topY + .5, r.x - l.x - 1, l.y - topY - 1);
-  } else if (st.kind === 'stand') {
-    /* a V, open at the top, holding the object in its throat */
+  ctx.fillStyle = C.struct; ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1.2;
+  ctx.fillRect(l.x, l.y, w, h);
+  ctx.strokeRect(l.x + .5, l.y + .5, w - 1, h - 1);
+  if (st.kind === 'stand' && w > 14) {
+    /* the little notches that stop the object sliding off */
+    const n = Math.min(6, h * 0.8);
     ctx.beginPath();
-    ctx.moveTo(l.x, topY); ctx.lineTo((l.x + r.x) / 2, l.y); ctx.lineTo(r.x, topY);
+    for (const fx of [0.32, 0.68]) {
+      ctx.moveTo(l.x + w * fx, l.y); ctx.lineTo(l.x + w * fx, l.y - n);
+    }
     ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, l.y); ctx.stroke();
-  } else if (st.kind === 'cradle') {
-    /* arms rising to each end, valley on the deck */
+  }
+  ctx.restore();
+}
+
+/* Seen from above: a V stand splays, everything else is a plain base. */
+function drawStandPlan(o) {
+  const st = standBox(o);
+  if (!st) return;
+  const a = w2s(st.x, st.z), b = w2s(st.x + st.w, st.z + st.d);
+  ctx.save();
+  if (!PREVIEW) {
+    ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
+    ctx.setLineDash([]);
+  }
+  if (st.kind === 'stand') {
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(l.x, topY); ctx.lineTo((l.x + r.x) / 2, l.y); ctx.lineTo(r.x, topY);
-    ctx.lineTo(r.x, l.y); ctx.lineTo(l.x, l.y); ctx.closePath();
-    ctx.globalAlpha = .5; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+    ctx.moveTo(a.x, a.y); ctx.lineTo((a.x + b.x) / 2, b.y); ctx.lineTo(b.x, a.y);
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -628,29 +741,44 @@ function paintBody(o, dx, dy, wpx, hpx, forPlan) {
   ctx.strokeRect(dx + .5, dy + .5, wpx - 1, hpx - 1);
   if (!o.text) return;
 
-  const sizePx = Math.max(3, textSizeOf(o) * (T ? T.sc : 1));
-  if (sizePx < 3.5) return;                       /* too small on screen to be worth it */
+  const sizePx = textSizeOf(o) * (T ? T.sc : 1);
   const padPx = PANEL_PAD * (T ? T.sc : 1);
   const lineH = sizePx * 1.32;
-  const lines = panelLines(o, wpx, sizePx);
+  if (lineH < 1) return;
+  const lines = panelLines(o, wpx, Math.max(sizePx, 1));
   const room = Math.floor((Math.abs(hpx) - padPx * 2) / lineH);
+  const shown = lines.slice(0, Math.max(room, 0));
 
   ctx.save();
   ctx.beginPath(); ctx.rect(dx, dy, wpx, hpx); ctx.clip();
-  ctx.font = `${sizePx}px ${UIFONT}`;
-  ctx.fillStyle = C.ink;
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  lines.slice(0, Math.max(room, 0)).forEach((l, i) => ctx.fillText(l, dx + padPx, dy + padPx + i * lineH));
+
+  if (sizePx < 4) {
+    /* too small to read at this zoom — greek it, so a full panel still
+       looks full and you can see how much of it the wording uses */
+    ctx.fillStyle = C.ink; ctx.globalAlpha = .45;
+    const maxW = Math.abs(wpx) - padPx * 2;
+    shown.forEach((l, i) => {
+      const w = i === shown.length - 1 ? maxW * 0.62 : maxW;
+      ctx.fillRect(dx + padPx, dy + padPx + i * lineH, w, Math.max(0.8, sizePx * 0.6));
+    });
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.font = `${sizePx}px ${UIFONT}`;
+    ctx.fillStyle = C.ink;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    shown.forEach((l, i) => ctx.fillText(l, dx + padPx, dy + padPx + i * lineH));
+  }
+
   if (lines.length > room) {
     ctx.fillStyle = C.warn;
-    ctx.fillText('…', dx + padPx, dy + padPx + Math.max(room - 1, 0) * lineH + lineH);
+    ctx.fillRect(dx + padPx, dy + Math.abs(hpx) - padPx * 0.7, Math.abs(wpx) - padPx * 2, Math.max(1, sizePx * 0.25));
   }
   ctx.restore();
 }
 
 function drawObjectFront(o) {
   const L = layout(o);
-  const sel = o.id === S.sel;
+  const sel = !PREVIEW && o.id === S.sel;
 
   if (o.mount === 'hanging') {
     ctx.save();
@@ -680,7 +808,7 @@ function drawObjectFront(o) {
     ctx.scale(o.flip ? -1 : 1, o.flipV ? -1 : 1);
     ctx.translate(-(dx + wpx / 2), -(dy + hpx / 2));
   }
-  paintBody(o, dx, dy, wpx, hpx, false);
+  if (hpx > 0.6) paintBody(o, dx, dy, wpx, hpx, false);
   ctx.globalAlpha = 1;
   ctx.restore();
 
@@ -692,7 +820,7 @@ function drawObjectFront(o) {
     ctx.restore();
   }
 
-  if (o.lean > 0 && o.mount === 'placed') {
+  if ((o.lean || 0) > 0 && o.mount === 'placed' && !PREVIEW && rnd(shownLean(o)) > 0) {
     const b = bbox(o);
     const a1 = w2s(b.x1 + 1.2, b.y0), a2 = w2s(b.x1 + 1.2, b.y1);
     ctx.save(); ctx.strokeStyle = C.plan; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
@@ -718,6 +846,7 @@ function attachWorld(o, wr) {
 function planMode(o) {
   const ps = o.planShape || 'auto';
   if (ps === 'top') return o.topPng ? 'top' : 'rect';
+  if (o.render === 'panel') return 'rect';
   if (ps !== 'auto') return ps;
   if (isShape(o)) return shapeById(o.render).plan;
   /* past halfway to flat you are looking at the object itself */
@@ -748,15 +877,7 @@ function drawPlan() {
   }
 
   for (const o of S.items.filter(i => i.type === 'object' && visible(i))) {
-    const st = standBox(o);
-    if (st) {
-      const a = w2s(st.x, st.z), b = w2s(st.x + st.w, st.z + st.d);
-      ctx.save();
-      ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-      ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
-      ctx.restore();
-    }
-
+    drawStandPlan(o);
     const f = footprint(o);
     const a = w2s(f.x, f.z), b = w2s(f.x + f.w, f.z + f.d);
     const sel = o.id === S.sel;
@@ -769,7 +890,9 @@ function drawPlan() {
 
     ctx.save();
     ctx.globalAlpha = o.hide ? .3 : 1;
-    if (mode === 'image' || mode === 'top') {
+    if (mode === 'panel') {
+      paintBody(o, a.x, a.y, w, h, false);
+    } else if (mode === 'image' || mode === 'top') {
       const img = planImg;
       ctx.save();
       if (o.flip || o.flipV) {
@@ -806,7 +929,7 @@ function drawPlan() {
       ctx.beginPath(); ctx.moveTo(a.x, base.y - 1); ctx.lineTo(b.x, base.y - 1); ctx.stroke();
     }
 
-    if (w > 26 && mode !== 'image' && mode !== 'top') {
+    if (w > 26 && mode !== 'image' && mode !== 'top' && mode !== 'panel') {
       label(o.name, a.x + w / 2, a.y + h / 2, { size: 10, font: UIFONT, fill: C.ink2, box: true, bg: caseGround() });
     }
     if (sel) outline(a.x, a.y, w, h);

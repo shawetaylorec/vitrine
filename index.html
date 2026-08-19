@@ -12,6 +12,7 @@
   --warn:#a83f37;
   --sheet:#e4e1da; --sheet-line:#cbc6bb; --sheet-line-2:#b6b0a2;
   --case-fill:#efeade; --case-edge:#6d6759; --struct:#cdc5b2; --struct-edge:#8c8471;
+  --preview-bg:#14151a;
   --shadow:0 1px 2px rgba(20,22,26,.06),0 8px 24px rgba(20,22,26,.06);
   --r:5px;
 }
@@ -25,6 +26,7 @@
     --warn:#c96a60;
     --sheet:#1b1e24; --sheet-line:#272c34; --sheet-line-2:#39404b;
     --case-fill:#2c2f36; --case-edge:#8d94a2; --struct:#3a3f49; --struct-edge:#767e8c;
+    --preview-bg:#0d0e12;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.35);
   }
 }
@@ -37,6 +39,7 @@
   --warn:#c96a60;
   --sheet:#1b1e24; --sheet-line:#272c34; --sheet-line-2:#39404b;
   --case-fill:#2c2f36; --case-edge:#8d94a2; --struct:#3a3f49; --struct-edge:#767e8c;
+  --preview-bg:#0d0e12;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.35);
 }
 *{box-sizing:border-box}
@@ -104,6 +107,7 @@ label.chk input{accent-color:var(--accent)}
 .f>span{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
 .f.full{grid-column:1/-1}
 .row{display:flex;gap:7px;align-items:center}
+.row.wrap{flex-wrap:wrap;gap:5px 12px}
 
 /* ---------- item list ---------- */
 .list{display:flex;flex-direction:column;gap:3px}
@@ -183,6 +187,31 @@ table.sched{width:100%;border-collapse:collapse;font-size:12px;font-family:"IBM 
 table.sched th{text-align:left;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:600;border-bottom:1px solid var(--line-strong);padding:5px 8px;white-space:nowrap;position:sticky;top:0;background:var(--panel)}
 table.sched td{padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 table.sched tr:hover td{background:var(--panel-2)}
+/* ---------- preview ---------- */
+body.preview .topbar,body.preview .rail{display:none}
+body.preview .app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+body.preview .stage{background:var(--preview-bg)}
+body.preview .hud,body.preview .zoomer,body.preview .dropzone{display:none}
+body.preview #sheet{cursor:default}
+.previewbar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:none;align-items:center;gap:8px;
+  background:color-mix(in srgb,#000 55%,transparent);backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:6px 8px;z-index:60;
+  transition:opacity .35s;color:#f2f1ee}
+body.preview .previewbar{display:flex}
+.previewbar.idle{opacity:.2}
+.previewbar .seg{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16)}
+.previewbar .seg button{color:rgba(255,255,255,.72)}
+.previewbar .seg button+button{border-left-color:rgba(255,255,255,.16)}
+.previewbar .seg button[aria-pressed="true"]{background:#f2f1ee;color:#15161a}
+.previewbar button.pb{background:none;border:0;color:rgba(255,255,255,.72);cursor:pointer;
+  width:28px;height:26px;border-radius:99px;font-size:15px;line-height:1}
+.previewbar button.pb:hover{background:rgba(255,255,255,.12);color:#fff}
+.previewbar .pz{font-size:11px;min-width:46px;text-align:center;color:rgba(255,255,255,.72);
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.previewbar .pexit{width:auto;padding:0 12px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;
+  border-left:1px solid rgba(255,255,255,.16);border-radius:0 99px 99px 0;margin-left:2px}
+.previewbar .pname{font-size:12px;letter-spacing:.06em;color:rgba(255,255,255,.55);padding:0 8px 0 4px;
+  max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scroller{overflow:auto;max-height:56vh}
 .shapegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;padding:15px;overflow-y:auto}
 .shapecell{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);cursor:pointer;color:var(--ink-2)}
@@ -204,7 +233,10 @@ table.sched tr:hover td{background:var(--panel-2)}
     </div>
     <span class="chip" id="viewNote">looking at the back wall</span>
     <div class="spacer"></div>
+    <button class="btn ghost" id="btnUndoStep" title="Undo" style="padding:5px 9px;font-size:15px;line-height:1">&#8630;</button>
+    <button class="btn ghost" id="btnRedoStep" title="Redo" style="padding:5px 9px;font-size:15px;line-height:1">&#8631;</button>
     <button class="btn" id="btnAddImg">Add object&hellip;</button>
+    <button class="btn ghost" id="btnPreview">Preview<span class="k" style="margin-left:6px">P</span></button>
     <button class="btn ghost" id="btnSchedule">Schedule</button>
     <button class="btn ghost" id="btnExportPng">Export PNG</button>
     <button class="btn ghost" id="btnSave">Save file</button>
@@ -225,10 +257,11 @@ table.sched tr:hover td{background:var(--panel-2)}
         <label class="f"><span>D cm</span><input type="number" id="caseD" min="5" max="300" step="0.5"></label>
       </div>
       <label class="f full"><span>Hanging rail height cm</span><input type="number" id="railH" min="0" step="0.5"></label>
-      <div class="row">
+      <div class="row wrap">
         <label class="chk"><input type="checkbox" id="optGrid" checked>Grid</label>
         <label class="chk"><input type="checkbox" id="optDims" checked>Dimensions</label>
         <label class="chk"><input type="checkbox" id="optSnap" checked>Snap</label>
+        <label class="chk"><input type="checkbox" id="optRulers" checked>Rulers</label>
       </div>
     </section>
 
@@ -236,13 +269,14 @@ table.sched tr:hover td{background:var(--panel-2)}
       <h2>Back wall</h2>
       <div class="swatchrow">
         <input type="color" id="bgColour" title="Back wall colour">
-        <button class="btn sm" id="btnBgImg" style="flex:1">Image&hellip;</button>
+        <button class="btn sm" id="btnBgImg" style="flex:1">Whole wall&hellip;</button>
         <button class="btn sm ghost" id="btnBgClear">Clear</button>
       </div>
       <div class="slid">
         <label>Image strength <b id="bgFadeVal">100%</b></label>
         <input type="range" id="bgFade" min="10" max="100" value="100">
       </div>
+      <button class="btn sm" id="btnWallGraphic">+ Graphic on the wall&hellip;</button>
       <p class="note">Dresses the elevation only &mdash; the plan view keeps its own deck tone.</p>
     </section>
 
@@ -292,6 +326,19 @@ table.sched tr:hover td{background:var(--panel-2)}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="previewbar" id="previewBar">
+  <span class="pname" id="pvName"></span>
+  <div class="seg" id="pvSeg">
+    <button data-view="front" aria-pressed="true">Elevation</button>
+    <button data-view="plan" aria-pressed="false">Plan</button>
+  </div>
+  <button class="pb" id="pvOut" title="Zoom out">&minus;</button>
+  <span class="pz" id="pvZoom">100%</span>
+  <button class="pb" id="pvIn" title="Zoom in">+</button>
+  <button class="pb" id="pvFit" style="width:auto;padding:0 8px;font-size:11px;letter-spacing:.08em">FIT</button>
+  <button class="pb pexit" id="pvExit" title="Leave preview (Esc)">Close</button>
+</div>
 
 <div class="backdrop" id="wizBack" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="wizTitle">
@@ -425,9 +472,10 @@ table.sched tr:hover td{background:var(--panel-2)}
             <p class="help" id="leanHelp"></p>
           </section>
           <section class="sect" id="panelWall">
-            <h2>On the wall</h2>
+            <h2>Fixed to a surface</h2>
+            <label class="f full"><span>Fixed to</span><select id="faceSel"></select></label>
             <label class="f full"><span>Height of its bottom edge cm</span><input type="number" id="wallYNum" step="0.5"></label>
-            <p class="help">Fixed flat against the back wall &mdash; no wires, no support underneath.</p>
+            <p class="help">Stuck flat to the back wall, or to the front of a plinth &mdash; no wires, nothing underneath. Either way it faces you in elevation and is barely a line in plan.</p>
           </section>
           <section class="sect" id="panelHanging">
             <h2>Wires</h2>
@@ -446,9 +494,9 @@ table.sched tr:hover td{background:var(--panel-2)}
               <option value="cradle">Book cradle</option>
             </select></label>
             <div class="fields" id="standFields">
-              <label class="f"><span>W cm</span><input type="number" id="standW" min="0.5" step="0.5"></label>
-              <label class="f"><span>D cm</span><input type="number" id="standD" min="0.5" step="0.5"></label>
-              <label class="f"><span id="standHLabel">Lift cm</span><input type="number" id="standH" min="0" step="0.5"></label>
+              <label class="f" id="standWF"><span>W cm</span><input type="number" id="standW" min="0.5" step="0.5"></label>
+              <label class="f" id="standDF"><span>D cm</span><input type="number" id="standD" min="0.5" step="0.5"></label>
+              <label class="f"><span id="standHLabel">Base h cm</span><input type="number" id="standH" min="0" step="0.5"></label>
             </div>
             <p class="help" id="standHelp"></p>
           </section>
@@ -528,14 +576,19 @@ const S = {
   view: 'front',
   zoom: 1,
   pan: { x: 0, y: 0 },
-  opt: { grid: true, dims: true, snap: true },
+  opt: { grid: true, dims: true, snap: true, rulers: true },
   level: 'all'
 };
 
-/* bitmap caches, keyed by item id */
+/* bitmap caches, keyed by item id. The SRC maps record which data URL
+   each decoded bitmap came from, so undo can tell whether it still
+   holds the right picture without re-decoding everything. */
 const BMP = new Map();      // the cut-out
 const TOP = new Map();      // optional top-view picture
+const BMPSRC = new Map();
+const TOPSRC = new Map();
 let BGIMG = null;           // back-wall image
+let PREVIEW = false;        // full-screen, no drafting furniture
 
 function loadImage(src) {
   return new Promise((res, rej) => {
@@ -559,10 +612,18 @@ function supportList() {
 const supportOf = o => supportList().find(s => s.id === o.support) || supportList()[0];
 const byId = id => S.items.find(i => i.id === id);
 
+/* A fixed panel is stuck flat to a vertical surface: the back wall, or
+   the front face of a plinth. Same relationship either way — only the
+   surface differs. Returns the plinth, or null for the back wall. */
+function faceOf(o) {
+  if (o.mount !== 'wall' || !o.face || o.face === 'back') return null;
+  return supportList().find(s => s.id === o.face) || null;
+}
+
 function levelKey(o) {
   if (o.type !== 'object') return o.id;
   if (o.mount === 'hanging') return 'hung';
-  if (o.mount === 'wall') return 'wall';
+  if (o.mount === 'wall') return faceOf(o) ? o.face : 'wall';
   return o.support || 'floor';
 }
 function visible(o) {
@@ -573,31 +634,37 @@ function visible(o) {
 }
 
 /* ---------------- stands and cradles ----------------
-   A stand belongs to its object: it is always centred under it
-   and travels with it. `h` is the end height for a cradle (the
-   V arms) and the lift for everything else. */
+   A stand belongs to its object: it is always centred under it and
+   travels with it. `h` is the height of the base it stands the object
+   on, whatever the kind. Only the plan view distinguishes them — a V
+   stand splays front to back, so that is the only place a V shows. */
 
 const STAND_NONE = { kind: 'none', w: 0, d: 0, h: 0 };
 const standOf = o => (o.stand && o.stand.kind && o.stand.kind !== 'none') ? o.stand : null;
 
-/* how far the stand raises the object's underside */
+/* how far the stand raises the object's underside — for every kind
+   this is simply the height of the base it sits on */
 function standLift(o) {
   const st = standOf(o);
-  if (!st) return 0;
-  /* a book cradle holds the block in its valley, so the middle is
-     effectively on the deck — only the arms stand proud */
-  return st.kind === 'cradle' ? 0 : st.h;
+  return st ? st.h : 0;
 }
+
+/* A book cradle is made to fit its book, so it takes the object's own
+   width and depth and you only give the height. A stand or a block is
+   a separate thing with its own footprint. */
+const cradleFits = kind => kind === 'cradle';
 
 function standBox(o) {
   const st = standOf(o);
   if (!st || o.mount !== 'placed') return null;
   const b = bbox(o), f = footprint(o);
+  const w = cradleFits(st.kind) ? b.x1 - b.x0 : st.w;
+  const d = cradleFits(st.kind) ? f.d : st.d;
   const cx = (b.x0 + b.x1) / 2, cz = f.z + f.d / 2;
   return {
     kind: st.kind,
-    x: cx - st.w / 2, w: st.w,
-    z: cz - st.d / 2, d: st.d,
+    x: cx - w / 2, w,
+    z: cz - d / 2, d,
     h: st.h,
     base: supportOf(o).top
   };
@@ -607,6 +674,20 @@ function standBox(o) {
    layout() places the artwork in world space: the point (u,v) on
    the picture — u across, v down from the top, both normalised —
    is pinned to `pivot`, and the picture is rotated by `rot`. */
+
+/* A leaning object is a slab h tall and `depth` thick tipped back by
+   `lean`. In elevation you see the foreshortened face and nothing
+   else — drawing the block's edge as well just puts an unexplained
+   bar under everything. On the deck it covers sin of its length plus
+   cos of its thickness. */
+function leanParts(o) {
+  const th = (o.lean || 0) * DEG;
+  return {
+    height: o.h * Math.cos(th),
+    deck: o.h * Math.sin(th) + (o.depth || 0) * Math.cos(th)
+  };
+}
+const isFlat = o => o.mount === 'placed' && (o.lean || 0) > 45;
 
 function layout(o) {
   const spin = (o.spin || 0) * DEG;
@@ -628,11 +709,12 @@ function layout(o) {
     return { w: o.w, h: o.h, rot: spin, pivot: { x: o.x + o.w / 2, y: o.wallY || 0 }, u: 0.5, v: 1 };
   }
 
-  /* placed: lean foreshortens the height, spin turns it in the
-     picture plane, then the whole thing drops until its lowest
-     corner rests on the support */
-  const lean = (o.lean || 0) * DEG;
-  const hEff = o.h * Math.cos(lean);
+  /* placed: leaning back turns the object's face away and brings its
+     thickness into view, so in elevation you see a foreshortened face
+     with the edge of the block below it. Lying flat that is all edge —
+     which is exactly what a label card on a plinth looks like. */
+  const p = leanParts(o);
+  const hEff = p.height;
   const base = supportOf(o).top + standLift(o);
   const c = Math.cos(spin), s = Math.sin(spin);
   let minY = Infinity;
@@ -665,8 +747,12 @@ function bbox(o) {
    front of that span. */
 function footprint(o) {
   const b = bbox(o);
-  const lean = o.mount === 'placed' ? (o.lean || 0) * DEG : 0;
-  return { x: b.x0, w: b.x1 - b.x0, z: o.z, d: o.depth + o.h * Math.sin(lean) };
+  const f = faceOf(o);
+  /* stuck to a plinth front it sits at that face, proud by its own
+     thickness — so from above it is barely a line */
+  if (f) return { x: b.x0, w: b.x1 - b.x0, z: f.z + f.d, d: o.depth || 0.4 };
+  const d = o.mount === 'placed' ? leanParts(o).deck : (o.depth || 0);
+  return { x: b.x0, w: b.x1 - b.x0, z: o.z, d };
 }
 
 /* everything the object needs room for, stand included */
@@ -691,6 +777,11 @@ function outOfCase(o) {
     if (e.x < s.x - 0.05 || e.x + e.w > s.x + s.w + 0.05) msgs.push('overhanging ' + s.name);
     if (e.z < s.z - 0.05 || e.z + e.d > s.z + s.d + 0.05) msgs.push('deeper than ' + s.name);
   }
+  const f = faceOf(o);
+  if (f) {
+    if (b.x0 < f.x - 0.05 || b.x1 > f.x + f.w + 0.05) msgs.push('wider than the front of ' + f.name);
+    if (b.y1 > f.top + 0.05) msgs.push('above the top of ' + f.name);
+  }
   return msgs;
 }
 
@@ -701,7 +792,7 @@ const mainCtx = cvs.getContext('2d');
 /* ctx / VW / VH are swapped out when rendering to an export canvas */
 let ctx = mainCtx;
 let VW = 0, VH = 0;
-const GUT = 26;   // ruler gutter, px
+let GUT = 26;   // ruler gutter, px — collapses when the rulers are off
 let T = null;
 
 function fitScale() {
@@ -710,6 +801,7 @@ function fitScale() {
 }
 function calcT() {
   if (ctx === mainCtx) { VW = cvs.clientWidth; VH = cvs.clientHeight; }
+  GUT = PREVIEW ? 0 : S.opt.rulers === false ? 8 : 26;
   const W = S.cs.w, H = S.view === 'front' ? S.cs.h : S.cs.d;
   const sc = fitScale() * S.zoom;
   return {
@@ -740,7 +832,8 @@ function readPalette() {
     ink: g('--ink'), ink2: g('--ink-2'), ink3: g('--ink-3'),
     accent: g('--accent'), plan: g('--plan'), warn: g('--warn'),
     caseFill: g('--case-fill'), caseEdge: g('--case-edge'),
-    struct: g('--struct'), structEdge: g('--struct-edge'), panel: g('--panel')
+    struct: g('--struct'), structEdge: g('--struct-edge'), panel: g('--panel'),
+    previewBg: g('--preview-bg')
   };
 }
 /* the back-wall colour dresses the elevation only — in plan you are
@@ -751,6 +844,7 @@ const UIFONT = '"Barlow Semi Condensed",system-ui,sans-serif';
 const MONO = '"IBM Plex Mono",ui-monospace,monospace';
 
 function label(text, x, y, { size = 11, font = MONO, fill = C.ink2, align = 'center', base = 'middle', box = false, pad = 3, bg = null } = {}) {
+  if (PREVIEW) return;          /* no annotation on the finished view */
   ctx.font = `${size}px ${font}`;
   ctx.textAlign = align; ctx.textBaseline = base;
   if (box) {
@@ -951,15 +1045,25 @@ function render() {
 function paint() {
   const cw = VW, ch = VH;
   ctx.clearRect(0, 0, cw, ch);
-  ctx.fillStyle = C.sheet; ctx.fillRect(0, 0, cw, ch);
+  ctx.fillStyle = PREVIEW ? C.previewBg : C.sheet;
+  ctx.fillRect(0, 0, cw, ch);
 
   const isPlan = S.view === 'plan';
   const tl = w2s(0, isPlan ? 0 : S.cs.h);
   const br = w2s(S.cs.w, isPlan ? S.cs.d : 0);
   const cw2 = br.x - tl.x, ch2 = br.y - tl.y;
 
+  ctx.save();
+  if (PREVIEW) {
+    /* lift the case off the surround, the way a lit vitrine reads
+       in a dim gallery */
+    ctx.shadowColor = 'rgba(0,0,0,.6)';
+    ctx.shadowBlur = 46;
+    ctx.shadowOffsetY = 14;
+  }
   ctx.fillStyle = caseGround();
   ctx.fillRect(tl.x, tl.y, cw2, ch2);
+  ctx.restore();
 
   if (!isPlan && BGIMG) {
     ctx.save();
@@ -972,7 +1076,7 @@ function paint() {
     ctx.restore();
   }
 
-  if (S.opt.grid) drawGrid(tl, br);
+  if (S.opt.grid && !PREVIEW) drawGrid(tl, br);
 
   ctx.save();
   ctx.beginPath(); ctx.rect(tl.x, tl.y, cw2, ch2); ctx.clip();
@@ -981,17 +1085,31 @@ function paint() {
 
   ctx.strokeStyle = C.caseEdge; ctx.lineWidth = 1.8;
   ctx.strokeRect(tl.x + 0.5, tl.y + 0.5, cw2 - 1, ch2 - 1);
-  if (isPlan) {
+  if (isPlan && !PREVIEW) {
     ctx.lineWidth = 4; ctx.beginPath();
     ctx.moveTo(tl.x, tl.y + 1.5); ctx.lineTo(br.x, tl.y + 1.5); ctx.stroke();
     label('BACK WALL', (tl.x + br.x) / 2, tl.y - 10, { size: 9, font: UIFONT, fill: C.ink3 });
     label('GLASS FRONT', (tl.x + br.x) / 2, br.y + 11, { size: 9, font: UIFONT, fill: C.ink3 });
   }
 
+  if (PREVIEW) {
+    /* the faintest fall-off into the corners of the case */
+    const g = ctx.createRadialGradient(
+      tl.x + cw2 / 2, tl.y + ch2 / 2, Math.min(cw2, ch2) * 0.25,
+      tl.x + cw2 / 2, tl.y + ch2 / 2, Math.hypot(cw2, ch2) * 0.62);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,.22)');
+    ctx.save();
+    ctx.beginPath(); ctx.rect(tl.x, tl.y, cw2, ch2); ctx.clip();
+    ctx.fillStyle = g; ctx.fillRect(tl.x, tl.y, cw2, ch2);
+    ctx.restore();
+    return;
+  }
+
   if (S.opt.dims) drawCaseDims(tl, br);
   drawSelectionDims();
   drawSpinHandle();
-  drawRulers();
+  if (S.opt.rulers !== false) drawRulers();
 }
 
 function drawGrid(tl, br) {
@@ -1023,33 +1141,56 @@ function drawCaseDims(tl, br) {
 
 /* ---------------- elevation ---------------- */
 
-function drawFront() {
-  const structs = S.items.filter(i => i.type !== 'object' && visible(i));
-  for (const p of structs.filter(i => i.type === 'plinth')) {
-    const a = w2s(p.x, p.h), b = w2s(p.x + p.w, 0);
-    ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
-    ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
-    ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
-    hatch(a.x, a.y, b.x - a.x, b.y - a.y);
-    if (p.id === S.sel) outline(a.x, a.y, b.x - a.x, b.y - a.y);
-    label(p.name, (a.x + b.x) / 2, a.y + 12, { size: 10, font: UIFONT, fill: C.ink3 });
-  }
-  for (const s of structs.filter(i => i.type === 'shelf')) {
-    const a = w2s(s.x, s.y), b = w2s(s.x + s.w, s.y - s.t);
-    const hgt = Math.max(2, b.y - a.y);
-    ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, hgt);
-    ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
-    ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, hgt - 1);
-    if (s.id === S.sel) outline(a.x, a.y, b.x - a.x, hgt);
-    label(`${s.name} · ${rnd(s.y)}`, b.x - 4, a.y - 8, { size: 10, font: MONO, fill: C.ink3, align: 'right' });
-  }
+/* How near the glass a thing reaches. Everything in the case — plinths
+   included — goes into one painter's-algorithm pass on this, so a panel
+   on the back wall ends up behind a plinth and an object standing in
+   front of a plinth ends up in front of whatever is stuck to its face.
+   A shelf is a plane rather than a volume, so it is keyed by its back
+   edge and stays behind what stands on it. */
+const BEHIND_ALL = -1e6;
+function depthKey(it) {
+  if (it.type === 'shelf') return it.z;
+  if (it.type === 'plinth') return it.z + it.d;
+  /* Anything fixed to the back wall is on the rearmost plane there is.
+     It cannot get in front of an object in the case, however small its
+     stand-off, so it is not a matter of comparing depths — it is a rule.
+     Among themselves they still order by how far they stand proud. */
+  if (it.mount === 'wall' && !faceOf(it)) return BEHIND_ALL + (it.z || 0);
+  const f = footprint(it);
+  return f.z + f.d;
+}
 
-  /* furthest from the glass drawn first */
-  const objs = S.items.filter(i => i.type === 'object' && visible(i)).sort((a, b) => a.z - b.z);
-  for (const o of objs) { drawStandFront(o); drawObjectFront(o); }
+function drawPlinthFront(p) {
+  const a = w2s(p.x, p.h), b = w2s(p.x + p.w, 0);
+  ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
+  ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
+  ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
+  hatch(a.x, a.y, b.x - a.x, b.y - a.y);
+  if (p.id === S.sel) outline(a.x, a.y, b.x - a.x, b.y - a.y);
+  label(p.name, (a.x + b.x) / 2, a.y + 12, { size: 10, font: UIFONT, fill: C.ink3 });
+}
+
+function drawShelfFront(s) {
+  const a = w2s(s.x, s.y), b = w2s(s.x + s.w, s.y - s.t);
+  const hgt = Math.max(2, b.y - a.y);
+  ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, hgt);
+  ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
+  ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, hgt - 1);
+  if (s.id === S.sel) outline(a.x, a.y, b.x - a.x, hgt);
+  label(`${s.name} · ${rnd(s.y)}`, b.x - 4, a.y - 8, { size: 10, font: MONO, fill: C.ink3, align: 'right' });
+}
+
+function drawFront() {
+  const items = S.items.filter(visible).sort((a, b) => depthKey(a) - depthKey(b));
+  for (const it of items) {
+    if (it.type === 'plinth') drawPlinthFront(it);
+    else if (it.type === 'shelf') drawShelfFront(it);
+    else { drawStandFront(it); drawObjectFront(it); }
+  }
 }
 
 function hatch(x, y, w, h) {
+  if (PREVIEW) return;
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   ctx.strokeStyle = C.structEdge; ctx.globalAlpha = .3; ctx.lineWidth = 1;
@@ -1057,34 +1198,54 @@ function hatch(x, y, w, h) {
   ctx.restore();
 }
 function outline(x, y, w, h) {
+  if (PREVIEW) return;
   ctx.save();
   ctx.strokeStyle = C.accent; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
   ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
   ctx.restore();
 }
 
+/* From the front every stand is just the base it raises the object on.
+   A V stand's splay runs front to back, so it only reads as a V from
+   above — see drawStandPlan. */
 function drawStandFront(o) {
   const st = standBox(o);
-  if (!st) return;
-  const l = w2s(st.x, st.base), r = w2s(st.x + st.w, st.base);
-  const topY = w2s(st.x, st.base + st.h).y;
+  if (!st || st.h <= 0) return;
+  const l = w2s(st.x, st.base + st.h), r = w2s(st.x + st.w, st.base);
+  const w = r.x - l.x, h = r.y - l.y;
   ctx.save();
-  ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1.4; ctx.fillStyle = C.struct;
-  if (st.kind === 'block') {
-    ctx.fillRect(l.x, topY, r.x - l.x, l.y - topY);
-    ctx.strokeRect(l.x + .5, topY + .5, r.x - l.x - 1, l.y - topY - 1);
-  } else if (st.kind === 'stand') {
-    /* a V, open at the top, holding the object in its throat */
+  ctx.fillStyle = C.struct; ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1.2;
+  ctx.fillRect(l.x, l.y, w, h);
+  ctx.strokeRect(l.x + .5, l.y + .5, w - 1, h - 1);
+  if (st.kind === 'stand' && w > 14) {
+    /* the little notches that stop the object sliding off */
+    const n = Math.min(6, h * 0.8);
     ctx.beginPath();
-    ctx.moveTo(l.x, topY); ctx.lineTo((l.x + r.x) / 2, l.y); ctx.lineTo(r.x, topY);
+    for (const fx of [0.32, 0.68]) {
+      ctx.moveTo(l.x + w * fx, l.y); ctx.lineTo(l.x + w * fx, l.y - n);
+    }
     ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, l.y); ctx.stroke();
-  } else if (st.kind === 'cradle') {
-    /* arms rising to each end, valley on the deck */
+  }
+  ctx.restore();
+}
+
+/* Seen from above: a V stand splays, everything else is a plain base. */
+function drawStandPlan(o) {
+  const st = standBox(o);
+  if (!st) return;
+  const a = w2s(st.x, st.z), b = w2s(st.x + st.w, st.z + st.d);
+  ctx.save();
+  if (!PREVIEW) {
+    ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
+    ctx.setLineDash([]);
+  }
+  if (st.kind === 'stand') {
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(l.x, topY); ctx.lineTo((l.x + r.x) / 2, l.y); ctx.lineTo(r.x, topY);
-    ctx.lineTo(r.x, l.y); ctx.lineTo(l.x, l.y); ctx.closePath();
-    ctx.globalAlpha = .5; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+    ctx.moveTo(a.x, a.y); ctx.lineTo((a.x + b.x) / 2, b.y); ctx.lineTo(b.x, a.y);
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -1133,29 +1294,44 @@ function paintBody(o, dx, dy, wpx, hpx, forPlan) {
   ctx.strokeRect(dx + .5, dy + .5, wpx - 1, hpx - 1);
   if (!o.text) return;
 
-  const sizePx = Math.max(3, textSizeOf(o) * (T ? T.sc : 1));
-  if (sizePx < 3.5) return;                       /* too small on screen to be worth it */
+  const sizePx = textSizeOf(o) * (T ? T.sc : 1);
   const padPx = PANEL_PAD * (T ? T.sc : 1);
   const lineH = sizePx * 1.32;
-  const lines = panelLines(o, wpx, sizePx);
+  if (lineH < 1) return;
+  const lines = panelLines(o, wpx, Math.max(sizePx, 1));
   const room = Math.floor((Math.abs(hpx) - padPx * 2) / lineH);
+  const shown = lines.slice(0, Math.max(room, 0));
 
   ctx.save();
   ctx.beginPath(); ctx.rect(dx, dy, wpx, hpx); ctx.clip();
-  ctx.font = `${sizePx}px ${UIFONT}`;
-  ctx.fillStyle = C.ink;
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  lines.slice(0, Math.max(room, 0)).forEach((l, i) => ctx.fillText(l, dx + padPx, dy + padPx + i * lineH));
+
+  if (sizePx < 4) {
+    /* too small to read at this zoom — greek it, so a full panel still
+       looks full and you can see how much of it the wording uses */
+    ctx.fillStyle = C.ink; ctx.globalAlpha = .45;
+    const maxW = Math.abs(wpx) - padPx * 2;
+    shown.forEach((l, i) => {
+      const w = i === shown.length - 1 ? maxW * 0.62 : maxW;
+      ctx.fillRect(dx + padPx, dy + padPx + i * lineH, w, Math.max(0.8, sizePx * 0.6));
+    });
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.font = `${sizePx}px ${UIFONT}`;
+    ctx.fillStyle = C.ink;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    shown.forEach((l, i) => ctx.fillText(l, dx + padPx, dy + padPx + i * lineH));
+  }
+
   if (lines.length > room) {
     ctx.fillStyle = C.warn;
-    ctx.fillText('…', dx + padPx, dy + padPx + Math.max(room - 1, 0) * lineH + lineH);
+    ctx.fillRect(dx + padPx, dy + Math.abs(hpx) - padPx * 0.7, Math.abs(wpx) - padPx * 2, Math.max(1, sizePx * 0.25));
   }
   ctx.restore();
 }
 
 function drawObjectFront(o) {
   const L = layout(o);
-  const sel = o.id === S.sel;
+  const sel = !PREVIEW && o.id === S.sel;
 
   if (o.mount === 'hanging') {
     ctx.save();
@@ -1185,7 +1361,7 @@ function drawObjectFront(o) {
     ctx.scale(o.flip ? -1 : 1, o.flipV ? -1 : 1);
     ctx.translate(-(dx + wpx / 2), -(dy + hpx / 2));
   }
-  paintBody(o, dx, dy, wpx, hpx, false);
+  if (hpx > 0.6) paintBody(o, dx, dy, wpx, hpx, false);
   ctx.globalAlpha = 1;
   ctx.restore();
 
@@ -1197,7 +1373,7 @@ function drawObjectFront(o) {
     ctx.restore();
   }
 
-  if (o.lean > 0 && o.mount === 'placed') {
+  if ((o.lean || 0) > 0 && o.mount === 'placed' && !PREVIEW && rnd(shownLean(o)) > 0) {
     const b = bbox(o);
     const a1 = w2s(b.x1 + 1.2, b.y0), a2 = w2s(b.x1 + 1.2, b.y1);
     ctx.save(); ctx.strokeStyle = C.plan; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
@@ -1223,6 +1399,7 @@ function attachWorld(o, wr) {
 function planMode(o) {
   const ps = o.planShape || 'auto';
   if (ps === 'top') return o.topPng ? 'top' : 'rect';
+  if (o.render === 'panel') return 'rect';
   if (ps !== 'auto') return ps;
   if (isShape(o)) return shapeById(o.render).plan;
   /* past halfway to flat you are looking at the object itself */
@@ -1253,15 +1430,7 @@ function drawPlan() {
   }
 
   for (const o of S.items.filter(i => i.type === 'object' && visible(i))) {
-    const st = standBox(o);
-    if (st) {
-      const a = w2s(st.x, st.z), b = w2s(st.x + st.w, st.z + st.d);
-      ctx.save();
-      ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-      ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
-      ctx.restore();
-    }
-
+    drawStandPlan(o);
     const f = footprint(o);
     const a = w2s(f.x, f.z), b = w2s(f.x + f.w, f.z + f.d);
     const sel = o.id === S.sel;
@@ -1274,7 +1443,9 @@ function drawPlan() {
 
     ctx.save();
     ctx.globalAlpha = o.hide ? .3 : 1;
-    if (mode === 'image' || mode === 'top') {
+    if (mode === 'panel') {
+      paintBody(o, a.x, a.y, w, h, false);
+    } else if (mode === 'image' || mode === 'top') {
       const img = planImg;
       ctx.save();
       if (o.flip || o.flipV) {
@@ -1311,7 +1482,7 @@ function drawPlan() {
       ctx.beginPath(); ctx.moveTo(a.x, base.y - 1); ctx.lineTo(b.x, base.y - 1); ctx.stroke();
     }
 
-    if (w > 26 && mode !== 'image' && mode !== 'top') {
+    if (w > 26 && mode !== 'image' && mode !== 'top' && mode !== 'panel') {
       label(o.name, a.x + w / 2, a.y + h / 2, { size: 10, font: UIFONT, fill: C.ink2, box: true, bg: caseGround() });
     }
     if (sel) outline(a.x, a.y, w, h);
@@ -1412,25 +1583,29 @@ function drawRulers() {
    Interaction — hit testing, dragging, keyboard
    ============================================================ */
 
+/* Nearest the glass first, which is the drawing order reversed — so a
+   click lands on whatever is actually on top. A few pixels of slack,
+   so something thin is still catchable at any zoom. */
 function hitTest(px, py) {
   const pt = s2w(px, py);
-  const list = S.items.filter(visible);
-  const objs = list.filter(i => i.type === 'object').sort((a, b) => b.z - a.z);
-  const rest = list.filter(i => i.type !== 'object');
-  for (const o of objs) {
-    if (S.view === 'front') {
-      const L = layout(o);
-      const dx = pt.a - L.pivot.x, dy = pt.b - L.pivot.y;
-      const c = Math.cos(-L.rot), s = Math.sin(-L.rot);
-      const lx = dx * c - dy * s, ly = dx * s + dy * c;
-      if (lx >= -L.u * L.w && lx <= (1 - L.u) * L.w && ly <= L.v * L.h && ly >= -(1 - L.v) * L.h) return o;
-    } else {
-      const f = footprint(o);
-      if (pt.a >= f.x && pt.a <= f.x + f.w && pt.b >= f.z && pt.b <= f.z + Math.max(f.d, 1)) return o;
-    }
-  }
-  for (const it of rest.filter(i => i.type === 'plinth').concat(rest.filter(i => i.type === 'shelf'))) {
-    if (S.view === 'front') {
+  const tol = T ? 5 / T.sc : 0.5;
+  const list = S.items.filter(visible).sort((a, b) => depthKey(b) - depthKey(a));
+
+  for (const it of list) {
+    if (it.type === 'object') {
+      if (S.view === 'front') {
+        const L = layout(it);
+        const dx = pt.a - L.pivot.x, dy = pt.b - L.pivot.y;
+        const c = Math.cos(-L.rot), s = Math.sin(-L.rot);
+        const lx = dx * c - dy * s, ly = dx * s + dy * c;
+        if (lx >= -L.u * L.w - tol && lx <= (1 - L.u) * L.w + tol &&
+          ly <= L.v * L.h + tol && ly >= -(1 - L.v) * L.h - tol) return it;
+      } else {
+        const f = footprint(it);
+        if (pt.a >= f.x - tol && pt.a <= f.x + f.w + tol &&
+          pt.b >= f.z - tol && pt.b <= f.z + f.d + tol) return it;
+      }
+    } else if (S.view === 'front') {
       const y0 = it.type === 'shelf' ? it.y - it.t : 0;
       const y1 = it.type === 'shelf' ? it.y : it.h;
       if (pt.a >= it.x && pt.a <= it.x + it.w && pt.b >= y0 - 0.6 && pt.b <= y1 + 0.6) return it;
@@ -1500,9 +1675,23 @@ function landOn(o, s) {
   }
 }
 
-/* everything that travels with a shelf or plinth */
+/* Bring a fixed panel onto the surface it is stuck to, if it has
+   wandered off it. Leaves it alone when it is already on. */
+function landOnFace(o) {
+  const f = faceOf(o);
+  if (!f) return;
+  const b = bbox(o);
+  if (b.x0 < f.x - 0.01 || b.x1 > f.x + f.w + 0.01) o.x = rnd(f.x + (f.w - o.w) / 2, 1);
+  if ((o.wallY || 0) < 0 || (o.wallY || 0) + o.h > f.top + 0.01) {
+    o.wallY = rnd(Math.max(0, (f.top - o.h) / 2), 1);
+  }
+}
+
+/* everything that travels with a shelf or plinth — things standing on
+   it, and anything stuck to its front */
 function childrenOf(id) {
-  return S.items.filter(i => i.type === 'object' && i.mount === 'placed' && i.support === id);
+  return S.items.filter(i => i.type === 'object' &&
+    ((i.mount === 'placed' && i.support === id) || (i.mount === 'wall' && i.face === id)));
 }
 
 function pick(it) {
@@ -1523,6 +1712,12 @@ cvs.addEventListener('pointerdown', e => {
   const r = cvs.getBoundingClientRect();
   const px = e.clientX - r.left, py = e.clientY - r.top;
   T = calcT();
+
+  /* preview is look-only: dragging pans, nothing selects or moves */
+  if (PREVIEW) {
+    drag = { pan: true, sx: px, sy: py, px: S.pan.x, py: S.pan.y };
+    return;
+  }
 
   /* the rotation handle sits on top of everything */
   const h = spinHandlePos();
@@ -1550,6 +1745,7 @@ cvs.addEventListener('pointerdown', e => {
 });
 
 cvs.addEventListener('dblclick', e => {
+  if (PREVIEW) return;
   const r = cvs.getBoundingClientRect();
   T = calcT();
   const hit = hitTest(e.clientX - r.left, e.clientY - r.top);
@@ -1565,7 +1761,10 @@ cvs.addEventListener('pointermove', e => {
     ? `x ${rnd(pt.a)}  y ${rnd(pt.b)}`
     : `x ${rnd(pt.a)}  z ${rnd(pt.b)}`;
 
+  if (PREVIEW) nudgeBar();
+
   if (!drag) {
+    if (PREVIEW) { cvs.style.cursor = 'default'; return; }
     const h = spinHandlePos();
     cvs.style.cursor = (h && Math.hypot(px - h.x, py - h.y) < 11) ? 'grab'
       : hitTest(px, py) ? 'grab' : 'default';
@@ -1654,6 +1853,20 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') document.activeElement.blur();
     return;
   }
+  if (PREVIEW) {
+    if (e.key === 'Escape' || e.key.toLowerCase() === 'p') { exitPreview(); return; }
+    if (e.key === '1') { setView('front'); return; }
+    if (e.key === '2') { setView('plan'); return; }
+    if (e.key.toLowerCase() === 'f') { fitView(); return; }
+    return;                       /* nothing is editable in preview */
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    e.shiftKey ? redo() : undo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+  if (e.key.toLowerCase() === 'p') { enterPreview(); return; }
   if (!$('#shapeBack').hidden) { if (e.key === 'Escape') closeShapePicker(); return; }
   if (!$('#wizBack').hidden) {
     if (e.key === 'Escape') minimiseWizard();
@@ -1716,7 +1929,7 @@ function addPlinth() {
 function blankObject(extra) {
   return Object.assign({
     id: uid(), type: 'object', render: 'rect',
-    name: 'Object', text: '', textSize: 0.55, colour: '',
+    name: 'Object', text: '', textSize: 0.55, colour: '', face: 'back',
     png: null, raw: null, topPng: null, planShape: 'auto',
     w: 20, h: 15, depth: 5,
     x: rnd(S.cs.w / 2 - 10), z: 4, wallY: 100, spin: 0,
@@ -1794,12 +2007,23 @@ function choseShape(id) {
 function addShape() { openShapePicker('new'); }
 function addPanel() {
   const n = S.items.filter(i => i.render === 'panel').length + 1;
+  /* with a plinth selected you almost certainly want the panel on it */
+  const sel = byId(S.sel);
+  const host = sel && sel.type === 'plinth' ? sel : null;
   const it = blankObject({
-    name: `Panel ${n}`, render: 'panel', mount: 'wall',
+    name: `Panel ${n}`, render: 'panel', mount: 'wall', face: 'back',
     w: 30, h: 21, depth: 0.4, wallY: rnd(S.cs.h * 0.55), z: 0,
     text: 'Interpretation text goes here.', textSize: 0.55
   });
-  S.items.push(it); select(it.id); commit(); toast('Panel added');
+  if (host) {
+    it.face = host.id;
+    it.w = rnd(Math.min(it.w, host.w - 4));
+    it.h = rnd(Math.min(it.h, host.h - 4));
+  }
+  S.items.push(it);
+  if (host) landOnFace(it);
+  select(it.id); commit();
+  toast(host ? `Panel added to the front of ${host.name}` : 'Panel added to the back wall');
 }
 
 function removeItem(id) {
@@ -1808,7 +2032,7 @@ function removeItem(id) {
   for (const o of S.items) if (o.type === 'object' && o.support === id) o.support = 'floor';
   BMP.delete(id); TOP.delete(id);
   if (S.sel === id) S.sel = null;
-  commit(); toast(`${it.name} removed`);
+  commit(); toast(`${it.name} removed — Ctrl+Z to put it back`);
 }
 async function duplicate(id) {
   const it = byId(id); if (!it) return;
@@ -1829,12 +2053,51 @@ function select(id) {
 
 function setView(v) {
   S.view = v; S.pan = { x: 0, y: 0 };
-  $$('#viewSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+  $$('#viewSeg button, #pvSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
   $('#viewNote').textContent = v === 'front' ? 'looking at the back wall' : 'looking down from above';
   renderInspector(); draw();
 }
 function fitView() { S.zoom = 1; S.pan = { x: 0, y: 0 }; updateZoomLabel(); draw(); }
-function updateZoomLabel() { $('#zVal').textContent = Math.round(S.zoom * 100) + '%'; }
+function updateZoomLabel() {
+  const pct = Math.round(S.zoom * 100) + '%';
+  $('#zVal').textContent = pct;
+  $('#pvZoom').textContent = pct;
+}
+
+/* ---------------- preview ----------------
+   Full screen, none of the drafting furniture, so what is left is the
+   case as it would be seen. Zoom and pan still work. */
+
+let barIdleT = 0;
+function nudgeBar() {
+  const bar = $('#previewBar');
+  bar.classList.remove('idle');
+  clearTimeout(barIdleT);
+  barIdleT = setTimeout(() => { if (PREVIEW) bar.classList.add('idle'); }, 2600);
+}
+
+function enterPreview() {
+  if (PREVIEW) return;
+  PREVIEW = true;
+  select(null);
+  document.body.classList.add('preview');
+  $('#pvName').textContent = S.name;
+  $$('#pvSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === S.view)));
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen().catch(() => { });
+  nudgeBar();
+  requestAnimationFrame(() => { fitView(); draw(); });
+}
+
+function exitPreview() {
+  if (!PREVIEW) return;
+  PREVIEW = false;
+  document.body.classList.remove('preview');
+  clearTimeout(barIdleT);
+  if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => { });
+  requestAnimationFrame(() => { fitView(); draw(); });
+}
+const togglePreview = () => PREVIEW ? exitPreview() : enterPreview();
 
 let toastT = 0;
 function toast(msg) {
@@ -1926,6 +2189,7 @@ function renderInspector() {
           <kbd>&larr;&uarr;&rarr;&darr;</kbd> nudge 1 cm &middot; <kbd>Shift</kbd> 0.1 &middot; <kbd>Ctrl</kbd> 5<br>
           <kbd>R</kbd> turn 90&deg; &nbsp; <kbd>Enter</kbd> mounting page<br>
           <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate &nbsp; <kbd>Del</kbd> remove<br>
+          <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo &nbsp; <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo<br>
           <kbd>Ctrl</kbd>+<kbd>V</kbd> paste a picture straight in<br>
           Drag empty sheet to pan &middot; scroll to zoom
         </p>
@@ -1986,9 +2250,9 @@ function renderInspector() {
     <section class="sect">
       <h2>Mounting</h2>
       <div class="tools" id="iMount">
-        <button data-mount="placed" aria-pressed="${o.mount === 'placed'}">Placed</button>
+        ${o.render === 'panel' ? '' : `<button data-mount="placed" aria-pressed="${o.mount === 'placed'}">Placed</button>`}
         <button data-mount="hanging" aria-pressed="${o.mount === 'hanging'}">Wires</button>
-        <button data-mount="wall" aria-pressed="${o.mount === 'wall'}">Wall</button>
+        <button data-mount="wall" aria-pressed="${o.mount === 'wall'}">Fixed</button>
       </div>`;
 
     if (o.mount === 'placed') {
@@ -2006,12 +2270,20 @@ function renderInspector() {
       <input type="range" id="iLean" min="0" max="90" value="${rnd(shownLean(o))}">
       <div class="readout"><span>base <b>${rnd(supportOf(o).top + standLift(o))}</b> cm</span><span>seen height <b>${rnd(L.h)}</b></span><span>deck used <b>${rnd(f.d)}</b> cm</span></div>`;
     } else if (o.mount === 'wall') {
+      const f = faceOf(o);
       html += `
+      <label class="f full"><span>Fixed to</span><select id="iFace">
+        <option value="back"${!f ? ' selected' : ''}>The back wall</option>
+        ${S.items.filter(i => i.type === 'plinth').map(p =>
+        `<option value="${p.id}"${f && f.id === p.id ? ' selected' : ''}>Front of ${esc(p.name)}</option>`).join('')}
+      </select></label>
       <div class="fields two">
         ${fld('Bottom edge cm', 'iWallY', rnd(o.wallY || 0), { step: 0.5 })}
-        ${fld('Stands off cm', 'iZ2', rnd(o.z), { step: 0.1, min: 0 })}
+        ${f ? '' : fld('Stands off cm', 'iZ2', rnd(o.z), { step: 0.1, min: 0 })}
       </div>
-      <p class="note">Fixed flat to the back wall.</p>`;
+      <p class="note">${f
+          ? `Stuck flat to the front of ${esc(f.name)}, ${rnd(o.wallY || 0)} cm up its face. Barely a line in plan, and it moves with the plinth.`
+          : 'Stuck flat to the back wall.'}</p>`;
     } else {
       html += `
       <label class="f full"><span>Rail height cm</span><input type="number" id="iRail" value="${rnd(o.rail ?? S.rail)}" step="0.5"></label>
@@ -2039,13 +2311,19 @@ function renderInspector() {
           ${[['none', 'None'], ['block', 'Plain block'], ['stand', 'V stand (acrylic)'], ['cradle', 'Book cradle']]
           .map(([v, l]) => `<option value="${v}"${(st ? st.kind : 'none') === v ? ' selected' : ''}>${l}</option>`).join('')}
         </select></label>
-        ${st ? `<div class="fields">
+        ${!st ? '' : cradleFits(st.kind) ? `<div class="fields">
+          ${fld('Base h cm', 'iStandH', rnd(st.h), { step: 0.5, min: 0 })}
+        </div>
+        <div class="readout"><span>takes the book&rsquo;s own <b>${rnd(standBox(o).w)} &times; ${rnd(standBox(o).d)}</b> cm</span></div>`
+      : `<div class="fields">
           ${fld('W cm', 'iStandW', rnd(st.w), { step: 0.5, min: 0.5 })}
           ${fld('D cm', 'iStandD', rnd(st.d), { step: 0.5, min: 0.5 })}
-          ${fld(st.kind === 'cradle' ? 'End h cm' : 'Lift cm', 'iStandH', rnd(st.h), { step: 0.5, min: 0 })}
+          ${fld('Base h cm', 'iStandH', rnd(st.h), { step: 0.5, min: 0 })}
         </div>
-        <div class="readout"><span>stand needs <b>${rnd(st.w)} &times; ${rnd(st.d)}</b> cm of deck</span></div>` : ''}
-        <p class="note">Always centred under the object and moves with it.</p>
+        <div class="readout"><span>stand needs <b>${rnd(st.w)} &times; ${rnd(st.d)}</b> cm of deck</span></div>`}
+        <p class="note">${st && cradleFits(st.kind)
+        ? 'A cradle is made to fit its book, so it takes the object&rsquo;s own width and depth — you give only the height.'
+        : 'Always centred under the object and moves with it. A V stand only reads as a V in the plan view.'}</p>
       </section>`;
     }
 
@@ -2167,6 +2445,7 @@ function bindInspector(o) {
   setNum('iRail', v => o.rail = v);
   setNum('iWallY', v => o.wallY = v);
   setNum('iZ2', v => o.z = Math.max(0, v));
+  on('iFace', 'change', e => { o.face = e.target.value; landOnFace(o); commit(); });
 
   /* moving a support carries its objects */
   const moveWithKids = (axis) => (v) => {
@@ -2284,6 +2563,8 @@ function setMount(o, mount) {
     o.wires.forEach(w => { w.len = Math.max(0, rnd(o.rail - (b.y1 - w.ay * o.h), 1)); });
   } else if (mount === 'wall') {
     o.wallY = rnd(b.y0);
+    o.face = o.face || 'back';
+    landOnFace(o);
   } else {
     const best = bestSupport(o, b.y0);
     o.support = best ? best.s.id : 'floor';
@@ -2323,7 +2604,7 @@ const W = {
   crop: null,
   scaleMode: 'width', keepAspect: true, widthCm: 20, heightCm: 15, lineCm: 10, calib: null,
   depthCm: 3, name: '',
-  mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright', wallY: 100,
+  mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright', wallY: 100, face: 'back',
   stand: { kind: 'none', w: 0, d: 0, h: 0 },
   planShape: 'auto',
   points: [],     // wire attachment points, in work-canvas pixels
@@ -2818,6 +3099,12 @@ function renderSupportSel() {
   $('#panelStand').classList.toggle('hidden', W.mount !== 'placed');
   $('#panelHanging').classList.toggle('hidden', W.mount !== 'hanging');
   $('#panelWall').classList.toggle('hidden', W.mount !== 'wall');
+  const fs = $('#faceSel');
+  fs.innerHTML = ['<option value="back">The back wall</option>']
+    .concat(S.items.filter(i => i.type === 'plinth')
+      .map(p => '<option value="' + p.id + '">Front of ' + esc(p.name) + '</option>'))
+    .join('');
+  fs.value = W.face || 'back';
   syncLeanFields();
 }
 function syncLeanFields() {
@@ -2836,10 +3123,13 @@ function syncStandFields() {
   $('#standW').value = rnd(W.stand.w);
   $('#standD').value = rnd(W.stand.d);
   $('#standH').value = rnd(W.stand.h);
-  $('#standHLabel').textContent = k === 'cradle' ? 'End h cm' : 'Lift cm';
+  $('#standHLabel').textContent = 'Base h cm';
+  /* a cradle is cut to fit its book, so only the height is yours to give */
+  $('#standWF').classList.toggle('hidden', cradleFits(k));
+  $('#standDF').classList.toggle('hidden', cradleFits(k));
   $('#standHelp').textContent =
-    k === 'cradle' ? 'A book cradle holds the block in its valley, so the middle sits on the deck and only the arms stand proud. Give the height of the arms at each end.'
-      : k === 'stand' ? 'A V stand lifts the object clear of the deck. Its own footprint is usually deeper than the object, and that is what has to fit on the plinth.'
+    k === 'cradle' ? 'Made to fit its book, so it takes the object’s own width and depth — you give only the height.'
+      : k === 'stand' ? 'Only splays into a V seen from above — from the front you get the base and its notches. Its footprint is usually deeper than the object, and that is what has to fit on the plinth.'
         : k === 'block' ? 'A plain block under the object. Its height is added to whatever it stands on.'
           : 'Nothing under the object.';
 }
@@ -2881,10 +3171,11 @@ function syncWizFields() {
 
 const TIFF_RE = /\.tiff?$/i;
 
-async function openWizardFiles(files) {
+async function openWizardFiles(files, preset) {
   const list = Array.from(files);
   const tiffs = list.filter(f => TIFF_RE.test(f.name) || f.type === 'image/tiff');
   if (tiffs.length) toast(`Chrome cannot read TIFF — save ${tiffs.length > 1 ? 'those' : 'that one'} as PNG or JPEG first`);
+  W.preset = preset || null;
   W.queue = list.filter(f => !tiffs.includes(f));
   if (W.queue.length) nextFromQueue();
 }
@@ -2910,9 +3201,10 @@ async function nextFromQueue() {
     W.name = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 60);
     W.widthCm = 20; W.heightCm = 15; W.depthCm = 3; W.keepAspect = true; W.scaleMode = 'width';
     W.mount = 'placed'; W.support = 'floor'; W.lean = 0; W.leanFrom = 'upright';
-    W.wallY = rnd(S.cs.h * 0.55); W.planShape = 'auto';
+    W.wallY = rnd(S.cs.h * 0.55); W.planShape = 'auto'; W.face = 'back';
     W.stand = { kind: 'none', w: 0, d: 0, h: 0 };
-    showWizard('Add object');
+    if (W.preset) Object.assign(W, W.preset);
+    showWizard(W.mount === 'wall' ? 'Add a graphic to the wall' : 'Add object');
     runAuto();
     setStep(1);
   } catch (err) { toast('Could not read that image'); }
@@ -2934,7 +3226,7 @@ async function openWizard({ edit, step = 1 }) {
   W.keepAspect = o.keepAspect !== false; W.scaleMode = 'width';
   W.mount = o.mount; W.support = o.support || 'floor';
   W.lean = o.lean || 0; W.leanFrom = o.leanFrom || 'upright';
-  W.wallY = o.wallY || rnd(S.cs.h * 0.55);
+  W.wallY = o.wallY || rnd(S.cs.h * 0.55); W.face = o.face || 'back';
   W.planShape = o.planShape || 'auto';
   W.stand = o.stand ? { ...o.stand } : { kind: 'none', w: 0, d: 0, h: 0 };
   W.points = (o.wires || []).map(wr => ({ x: W.bb.x + wr.ax * W.bb.w, y: W.bb.y + wr.ay * W.bb.h }));
@@ -3035,7 +3327,7 @@ function finishWizard() {
     o = blankObject({
       name: W.name || 'Object', render: 'image', png, w, h, depth: W.depthCm,
       mount: W.mount, support: W.support, lean: W.lean, leanFrom: W.leanFrom,
-      wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect,
+      wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect, face: W.face,
       stand: { ...W.stand }, rail: S.rail, wires, z: 2
     });
     if (W.raw) { const rc = copyCanvas(W.raw); o.raw = rc.toDataURL('image/jpeg', 0.82); }
@@ -3044,7 +3336,7 @@ function finishWizard() {
     Object.assign(o, {
       name: W.name || o.name, png, w, h, depth: W.depthCm,
       mount: W.mount, support: W.support, lean: W.lean, leanFrom: W.leanFrom,
-      wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect,
+      wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect, face: W.face,
       stand: { ...W.stand }
     });
     if (wires.length) o.wires = wires.map((nw, i) => ({ ...nw, len: (o.wires && o.wires[i]) ? o.wires[i].len : 0 }));
@@ -3129,14 +3421,112 @@ const store = {
 };
 
 function snapshot() {
-  return JSON.parse(JSON.stringify({ v: 2, name: S.name, cs: S.cs, rail: S.rail, bg: S.bg, items: S.items }));
+  return JSON.parse(JSON.stringify({ v: 3, name: S.name, cs: S.cs, rail: S.rail, bg: S.bg, opt: S.opt, items: S.items }));
+}
+
+/* ---------------- undo ----------------
+   Every commit files the state as it was beforehand. The picture data
+   is the bulk of a case, and it never changes when you move or delete
+   something, so it is held once in ASSETS and the history stores only
+   a key — which keeps sixty steps cheap however many photographs are
+   in the case. */
+
+const ASSETS = new Map();      // key -> data URL
+const ASSET_KEY = new Map();   // data URL -> key
+let assetSeq = 0;
+function putAsset(url) {
+  if (!url) return null;
+  let k = ASSET_KEY.get(url);
+  if (!k) { k = 'a' + (++assetSeq); ASSETS.set(k, url); ASSET_KEY.set(url, k); }
+  return k;
+}
+const getAsset = k => (k ? ASSETS.get(k) || null : null);
+
+const UNDO = [], REDO = [];
+const UNDO_MAX = 60;
+let lastState = null;
+
+function undoState() {
+  return JSON.stringify({
+    name: S.name, cs: S.cs, rail: S.rail, level: S.level, sel: S.sel,
+    bg: { ...S.bg, img: putAsset(S.bg.img) },
+    items: S.items.map(i => ({ ...i, png: putAsset(i.png), raw: putAsset(i.raw), topPng: putAsset(i.topPng) }))
+  });
+}
+
+/* only re-decode a bitmap whose picture actually changed */
+async function syncBitmaps() {
+  const live = new Set(S.items.map(i => i.id));
+  for (const id of [...BMP.keys()]) if (!live.has(id)) { BMP.delete(id); BMPSRC.delete(id); }
+  for (const id of [...TOP.keys()]) if (!live.has(id)) { TOP.delete(id); TOPSRC.delete(id); }
+  await Promise.all(S.items.map(async i => {
+    if (i.png && BMPSRC.get(i.id) !== i.png) {
+      try { BMP.set(i.id, await loadImage(i.png)); BMPSRC.set(i.id, i.png); } catch (e) { }
+    } else if (!i.png) { BMP.delete(i.id); BMPSRC.delete(i.id); }
+    if (i.topPng && TOPSRC.get(i.id) !== i.topPng) {
+      try { TOP.set(i.id, await loadImage(i.topPng)); TOPSRC.set(i.id, i.topPng); } catch (e) { }
+    } else if (!i.topPng) { TOP.delete(i.id); TOPSRC.delete(i.id); }
+  }));
+}
+
+async function applyState(str) {
+  const d = JSON.parse(str);
+  S.name = d.name; S.cs = d.cs; S.rail = d.rail; S.level = d.level ?? 'all';
+  S.bg = { ...d.bg, img: getAsset(d.bg.img) };
+  S.items = d.items.map(i => ({ ...i, png: getAsset(i.png), raw: getAsset(i.raw), topPng: getAsset(i.topPng) }));
+  S.sel = S.items.some(i => i.id === d.sel) ? d.sel : null;
+  BGIMG = null;
+  if (S.bg.img) { try { BGIMG = await loadImage(S.bg.img); } catch (e) { } }
+  await syncBitmaps();
+  syncCaseFields(); renderLists(); renderInspector(); draw();
+  scheduleSave();
+}
+
+async function undo() {
+  if (!UNDO.length) { toast('Nothing left to undo'); return; }
+  REDO.push(undoState());
+  const s = UNDO.pop();
+  await applyState(s);
+  lastState = s;
+  refreshUndoButtons();
+  toast('Undone');
+}
+async function redo() {
+  if (!REDO.length) { toast('Nothing to redo'); return; }
+  UNDO.push(undoState());
+  const s = REDO.pop();
+  await applyState(s);
+  lastState = s;
+  refreshUndoButtons();
+  toast('Redone');
+}
+function resetUndo() {
+  UNDO.length = 0; REDO.length = 0;
+  lastState = undoState();
+  refreshUndoButtons();
+}
+function refreshUndoButtons() {
+  const u = $('#btnUndoStep'), r = $('#btnRedoStep');
+  if (u) { u.disabled = !UNDO.length; u.title = UNDO.length ? `Undo (${UNDO.length} step${UNDO.length > 1 ? 's' : ''})` : 'Nothing to undo'; }
+  if (r) r.disabled = !REDO.length;
 }
 
 let saveT = 0;
-function commit() {
-  renderLists(); renderInspector(); draw();
+function scheduleSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => { store.set('current', snapshot()); }, 500);
+}
+
+function commit() {
+  if (lastState !== null) {
+    UNDO.push(lastState);
+    if (UNDO.length > UNDO_MAX) UNDO.shift();
+    REDO.length = 0;
+  }
+  lastState = undoState();
+  refreshUndoButtons();
+  renderLists(); renderInspector(); draw();
+  scheduleSave();
 }
 
 /* fill in anything a file saved by an older build has not got */
@@ -3157,16 +3547,15 @@ async function restore(data) {
   S.cs = data.cs || S.cs;
   S.rail = data.rail ?? S.rail;
   S.bg = Object.assign({ colour: '', img: null, fade: 100 }, data.bg || {});
+  S.opt = Object.assign({ grid: true, dims: true, snap: true, rulers: true }, data.opt || {});
   S.items = data.items.map(upgrade);
   S.sel = null;
-  BMP.clear(); TOP.clear(); BGIMG = null;
-  await Promise.all(S.items.map(async i => {
-    try { if (i.png) BMP.set(i.id, await loadImage(i.png)); } catch (e) { }
-    try { if (i.topPng) TOP.set(i.id, await loadImage(i.topPng)); } catch (e) { }
-  }));
+  BMP.clear(); TOP.clear(); BMPSRC.clear(); TOPSRC.clear(); BGIMG = null;
+  await syncBitmaps();
   if (S.bg.img) { try { BGIMG = await loadImage(S.bg.img); } catch (e) { } }
   syncCaseFields();
   renderLists(); renderInspector(); fitView(); draw();
+  resetUndo();          /* a freshly opened case starts with clean history */
   return true;
 }
 
@@ -3254,7 +3643,8 @@ function buildSchedule() {
 function syncCaseFields() {
   $('#caseW').value = S.cs.w; $('#caseH').value = S.cs.h; $('#caseD').value = S.cs.d;
   $('#railH').value = S.rail;
-  $('#optGrid').checked = S.opt.grid; $('#optDims').checked = S.opt.dims; $('#optSnap').checked = S.opt.snap;
+  $('#optGrid').checked = S.opt.grid; $('#optDims').checked = S.opt.dims;
+  $('#optSnap').checked = S.opt.snap; $('#optRulers').checked = S.opt.rulers !== false;
   $('#bgColour').value = S.bg.colour || defaultCaseColour();
   $('#bgFade').value = S.bg.fade ?? 100;
   $('#bgFadeVal').textContent = (S.bg.fade ?? 100) + '%';
@@ -3276,6 +3666,7 @@ $('#railH').addEventListener('change', e => {
 $('#optGrid').addEventListener('change', e => { S.opt.grid = e.target.checked; draw(); });
 $('#optDims').addEventListener('change', e => { S.opt.dims = e.target.checked; draw(); });
 $('#optSnap').addEventListener('change', e => { S.opt.snap = e.target.checked; });
+$('#optRulers').addEventListener('change', e => { S.opt.rulers = e.target.checked; draw(); });
 $('#levelFilter').addEventListener('change', e => { S.level = e.target.value; draw(); });
 
 /* back wall */
@@ -3296,6 +3687,10 @@ $('#fileBg').addEventListener('change', async e => {
   } catch (err) { toast('Could not read that image'); }
 });
 $('#btnBgClear').onclick = () => { S.bg.img = null; S.bg.colour = ''; BGIMG = null; syncCaseFields(); commit(); };
+/* a graphic is an ordinary object that happens to be fixed to the wall,
+   so it goes through the same cut-out and sizing steps */
+let wallGraphicNext = false;
+$('#btnWallGraphic').onclick = () => { wallGraphicNext = true; $('#fileImg').click(); };
 
 /* structure and objects */
 $('#btnShelf').onclick = addShelf;
@@ -3327,7 +3722,12 @@ $('#btnTheme').onclick = () => {
 const pickImages = () => $('#fileImg').click();
 $('#btnAddImg').onclick = pickImages;
 $('#btnAddImg2').onclick = pickImages;
-$('#fileImg').addEventListener('change', e => { if (e.target.files.length) openWizardFiles(e.target.files); e.target.value = ''; });
+$('#fileImg').addEventListener('change', e => {
+  const preset = wallGraphicNext ? { mount: 'wall', planShape: 'rect' } : null;
+  wallGraphicNext = false;
+  if (e.target.files.length) openWizardFiles(e.target.files, preset);
+  e.target.value = '';
+});
 $('#fileTop').addEventListener('change', e => {
   const f = e.target.files[0]; e.target.value = '';
   if (f && W.pendingTopFor) openTopWizard(W.pendingTopFor, f);
@@ -3460,6 +3860,7 @@ $('#leanNum').addEventListener('change', e => {
 });
 $('#leanFrom').addEventListener('change', e => { W.leanFrom = e.target.value; syncLeanFields(); });
 $('#wallYNum').addEventListener('change', e => { W.wallY = num(e.target.value); });
+$('#faceSel').addEventListener('change', e => { W.face = e.target.value; });
 $('#supportSel').addEventListener('change', e => { W.support = e.target.value; });
 $('#planShape').addEventListener('change', e => { W.planShape = e.target.value; });
 $('#btnTopView').onclick = () => {
@@ -3507,6 +3908,22 @@ $('#fileJson').addEventListener('change', async e => {
 });
 $('#btnExportPng').onclick = () => exportPNG(2);
 
+/* undo */
+$('#btnUndoStep').onclick = undo;
+$('#btnRedoStep').onclick = redo;
+
+/* preview */
+$('#btnPreview').onclick = enterPreview;
+$('#pvExit').onclick = exitPreview;
+$('#pvSeg').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
+$('#pvIn').onclick = () => { S.zoom = clamp(S.zoom * 1.25, 0.2, 12); updateZoomLabel(); draw(); };
+$('#pvOut').onclick = () => { S.zoom = clamp(S.zoom / 1.25, 0.2, 12); updateZoomLabel(); draw(); };
+$('#pvFit').onclick = fitView;
+$('#previewBar').addEventListener('pointerenter', nudgeBar);
+/* leaving full screen by any other route — F11, the browser's own Esc —
+   should drop the mode too, or the chrome stays hidden */
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) exitPreview(); });
+
 /* shape picker */
 $('#shapeClose').onclick = closeShapePicker;
 $('#shapeBack').addEventListener('pointerdown', e => { if (e.target.id === 'shapeBack') closeShapePicker(); });
@@ -3536,6 +3953,13 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if
   setView('front');
   renderLists(); renderInspector(); draw();
   window.addEventListener('resize', () => draw());
-  try { await restore(await store.get('current')); } catch (e) { }
+  resetUndo();                       /* history starts from the empty case */
+  try {
+    const saved = await store.get('current');
+    /* Reading the autosave can take a moment — long enough to start
+       working in an apparently empty case. If anything has been changed
+       by the time it arrives, that is the real work: leave it alone. */
+    if (saved && !UNDO.length) await restore(saved);
+  } catch (e) { }
 })();
 </script>

@@ -16,7 +16,7 @@ const W = {
   crop: null,
   scaleMode: 'width', keepAspect: true, widthCm: 20, heightCm: 15, lineCm: 10, calib: null,
   depthCm: 3, name: '',
-  mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright', wallY: 100,
+  mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright', wallY: 100, face: 'back',
   stand: { kind: 'none', w: 0, d: 0, h: 0 },
   planShape: 'auto',
   points: [],     // wire attachment points, in work-canvas pixels
@@ -511,6 +511,12 @@ function renderSupportSel() {
   $('#panelStand').classList.toggle('hidden', W.mount !== 'placed');
   $('#panelHanging').classList.toggle('hidden', W.mount !== 'hanging');
   $('#panelWall').classList.toggle('hidden', W.mount !== 'wall');
+  const fs = $('#faceSel');
+  fs.innerHTML = ['<option value="back">The back wall</option>']
+    .concat(S.items.filter(i => i.type === 'plinth')
+      .map(p => '<option value="' + p.id + '">Front of ' + esc(p.name) + '</option>'))
+    .join('');
+  fs.value = W.face || 'back';
   syncLeanFields();
 }
 function syncLeanFields() {
@@ -529,10 +535,13 @@ function syncStandFields() {
   $('#standW').value = rnd(W.stand.w);
   $('#standD').value = rnd(W.stand.d);
   $('#standH').value = rnd(W.stand.h);
-  $('#standHLabel').textContent = k === 'cradle' ? 'End h cm' : 'Lift cm';
+  $('#standHLabel').textContent = 'Base h cm';
+  /* a cradle is cut to fit its book, so only the height is yours to give */
+  $('#standWF').classList.toggle('hidden', cradleFits(k));
+  $('#standDF').classList.toggle('hidden', cradleFits(k));
   $('#standHelp').textContent =
-    k === 'cradle' ? 'A book cradle holds the block in its valley, so the middle sits on the deck and only the arms stand proud. Give the height of the arms at each end.'
-      : k === 'stand' ? 'A V stand lifts the object clear of the deck. Its own footprint is usually deeper than the object, and that is what has to fit on the plinth.'
+    k === 'cradle' ? 'Made to fit its book, so it takes the object’s own width and depth — you give only the height.'
+      : k === 'stand' ? 'Only splays into a V seen from above — from the front you get the base and its notches. Its footprint is usually deeper than the object, and that is what has to fit on the plinth.'
         : k === 'block' ? 'A plain block under the object. Its height is added to whatever it stands on.'
           : 'Nothing under the object.';
 }
@@ -574,10 +583,11 @@ function syncWizFields() {
 
 const TIFF_RE = /\.tiff?$/i;
 
-async function openWizardFiles(files) {
+async function openWizardFiles(files, preset) {
   const list = Array.from(files);
   const tiffs = list.filter(f => TIFF_RE.test(f.name) || f.type === 'image/tiff');
   if (tiffs.length) toast(`Chrome cannot read TIFF — save ${tiffs.length > 1 ? 'those' : 'that one'} as PNG or JPEG first`);
+  W.preset = preset || null;
   W.queue = list.filter(f => !tiffs.includes(f));
   if (W.queue.length) nextFromQueue();
 }
@@ -603,9 +613,10 @@ async function nextFromQueue() {
     W.name = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 60);
     W.widthCm = 20; W.heightCm = 15; W.depthCm = 3; W.keepAspect = true; W.scaleMode = 'width';
     W.mount = 'placed'; W.support = 'floor'; W.lean = 0; W.leanFrom = 'upright';
-    W.wallY = rnd(S.cs.h * 0.55); W.planShape = 'auto';
+    W.wallY = rnd(S.cs.h * 0.55); W.planShape = 'auto'; W.face = 'back';
     W.stand = { kind: 'none', w: 0, d: 0, h: 0 };
-    showWizard('Add object');
+    if (W.preset) Object.assign(W, W.preset);
+    showWizard(W.mount === 'wall' ? 'Add a graphic to the wall' : 'Add object');
     runAuto();
     setStep(1);
   } catch (err) { toast('Could not read that image'); }
@@ -627,7 +638,7 @@ async function openWizard({ edit, step = 1 }) {
   W.keepAspect = o.keepAspect !== false; W.scaleMode = 'width';
   W.mount = o.mount; W.support = o.support || 'floor';
   W.lean = o.lean || 0; W.leanFrom = o.leanFrom || 'upright';
-  W.wallY = o.wallY || rnd(S.cs.h * 0.55);
+  W.wallY = o.wallY || rnd(S.cs.h * 0.55); W.face = o.face || 'back';
   W.planShape = o.planShape || 'auto';
   W.stand = o.stand ? { ...o.stand } : { kind: 'none', w: 0, d: 0, h: 0 };
   W.points = (o.wires || []).map(wr => ({ x: W.bb.x + wr.ax * W.bb.w, y: W.bb.y + wr.ay * W.bb.h }));
@@ -728,7 +739,7 @@ function finishWizard() {
     o = blankObject({
       name: W.name || 'Object', render: 'image', png, w, h, depth: W.depthCm,
       mount: W.mount, support: W.support, lean: W.lean, leanFrom: W.leanFrom,
-      wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect,
+      wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect, face: W.face,
       stand: { ...W.stand }, rail: S.rail, wires, z: 2
     });
     if (W.raw) { const rc = copyCanvas(W.raw); o.raw = rc.toDataURL('image/jpeg', 0.82); }
@@ -737,7 +748,7 @@ function finishWizard() {
     Object.assign(o, {
       name: W.name || o.name, png, w, h, depth: W.depthCm,
       mount: W.mount, support: W.support, lean: W.lean, leanFrom: W.leanFrom,
-      wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect,
+      wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect, face: W.face,
       stand: { ...W.stand }
     });
     if (wires.length) o.wires = wires.map((nw, i) => ({ ...nw, len: (o.wires && o.wires[i]) ? o.wires[i].len : 0 }));
@@ -822,14 +833,112 @@ const store = {
 };
 
 function snapshot() {
-  return JSON.parse(JSON.stringify({ v: 2, name: S.name, cs: S.cs, rail: S.rail, bg: S.bg, items: S.items }));
+  return JSON.parse(JSON.stringify({ v: 3, name: S.name, cs: S.cs, rail: S.rail, bg: S.bg, opt: S.opt, items: S.items }));
+}
+
+/* ---------------- undo ----------------
+   Every commit files the state as it was beforehand. The picture data
+   is the bulk of a case, and it never changes when you move or delete
+   something, so it is held once in ASSETS and the history stores only
+   a key — which keeps sixty steps cheap however many photographs are
+   in the case. */
+
+const ASSETS = new Map();      // key -> data URL
+const ASSET_KEY = new Map();   // data URL -> key
+let assetSeq = 0;
+function putAsset(url) {
+  if (!url) return null;
+  let k = ASSET_KEY.get(url);
+  if (!k) { k = 'a' + (++assetSeq); ASSETS.set(k, url); ASSET_KEY.set(url, k); }
+  return k;
+}
+const getAsset = k => (k ? ASSETS.get(k) || null : null);
+
+const UNDO = [], REDO = [];
+const UNDO_MAX = 60;
+let lastState = null;
+
+function undoState() {
+  return JSON.stringify({
+    name: S.name, cs: S.cs, rail: S.rail, level: S.level, sel: S.sel,
+    bg: { ...S.bg, img: putAsset(S.bg.img) },
+    items: S.items.map(i => ({ ...i, png: putAsset(i.png), raw: putAsset(i.raw), topPng: putAsset(i.topPng) }))
+  });
+}
+
+/* only re-decode a bitmap whose picture actually changed */
+async function syncBitmaps() {
+  const live = new Set(S.items.map(i => i.id));
+  for (const id of [...BMP.keys()]) if (!live.has(id)) { BMP.delete(id); BMPSRC.delete(id); }
+  for (const id of [...TOP.keys()]) if (!live.has(id)) { TOP.delete(id); TOPSRC.delete(id); }
+  await Promise.all(S.items.map(async i => {
+    if (i.png && BMPSRC.get(i.id) !== i.png) {
+      try { BMP.set(i.id, await loadImage(i.png)); BMPSRC.set(i.id, i.png); } catch (e) { }
+    } else if (!i.png) { BMP.delete(i.id); BMPSRC.delete(i.id); }
+    if (i.topPng && TOPSRC.get(i.id) !== i.topPng) {
+      try { TOP.set(i.id, await loadImage(i.topPng)); TOPSRC.set(i.id, i.topPng); } catch (e) { }
+    } else if (!i.topPng) { TOP.delete(i.id); TOPSRC.delete(i.id); }
+  }));
+}
+
+async function applyState(str) {
+  const d = JSON.parse(str);
+  S.name = d.name; S.cs = d.cs; S.rail = d.rail; S.level = d.level ?? 'all';
+  S.bg = { ...d.bg, img: getAsset(d.bg.img) };
+  S.items = d.items.map(i => ({ ...i, png: getAsset(i.png), raw: getAsset(i.raw), topPng: getAsset(i.topPng) }));
+  S.sel = S.items.some(i => i.id === d.sel) ? d.sel : null;
+  BGIMG = null;
+  if (S.bg.img) { try { BGIMG = await loadImage(S.bg.img); } catch (e) { } }
+  await syncBitmaps();
+  syncCaseFields(); renderLists(); renderInspector(); draw();
+  scheduleSave();
+}
+
+async function undo() {
+  if (!UNDO.length) { toast('Nothing left to undo'); return; }
+  REDO.push(undoState());
+  const s = UNDO.pop();
+  await applyState(s);
+  lastState = s;
+  refreshUndoButtons();
+  toast('Undone');
+}
+async function redo() {
+  if (!REDO.length) { toast('Nothing to redo'); return; }
+  UNDO.push(undoState());
+  const s = REDO.pop();
+  await applyState(s);
+  lastState = s;
+  refreshUndoButtons();
+  toast('Redone');
+}
+function resetUndo() {
+  UNDO.length = 0; REDO.length = 0;
+  lastState = undoState();
+  refreshUndoButtons();
+}
+function refreshUndoButtons() {
+  const u = $('#btnUndoStep'), r = $('#btnRedoStep');
+  if (u) { u.disabled = !UNDO.length; u.title = UNDO.length ? `Undo (${UNDO.length} step${UNDO.length > 1 ? 's' : ''})` : 'Nothing to undo'; }
+  if (r) r.disabled = !REDO.length;
 }
 
 let saveT = 0;
-function commit() {
-  renderLists(); renderInspector(); draw();
+function scheduleSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => { store.set('current', snapshot()); }, 500);
+}
+
+function commit() {
+  if (lastState !== null) {
+    UNDO.push(lastState);
+    if (UNDO.length > UNDO_MAX) UNDO.shift();
+    REDO.length = 0;
+  }
+  lastState = undoState();
+  refreshUndoButtons();
+  renderLists(); renderInspector(); draw();
+  scheduleSave();
 }
 
 /* fill in anything a file saved by an older build has not got */
@@ -850,16 +959,15 @@ async function restore(data) {
   S.cs = data.cs || S.cs;
   S.rail = data.rail ?? S.rail;
   S.bg = Object.assign({ colour: '', img: null, fade: 100 }, data.bg || {});
+  S.opt = Object.assign({ grid: true, dims: true, snap: true, rulers: true }, data.opt || {});
   S.items = data.items.map(upgrade);
   S.sel = null;
-  BMP.clear(); TOP.clear(); BGIMG = null;
-  await Promise.all(S.items.map(async i => {
-    try { if (i.png) BMP.set(i.id, await loadImage(i.png)); } catch (e) { }
-    try { if (i.topPng) TOP.set(i.id, await loadImage(i.topPng)); } catch (e) { }
-  }));
+  BMP.clear(); TOP.clear(); BMPSRC.clear(); TOPSRC.clear(); BGIMG = null;
+  await syncBitmaps();
   if (S.bg.img) { try { BGIMG = await loadImage(S.bg.img); } catch (e) { } }
   syncCaseFields();
   renderLists(); renderInspector(); fitView(); draw();
+  resetUndo();          /* a freshly opened case starts with clean history */
   return true;
 }
 

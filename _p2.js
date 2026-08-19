@@ -2,25 +2,29 @@
    Interaction — hit testing, dragging, keyboard
    ============================================================ */
 
+/* Nearest the glass first, which is the drawing order reversed — so a
+   click lands on whatever is actually on top. A few pixels of slack,
+   so something thin is still catchable at any zoom. */
 function hitTest(px, py) {
   const pt = s2w(px, py);
-  const list = S.items.filter(visible);
-  const objs = list.filter(i => i.type === 'object').sort((a, b) => b.z - a.z);
-  const rest = list.filter(i => i.type !== 'object');
-  for (const o of objs) {
-    if (S.view === 'front') {
-      const L = layout(o);
-      const dx = pt.a - L.pivot.x, dy = pt.b - L.pivot.y;
-      const c = Math.cos(-L.rot), s = Math.sin(-L.rot);
-      const lx = dx * c - dy * s, ly = dx * s + dy * c;
-      if (lx >= -L.u * L.w && lx <= (1 - L.u) * L.w && ly <= L.v * L.h && ly >= -(1 - L.v) * L.h) return o;
-    } else {
-      const f = footprint(o);
-      if (pt.a >= f.x && pt.a <= f.x + f.w && pt.b >= f.z && pt.b <= f.z + Math.max(f.d, 1)) return o;
-    }
-  }
-  for (const it of rest.filter(i => i.type === 'plinth').concat(rest.filter(i => i.type === 'shelf'))) {
-    if (S.view === 'front') {
+  const tol = T ? 5 / T.sc : 0.5;
+  const list = S.items.filter(visible).sort((a, b) => depthKey(b) - depthKey(a));
+
+  for (const it of list) {
+    if (it.type === 'object') {
+      if (S.view === 'front') {
+        const L = layout(it);
+        const dx = pt.a - L.pivot.x, dy = pt.b - L.pivot.y;
+        const c = Math.cos(-L.rot), s = Math.sin(-L.rot);
+        const lx = dx * c - dy * s, ly = dx * s + dy * c;
+        if (lx >= -L.u * L.w - tol && lx <= (1 - L.u) * L.w + tol &&
+          ly <= L.v * L.h + tol && ly >= -(1 - L.v) * L.h - tol) return it;
+      } else {
+        const f = footprint(it);
+        if (pt.a >= f.x - tol && pt.a <= f.x + f.w + tol &&
+          pt.b >= f.z - tol && pt.b <= f.z + f.d + tol) return it;
+      }
+    } else if (S.view === 'front') {
       const y0 = it.type === 'shelf' ? it.y - it.t : 0;
       const y1 = it.type === 'shelf' ? it.y : it.h;
       if (pt.a >= it.x && pt.a <= it.x + it.w && pt.b >= y0 - 0.6 && pt.b <= y1 + 0.6) return it;
@@ -90,9 +94,23 @@ function landOn(o, s) {
   }
 }
 
-/* everything that travels with a shelf or plinth */
+/* Bring a fixed panel onto the surface it is stuck to, if it has
+   wandered off it. Leaves it alone when it is already on. */
+function landOnFace(o) {
+  const f = faceOf(o);
+  if (!f) return;
+  const b = bbox(o);
+  if (b.x0 < f.x - 0.01 || b.x1 > f.x + f.w + 0.01) o.x = rnd(f.x + (f.w - o.w) / 2, 1);
+  if ((o.wallY || 0) < 0 || (o.wallY || 0) + o.h > f.top + 0.01) {
+    o.wallY = rnd(Math.max(0, (f.top - o.h) / 2), 1);
+  }
+}
+
+/* everything that travels with a shelf or plinth — things standing on
+   it, and anything stuck to its front */
 function childrenOf(id) {
-  return S.items.filter(i => i.type === 'object' && i.mount === 'placed' && i.support === id);
+  return S.items.filter(i => i.type === 'object' &&
+    ((i.mount === 'placed' && i.support === id) || (i.mount === 'wall' && i.face === id)));
 }
 
 function pick(it) {
@@ -113,6 +131,12 @@ cvs.addEventListener('pointerdown', e => {
   const r = cvs.getBoundingClientRect();
   const px = e.clientX - r.left, py = e.clientY - r.top;
   T = calcT();
+
+  /* preview is look-only: dragging pans, nothing selects or moves */
+  if (PREVIEW) {
+    drag = { pan: true, sx: px, sy: py, px: S.pan.x, py: S.pan.y };
+    return;
+  }
 
   /* the rotation handle sits on top of everything */
   const h = spinHandlePos();
@@ -140,6 +164,7 @@ cvs.addEventListener('pointerdown', e => {
 });
 
 cvs.addEventListener('dblclick', e => {
+  if (PREVIEW) return;
   const r = cvs.getBoundingClientRect();
   T = calcT();
   const hit = hitTest(e.clientX - r.left, e.clientY - r.top);
@@ -155,7 +180,10 @@ cvs.addEventListener('pointermove', e => {
     ? `x ${rnd(pt.a)}  y ${rnd(pt.b)}`
     : `x ${rnd(pt.a)}  z ${rnd(pt.b)}`;
 
+  if (PREVIEW) nudgeBar();
+
   if (!drag) {
+    if (PREVIEW) { cvs.style.cursor = 'default'; return; }
     const h = spinHandlePos();
     cvs.style.cursor = (h && Math.hypot(px - h.x, py - h.y) < 11) ? 'grab'
       : hitTest(px, py) ? 'grab' : 'default';
@@ -244,6 +272,20 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') document.activeElement.blur();
     return;
   }
+  if (PREVIEW) {
+    if (e.key === 'Escape' || e.key.toLowerCase() === 'p') { exitPreview(); return; }
+    if (e.key === '1') { setView('front'); return; }
+    if (e.key === '2') { setView('plan'); return; }
+    if (e.key.toLowerCase() === 'f') { fitView(); return; }
+    return;                       /* nothing is editable in preview */
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    e.shiftKey ? redo() : undo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+  if (e.key.toLowerCase() === 'p') { enterPreview(); return; }
   if (!$('#shapeBack').hidden) { if (e.key === 'Escape') closeShapePicker(); return; }
   if (!$('#wizBack').hidden) {
     if (e.key === 'Escape') minimiseWizard();
@@ -306,7 +348,7 @@ function addPlinth() {
 function blankObject(extra) {
   return Object.assign({
     id: uid(), type: 'object', render: 'rect',
-    name: 'Object', text: '', textSize: 0.55, colour: '',
+    name: 'Object', text: '', textSize: 0.55, colour: '', face: 'back',
     png: null, raw: null, topPng: null, planShape: 'auto',
     w: 20, h: 15, depth: 5,
     x: rnd(S.cs.w / 2 - 10), z: 4, wallY: 100, spin: 0,
@@ -384,12 +426,23 @@ function choseShape(id) {
 function addShape() { openShapePicker('new'); }
 function addPanel() {
   const n = S.items.filter(i => i.render === 'panel').length + 1;
+  /* with a plinth selected you almost certainly want the panel on it */
+  const sel = byId(S.sel);
+  const host = sel && sel.type === 'plinth' ? sel : null;
   const it = blankObject({
-    name: `Panel ${n}`, render: 'panel', mount: 'wall',
+    name: `Panel ${n}`, render: 'panel', mount: 'wall', face: 'back',
     w: 30, h: 21, depth: 0.4, wallY: rnd(S.cs.h * 0.55), z: 0,
     text: 'Interpretation text goes here.', textSize: 0.55
   });
-  S.items.push(it); select(it.id); commit(); toast('Panel added');
+  if (host) {
+    it.face = host.id;
+    it.w = rnd(Math.min(it.w, host.w - 4));
+    it.h = rnd(Math.min(it.h, host.h - 4));
+  }
+  S.items.push(it);
+  if (host) landOnFace(it);
+  select(it.id); commit();
+  toast(host ? `Panel added to the front of ${host.name}` : 'Panel added to the back wall');
 }
 
 function removeItem(id) {
@@ -398,7 +451,7 @@ function removeItem(id) {
   for (const o of S.items) if (o.type === 'object' && o.support === id) o.support = 'floor';
   BMP.delete(id); TOP.delete(id);
   if (S.sel === id) S.sel = null;
-  commit(); toast(`${it.name} removed`);
+  commit(); toast(`${it.name} removed — Ctrl+Z to put it back`);
 }
 async function duplicate(id) {
   const it = byId(id); if (!it) return;
@@ -419,12 +472,51 @@ function select(id) {
 
 function setView(v) {
   S.view = v; S.pan = { x: 0, y: 0 };
-  $$('#viewSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+  $$('#viewSeg button, #pvSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
   $('#viewNote').textContent = v === 'front' ? 'looking at the back wall' : 'looking down from above';
   renderInspector(); draw();
 }
 function fitView() { S.zoom = 1; S.pan = { x: 0, y: 0 }; updateZoomLabel(); draw(); }
-function updateZoomLabel() { $('#zVal').textContent = Math.round(S.zoom * 100) + '%'; }
+function updateZoomLabel() {
+  const pct = Math.round(S.zoom * 100) + '%';
+  $('#zVal').textContent = pct;
+  $('#pvZoom').textContent = pct;
+}
+
+/* ---------------- preview ----------------
+   Full screen, none of the drafting furniture, so what is left is the
+   case as it would be seen. Zoom and pan still work. */
+
+let barIdleT = 0;
+function nudgeBar() {
+  const bar = $('#previewBar');
+  bar.classList.remove('idle');
+  clearTimeout(barIdleT);
+  barIdleT = setTimeout(() => { if (PREVIEW) bar.classList.add('idle'); }, 2600);
+}
+
+function enterPreview() {
+  if (PREVIEW) return;
+  PREVIEW = true;
+  select(null);
+  document.body.classList.add('preview');
+  $('#pvName').textContent = S.name;
+  $$('#pvSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === S.view)));
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen().catch(() => { });
+  nudgeBar();
+  requestAnimationFrame(() => { fitView(); draw(); });
+}
+
+function exitPreview() {
+  if (!PREVIEW) return;
+  PREVIEW = false;
+  document.body.classList.remove('preview');
+  clearTimeout(barIdleT);
+  if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => { });
+  requestAnimationFrame(() => { fitView(); draw(); });
+}
+const togglePreview = () => PREVIEW ? exitPreview() : enterPreview();
 
 let toastT = 0;
 function toast(msg) {
@@ -516,6 +608,7 @@ function renderInspector() {
           <kbd>&larr;&uarr;&rarr;&darr;</kbd> nudge 1 cm &middot; <kbd>Shift</kbd> 0.1 &middot; <kbd>Ctrl</kbd> 5<br>
           <kbd>R</kbd> turn 90&deg; &nbsp; <kbd>Enter</kbd> mounting page<br>
           <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate &nbsp; <kbd>Del</kbd> remove<br>
+          <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo &nbsp; <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo<br>
           <kbd>Ctrl</kbd>+<kbd>V</kbd> paste a picture straight in<br>
           Drag empty sheet to pan &middot; scroll to zoom
         </p>
@@ -576,9 +669,9 @@ function renderInspector() {
     <section class="sect">
       <h2>Mounting</h2>
       <div class="tools" id="iMount">
-        <button data-mount="placed" aria-pressed="${o.mount === 'placed'}">Placed</button>
+        ${o.render === 'panel' ? '' : `<button data-mount="placed" aria-pressed="${o.mount === 'placed'}">Placed</button>`}
         <button data-mount="hanging" aria-pressed="${o.mount === 'hanging'}">Wires</button>
-        <button data-mount="wall" aria-pressed="${o.mount === 'wall'}">Wall</button>
+        <button data-mount="wall" aria-pressed="${o.mount === 'wall'}">Fixed</button>
       </div>`;
 
     if (o.mount === 'placed') {
@@ -596,12 +689,20 @@ function renderInspector() {
       <input type="range" id="iLean" min="0" max="90" value="${rnd(shownLean(o))}">
       <div class="readout"><span>base <b>${rnd(supportOf(o).top + standLift(o))}</b> cm</span><span>seen height <b>${rnd(L.h)}</b></span><span>deck used <b>${rnd(f.d)}</b> cm</span></div>`;
     } else if (o.mount === 'wall') {
+      const f = faceOf(o);
       html += `
+      <label class="f full"><span>Fixed to</span><select id="iFace">
+        <option value="back"${!f ? ' selected' : ''}>The back wall</option>
+        ${S.items.filter(i => i.type === 'plinth').map(p =>
+        `<option value="${p.id}"${f && f.id === p.id ? ' selected' : ''}>Front of ${esc(p.name)}</option>`).join('')}
+      </select></label>
       <div class="fields two">
         ${fld('Bottom edge cm', 'iWallY', rnd(o.wallY || 0), { step: 0.5 })}
-        ${fld('Stands off cm', 'iZ2', rnd(o.z), { step: 0.1, min: 0 })}
+        ${f ? '' : fld('Stands off cm', 'iZ2', rnd(o.z), { step: 0.1, min: 0 })}
       </div>
-      <p class="note">Fixed flat to the back wall.</p>`;
+      <p class="note">${f
+          ? `Stuck flat to the front of ${esc(f.name)}, ${rnd(o.wallY || 0)} cm up its face. Barely a line in plan, and it moves with the plinth.`
+          : 'Stuck flat to the back wall.'}</p>`;
     } else {
       html += `
       <label class="f full"><span>Rail height cm</span><input type="number" id="iRail" value="${rnd(o.rail ?? S.rail)}" step="0.5"></label>
@@ -629,13 +730,19 @@ function renderInspector() {
           ${[['none', 'None'], ['block', 'Plain block'], ['stand', 'V stand (acrylic)'], ['cradle', 'Book cradle']]
           .map(([v, l]) => `<option value="${v}"${(st ? st.kind : 'none') === v ? ' selected' : ''}>${l}</option>`).join('')}
         </select></label>
-        ${st ? `<div class="fields">
+        ${!st ? '' : cradleFits(st.kind) ? `<div class="fields">
+          ${fld('Base h cm', 'iStandH', rnd(st.h), { step: 0.5, min: 0 })}
+        </div>
+        <div class="readout"><span>takes the book&rsquo;s own <b>${rnd(standBox(o).w)} &times; ${rnd(standBox(o).d)}</b> cm</span></div>`
+      : `<div class="fields">
           ${fld('W cm', 'iStandW', rnd(st.w), { step: 0.5, min: 0.5 })}
           ${fld('D cm', 'iStandD', rnd(st.d), { step: 0.5, min: 0.5 })}
-          ${fld(st.kind === 'cradle' ? 'End h cm' : 'Lift cm', 'iStandH', rnd(st.h), { step: 0.5, min: 0 })}
+          ${fld('Base h cm', 'iStandH', rnd(st.h), { step: 0.5, min: 0 })}
         </div>
-        <div class="readout"><span>stand needs <b>${rnd(st.w)} &times; ${rnd(st.d)}</b> cm of deck</span></div>` : ''}
-        <p class="note">Always centred under the object and moves with it.</p>
+        <div class="readout"><span>stand needs <b>${rnd(st.w)} &times; ${rnd(st.d)}</b> cm of deck</span></div>`}
+        <p class="note">${st && cradleFits(st.kind)
+        ? 'A cradle is made to fit its book, so it takes the object&rsquo;s own width and depth — you give only the height.'
+        : 'Always centred under the object and moves with it. A V stand only reads as a V in the plan view.'}</p>
       </section>`;
     }
 
@@ -757,6 +864,7 @@ function bindInspector(o) {
   setNum('iRail', v => o.rail = v);
   setNum('iWallY', v => o.wallY = v);
   setNum('iZ2', v => o.z = Math.max(0, v));
+  on('iFace', 'change', e => { o.face = e.target.value; landOnFace(o); commit(); });
 
   /* moving a support carries its objects */
   const moveWithKids = (axis) => (v) => {
@@ -874,6 +982,8 @@ function setMount(o, mount) {
     o.wires.forEach(w => { w.len = Math.max(0, rnd(o.rail - (b.y1 - w.ay * o.h), 1)); });
   } else if (mount === 'wall') {
     o.wallY = rnd(b.y0);
+    o.face = o.face || 'back';
+    landOnFace(o);
   } else {
     const best = bestSupport(o, b.y0);
     o.support = best ? best.s.id : 'floor';

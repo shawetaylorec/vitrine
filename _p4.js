@@ -5,7 +5,8 @@
 function syncCaseFields() {
   $('#caseW').value = S.cs.w; $('#caseH').value = S.cs.h; $('#caseD').value = S.cs.d;
   $('#railH').value = S.rail;
-  $('#optGrid').checked = S.opt.grid; $('#optDims').checked = S.opt.dims; $('#optSnap').checked = S.opt.snap;
+  $('#optGrid').checked = S.opt.grid; $('#optDims').checked = S.opt.dims;
+  $('#optSnap').checked = S.opt.snap; $('#optRulers').checked = S.opt.rulers !== false;
   $('#bgColour').value = S.bg.colour || defaultCaseColour();
   $('#bgFade').value = S.bg.fade ?? 100;
   $('#bgFadeVal').textContent = (S.bg.fade ?? 100) + '%';
@@ -27,6 +28,7 @@ $('#railH').addEventListener('change', e => {
 $('#optGrid').addEventListener('change', e => { S.opt.grid = e.target.checked; draw(); });
 $('#optDims').addEventListener('change', e => { S.opt.dims = e.target.checked; draw(); });
 $('#optSnap').addEventListener('change', e => { S.opt.snap = e.target.checked; });
+$('#optRulers').addEventListener('change', e => { S.opt.rulers = e.target.checked; draw(); });
 $('#levelFilter').addEventListener('change', e => { S.level = e.target.value; draw(); });
 
 /* back wall */
@@ -47,6 +49,10 @@ $('#fileBg').addEventListener('change', async e => {
   } catch (err) { toast('Could not read that image'); }
 });
 $('#btnBgClear').onclick = () => { S.bg.img = null; S.bg.colour = ''; BGIMG = null; syncCaseFields(); commit(); };
+/* a graphic is an ordinary object that happens to be fixed to the wall,
+   so it goes through the same cut-out and sizing steps */
+let wallGraphicNext = false;
+$('#btnWallGraphic').onclick = () => { wallGraphicNext = true; $('#fileImg').click(); };
 
 /* structure and objects */
 $('#btnShelf').onclick = addShelf;
@@ -78,7 +84,12 @@ $('#btnTheme').onclick = () => {
 const pickImages = () => $('#fileImg').click();
 $('#btnAddImg').onclick = pickImages;
 $('#btnAddImg2').onclick = pickImages;
-$('#fileImg').addEventListener('change', e => { if (e.target.files.length) openWizardFiles(e.target.files); e.target.value = ''; });
+$('#fileImg').addEventListener('change', e => {
+  const preset = wallGraphicNext ? { mount: 'wall', planShape: 'rect' } : null;
+  wallGraphicNext = false;
+  if (e.target.files.length) openWizardFiles(e.target.files, preset);
+  e.target.value = '';
+});
 $('#fileTop').addEventListener('change', e => {
   const f = e.target.files[0]; e.target.value = '';
   if (f && W.pendingTopFor) openTopWizard(W.pendingTopFor, f);
@@ -211,6 +222,7 @@ $('#leanNum').addEventListener('change', e => {
 });
 $('#leanFrom').addEventListener('change', e => { W.leanFrom = e.target.value; syncLeanFields(); });
 $('#wallYNum').addEventListener('change', e => { W.wallY = num(e.target.value); });
+$('#faceSel').addEventListener('change', e => { W.face = e.target.value; });
 $('#supportSel').addEventListener('change', e => { W.support = e.target.value; });
 $('#planShape').addEventListener('change', e => { W.planShape = e.target.value; });
 $('#btnTopView').onclick = () => {
@@ -258,6 +270,22 @@ $('#fileJson').addEventListener('change', async e => {
 });
 $('#btnExportPng').onclick = () => exportPNG(2);
 
+/* undo */
+$('#btnUndoStep').onclick = undo;
+$('#btnRedoStep').onclick = redo;
+
+/* preview */
+$('#btnPreview').onclick = enterPreview;
+$('#pvExit').onclick = exitPreview;
+$('#pvSeg').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
+$('#pvIn').onclick = () => { S.zoom = clamp(S.zoom * 1.25, 0.2, 12); updateZoomLabel(); draw(); };
+$('#pvOut').onclick = () => { S.zoom = clamp(S.zoom / 1.25, 0.2, 12); updateZoomLabel(); draw(); };
+$('#pvFit').onclick = fitView;
+$('#previewBar').addEventListener('pointerenter', nudgeBar);
+/* leaving full screen by any other route — F11, the browser's own Esc —
+   should drop the mode too, or the chrome stays hidden */
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) exitPreview(); });
+
 /* shape picker */
 $('#shapeClose').onclick = closeShapePicker;
 $('#shapeBack').addEventListener('pointerdown', e => { if (e.target.id === 'shapeBack') closeShapePicker(); });
@@ -287,5 +315,12 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if
   setView('front');
   renderLists(); renderInspector(); draw();
   window.addEventListener('resize', () => draw());
-  try { await restore(await store.get('current')); } catch (e) { }
+  resetUndo();                       /* history starts from the empty case */
+  try {
+    const saved = await store.get('current');
+    /* Reading the autosave can take a moment — long enough to start
+       working in an apparently empty case. If anything has been changed
+       by the time it arrives, that is the real work: leave it alone. */
+    if (saved && !UNDO.length) await restore(saved);
+  } catch (e) { }
 })();

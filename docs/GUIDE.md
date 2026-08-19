@@ -11,9 +11,19 @@ two — it is what the plan view is drawn against and what the overhang warnings
 measures its wire lengths down from there, so getting it right once saves correcting
 every object later.
 
+Three toggles control the drawing furniture: **Grid** (the 10 cm squares),
+**Dimensions** (the arrows, and the dashed witness lines off whatever is selected) and
+**Rulers** (the cm scales down the side and across the top). Turning the rulers off
+reclaims the gutter, so the case gets bigger rather than leaving an empty margin.
+
 Under **Back wall** you can set a colour, or upload an image of the actual case
-interior. It dresses the elevation only — the plan keeps its own tone, because in plan
-you are looking down at the deck, not at the wall.
+interior with **Whole wall**. It dresses the elevation only — the plan keeps its own
+tone, because in plan you are looking down at the deck, not at the wall.
+
+**+ Graphic on the wall** is for a single picture rather than the whole surface. It runs
+the same cut-out and sizing steps as an object, then fixes the result flat to the back
+at whatever height you set — so you can cut a photograph out of its background and hang
+it on the wall like artwork.
 
 ## 2. Structure before objects
 
@@ -23,7 +33,8 @@ Add shelves and plinths first, so that objects have something to land on.
   what objects rest on.
 - **Plinth** — a block on the floor with its own width, depth and height.
 
-Both can be dragged in either view. Moving one takes everything standing on it along.
+Both can be dragged in either view. Moving one takes everything standing on it — and
+anything stuck to its front — along with it.
 
 ## 3. Adding an object
 
@@ -83,27 +94,30 @@ automatically when you finish.
 **On wires** — click the picture where each wire attaches. One point hangs it straight.
 Two points let you tilt it by giving the wires different lengths.
 
-**On the wall** — flat against the back, at whatever height you give. This is what
-interpretation panels use.
+**Fixed** — flat against a vertical surface. Pick the back wall or the front of any
+plinth, and give the height of its bottom edge.
 
 ## 4. Stands and cradles
 
 On the mounting page, or in the inspector afterwards.
 
-| Type | Use it for | What the height means |
+| Type | Use it for | Dimensions |
 | --- | --- | --- |
-| Plain block | a simple riser | how far it lifts the object |
-| V stand | acrylic stands for astrolabes, plates, retes | how far it lifts the object |
-| Book cradle | manuscripts held open | the height of the arms at each end |
+| Plain block | a simple riser | width, depth and height, all yours |
+| V stand | acrylic stands for astrolabes, plates, retes | width, depth and height, all yours |
+| Book cradle | manuscripts held open | height only — it takes the book's own width and depth |
 
-A cradle holds the block in its valley, so the middle is treated as sitting on the deck
-and only the arms stand proud — which is why a cradle adds no lift.
+Every kind raises the object by its **base height**.
 
-Give the stand its own width and depth. This is the important part: a V stand is
-usually deeper than the object it holds, and it is the *stand* that has to fit on the
+Give a block or a V stand its own width and depth. This is the important part: a V stand
+is usually deeper than the object it holds, and it is the *stand* that has to fit on the
 plinth. The overhang warnings use whichever is bigger.
 
-The stand is always centred under its object and moves with it.
+A V stand's splay runs front to back, so it only reads as a V in the **plan** view. From
+the front you see its base and the little notches that stop the object sliding off.
+
+The stand is always centred under its object and moves with it. With no stand, nothing
+at all is drawn beneath the object.
 
 ## 5. Manuscripts
 
@@ -119,7 +133,7 @@ What follows from that:
 - once it leans past halfway to flat, the plan draws **the picture itself** rather than
   a rectangle, because that is what you would see looking down.
 
-Add a book cradle underneath and give the arm height.
+Add a book cradle underneath and give the height of its base.
 
 ## 6. Moving things about
 
@@ -134,14 +148,19 @@ Drag in either view.
 - Plan: sideways and back-to-front.
 - Arrow left and right nudge 1 cm, <kbd>Shift</kbd> 0.1 cm, <kbd>Ctrl</kbd> 5 cm.
 
+**Arrow up and down step between surfaces** — from the floor to a plinth to a shelf and
+back — rather than guessing from how far you nudged.
+
 To turn something, drag the round handle above it, press <kbd>R</kbd>, or type an angle
 in **Turn**. A turned object still settles properly onto its support.
 
-**Arrow up and down step between surfaces** — from the floor to a plinth to a
-shelf and back — rather than guessing from how far you nudged.
-
 **Plan filter**, bottom left, limits both views to one level at a time. Working out
 depth on a crowded shelf is much easier with everything else hidden.
+
+Everything is drawn back to front, so what is nearer the glass covers what is behind it,
+and clicking picks whatever is visually on top. Anything fixed to the **back wall** is
+always behind everything else — it is the rearmost plane there is, so a graphic on the
+wall can never end up in front of an object in the case.
 
 ## 7. Shapes and panels
 
@@ -155,18 +174,26 @@ Use them to block a case out before the photography is done, and swap them for t
 thing later. **Change shape…** in the inspector swaps one for another without losing
 its position, and there are buttons to turn a shape into a panel and back.
 
-**+ Panel** adds an interpretation panel, fixed flat to the back wall by default. You
-can also put one on a plinth by switching its mounting to *Placed*.
+**+ Panel** adds an interpretation panel. A panel is a flat card stuck to a vertical
+surface, so its mounting is **Fixed** (or **Wires**) — never *Placed*.
+
+- With **a plinth selected**, the new panel goes straight onto that plinth's front face,
+  sized to fit it and centred.
+- With nothing selected it goes on the **back wall**.
+
+Either way, **Fixed to** in the inspector moves it between surfaces afterwards. On a
+plinth front it faces you in elevation and is barely a line in plan, and it travels with
+the plinth.
 
 Panel text is set in **real centimetres**, with the equivalent in points shown beside
 it. This is the point of it: a 30 × 20 cm panel at 0.55 cm (16 pt) holds about ninety
 words, and the panel will tell you when your wording runs past the bottom — a red
-warning in the inspector and an ellipsis on the drawing. Shrink the type or grow the
-panel until it stops complaining.
+warning in the inspector and a red rule on the drawing. Shrink the type or grow the
+panel until it stops complaining. When the type is too small to read on screen it is
+drawn as grey rules, so a full panel still looks full; zoom in for the words.
 
 To get wording in, either type into the box, or **select the panel and press
-<kbd>Ctrl</kbd>+<kbd>V</kbd>** with text on the clipboard. Line breaks you type or
-paste are kept.
+<kbd>Ctrl</kbd>+<kbd>V</kbd>** with text on the clipboard. Line breaks are kept.
 
 ## 8. Seen from above
 
@@ -177,7 +204,30 @@ Each object has a **plan shape**:
 - **The picture itself** — force it
 - **Top-view picture** — cut out a separate photograph taken from above
 
-## 9. Getting it out
+## 9. Undoing
+
+<kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> or
+<kbd>Ctrl</kbd>+<kbd>Y</kbd> redoes, and there are ↶ ↷ buttons at the left of the
+toolbar. Sixty steps, covering everything — deletions, moves, resizes, mounting changes,
+case dimensions, panel text. Restoring a deleted object brings its cut-out back with it.
+
+Selecting something is not an undo step, so <kbd>Ctrl</kbd>+<kbd>Z</kbd> never just
+moves the highlight around. Opening a file clears the history.
+
+The cut-out editor has its own separate <kbd>Ctrl</kbd>+<kbd>Z</kbd> for brush strokes.
+
+## 10. Preview
+
+**Preview** in the toolbar, or <kbd>P</kbd>. Full screen, with every drafting mark gone
+— grid, rulers, dimensions, labels, selection handles — leaving the case as it would be
+seen, lit against a dark surround.
+
+Zoom and pan work as usual; nothing is selectable or draggable, so you can lean on the
+mouse without moving anything. The controls sit in a bar at the bottom and fade back
+after a couple of seconds of stillness — move the mouse and they return.
+<kbd>Esc</kbd> or <kbd>P</kbd> leaves.
+
+## 11. Getting it out
 
 - **Export PNG** — the current view, at twice screen resolution, captioned with the
   case dimensions.
@@ -202,3 +252,6 @@ near flat is mostly depth. Either stand it up more, or it needs a deeper case.
 
 **The cut-out ate part of my object.** Lower the tolerance, or switch back to *from
 edges* if you are on *everywhere*, then tidy up with the restore brush.
+
+**Something is hidden behind something else.** Check its **Z from back**. Things are
+drawn in depth order, so an object with a small z sits behind one with a large z.

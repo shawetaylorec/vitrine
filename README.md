@@ -39,21 +39,30 @@ of and give that. Depth you type, because a flat photograph cannot tell you.
 | --- | --- |
 | Placed | Rests on the case floor, a shelf or a plinth. Optional stand or book cradle. Can lean back. |
 | On wires | Hangs from a rail at a given height. One wire hangs it straight; two wires of different lengths tilt it. |
-| On the wall | Fixed flat to the back wall at a given height. |
+| Fixed | Stuck flat to a vertical surface — the back wall, or the front face of any plinth. |
 
-**Stands and cradles belong to the object.** A V stand or a book cradle is always
-centred underneath and travels with it. Its own footprint — usually deeper than the
-object — is what has to fit on the plinth, and the overhang warnings use it.
+**Stands and cradles belong to the object.** A V stand, a plain block or a book cradle
+is always centred underneath and travels with it. A V stand only splays into a V seen
+from *above* — from the front you get its base and its notches. A book cradle is cut to
+fit its book, so it takes the object's own width and depth and you give only the height.
+Whatever the stand, its own footprint is what has to fit on the plinth, and the overhang
+warnings use it.
 
 **Lean can be measured from upright or from flat.** For a manuscript in a cradle,
 "15° from flat" is the natural way to say it. The elevation shows the foreshortened
-height, the plan shows the deeper footprint, and once something leans past halfway to
-flat the plan draws the picture itself rather than a rectangle.
+height, the plan shows the deck it actually covers, and once something leans past
+halfway to flat the plan draws the picture itself rather than a rectangle.
 
 ![The plan view](docs/images/shotplan.png)
 
+**Everything is depth-sorted.** Objects, plinths and shelves are drawn back to front in
+one pass, so what is nearer the glass covers what is behind it. Anything fixed to the
+back wall sits behind everything else outright — a graphic on the wall cannot get in
+front of an object in the case, whatever its stand-off.
+
 **It tells you when things do not fit** — past the case sides, above the top, deeper
-than the case, or overhanging whatever it stands on.
+than the case, overhanging whatever it stands on, or wider than the plinth face it is
+stuck to.
 
 **It produces an install schedule** — every object's size, base height, top height,
 distance from the left and back, lean and wire lengths, copyable straight into a
@@ -69,11 +78,22 @@ cylinder reads as a circle from above without being told.
 **Interpretation panels carry real type.** Text size is set in centimetres and shown in
 points, so the panel tells you whether that wording actually fits at 16 pt on a
 30 × 20 cm board before anyone sets it. Paste wording straight in from a label document;
-line breaks are kept.
+line breaks are kept. Select a plinth before adding one and it goes on that plinth's
+front face, sized to fit.
 
-Also: shelves and plinths, a back wall colour or image, a plan-level filter, a turn
-handle for rotating objects, PNG export of either view, light and dark, and save/open to
-a `.vitrine.json` file that carries the cut-outs with it.
+**Preview mode** goes full screen and strips every drafting mark — grid, rulers,
+dimensions, labels, handles — leaving the case as it would be seen, lit against a dark
+surround. Zoom and pan still work; nothing can be moved by accident.
+
+![Preview mode](docs/images/preview.png)
+
+**Undo** covers everything, sixty steps deep: <kbd>Ctrl</kbd>+<kbd>Z</kbd>, or the
+arrows in the toolbar.
+
+Also: shelves and plinths, a back wall colour or image, graphics fixed to the wall, a
+plan-level filter, a turn handle for rotating objects, toggles for grid, dimensions and
+rulers, PNG export of either view, light and dark, and save/open to a `.vitrine.json`
+file that carries the cut-outs with it.
 
 ## Running it
 
@@ -87,11 +107,14 @@ Or use the hosted copy, which is the same file: <https://claude.ai/code/artifact
 | --- | --- |
 | <kbd>1</kbd> / <kbd>2</kbd> | elevation / plan |
 | <kbd>F</kbd> | fit to window |
-| arrows | nudge 1 cm — <kbd>Shift</kbd> 0.1 cm, <kbd>Ctrl</kbd> 5 cm |
+| <kbd>P</kbd> | preview mode (<kbd>Esc</kbd> to leave) |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> | undo / redo |
+| <kbd>←</kbd><kbd>→</kbd> | nudge 1 cm — <kbd>Shift</kbd> 0.1 cm, <kbd>Ctrl</kbd> 5 cm |
+| <kbd>↑</kbd><kbd>↓</kbd> | step between surfaces, or change wire length |
 | <kbd>R</kbd> | turn 90° |
 | <kbd>Enter</kbd> | reopen the mounting page |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Del</kbd> | duplicate / remove |
-| <kbd>Ctrl</kbd>+<kbd>V</kbd> | paste a picture straight in |
+| <kbd>Ctrl</kbd>+<kbd>V</kbd> | paste a picture, or text into a selected panel |
 | double-click | reopen an object's cut-out, size and mounting pages |
 
 ## Known limits

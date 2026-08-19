@@ -56,7 +56,8 @@
   ok(Math.abs(man.lean - 75) < .01, `lean stored from upright (${man.lean}°) while typed as 15° from flat`);
   ok(Math.abs(shownLean(man) - 15) < .01, 'and reads back as 15° from flat');
   ok(planMode(man) === 'image', 'a near-flat manuscript shows its picture in plan');
-  ok(standOf(man) && standLift(man) === 0, 'a book cradle adds no lift — the block sits in the valley');
+  ok(standOf(man) && standLift(man) === 6 && Math.abs(bbox(man).y0 - 6) < 0.01,
+    'a book cradle is a base under the book, raising it by the base height');
 
   /* --- 2. structure, and children travelling with it --- */
   addShelf();
@@ -131,6 +132,21 @@
   ok($('#shapeBack').hidden === true && shape, 'choosing one closes the picker and adds it');
   ok(shape.w === 14 && shape.h === 24 && shape.depth === 14, `it arrives at a sensible size (${shape.w}×${shape.h}×${shape.depth})`);
   ok(planMode(shape) === 'ellipse', 'a cylinder reads as a circle from above');
+
+  /* adding a panel with a plinth selected puts it on that plinth */
+  select(plinth.id);
+  addPanel();
+  const onPlinthPanel = S.items[S.items.length - 1];
+  ok(onPlinthPanel.face === plinth.id,
+    'adding a panel with a plinth selected fixes it to that plinth');
+  ok(onPlinthPanel.w <= plinth.w && onPlinthPanel.h <= plinth.h,
+    `sized to fit the ${plinth.w} by ${plinth.h} cm face at ${onPlinthPanel.w} by ${onPlinthPanel.h}`);
+  removeItem(onPlinthPanel.id);
+  select(null);
+  addPanel();
+  const wallDefault = S.items[S.items.length - 1];
+  ok(wallDefault.face === 'back', 'and with nothing selected it goes on the back wall as before');
+  removeItem(wallDefault.id);
   select(shape.id);
   const wasAt = shape.x;
   shapePickMode = 'change';
@@ -158,45 +174,166 @@
   ok(layoutText(panel.text, 9999).length === 2, 'typed line breaks are kept, not collapsed');
   ok(ptOf(0.55) === 16, '0.55 cm reads as 16 pt');
 
-  /* --- 7c. putting a panel on a plinth and keeping it there --- */
-  setMount(panel, 'placed');
-  panel.w = 14; panel.h = 9; panel.depth = 1;
-  panel.support = plinth.id;
-  landOn(panel, supportOf(panel));
-  ok(Math.abs(bbox(panel).y0 - plinth.h) < 0.01, `choosing the plinth puts the panel on top of it (${rnd(bbox(panel).y0)} cm)`);
-  const env = envelope(panel);
-  ok(env.x >= plinth.x - 0.01 && env.x + env.w <= plinth.x + plinth.w + 0.01,
-    'and brings it over the plinth rather than leaving it dangling');
+  /* --- 7c. a panel fixes to the FRONT FACE of a plinth --- */
+  panel.w = 14; panel.h = 9; panel.depth = 0.4;
+  setMount(panel, 'wall');
+  panel.face = plinth.id;
+  landOnFace(panel);
+  ok(faceOf(panel) && faceOf(panel).id === plinth.id, 'a panel can be fixed to the front of a plinth');
+  const pl = layout(panel);
+  ok(Math.abs(pl.h - 9) < 0.01, `it faces you in elevation at its full ${rnd(pl.h)} cm height`);
+  const pf = footprint(panel);
+  ok(Math.abs(pf.d - 0.4) < 0.01, `and from above is only its own ${rnd(pf.d, 2)} cm thickness — barely a line`);
+  ok(Math.abs(pf.z - (plinth.z + plinth.d)) < 0.01,
+    `sitting on the plinth's front face at z ${rnd(pf.z)}, not on its top`);
+  ok(panel.wallY >= 0 && panel.wallY + panel.h <= plinth.h + 0.01,
+    `positioned ${rnd(panel.wallY)} cm up a ${plinth.h} cm plinth face`);
+  const pb = bbox(panel);
+  ok(pb.x0 >= plinth.x - 0.01 && pb.x1 <= plinth.x + plinth.w + 0.01, 'and centred across that face');
+  ok(planMode(panel) === 'rect', 'in plan it is just that sliver, not a card face');
+  ok(levelKey(panel) === plinth.id, 'and the level filter groups it with its plinth');
 
-  /* slide it to the very edge — it must stay on the plinth */
-  panel.x = rnd(plinth.x + plinth.w - panel.w);
-  ok(supportAfterDrag(panel, plinth.id, 0) === plinth.id,
-    'sliding it sideways to the plinth edge does not drop it to the floor');
-  panel.x = rnd(plinth.x + plinth.w - 2);          /* centre now past the edge */
-  ok(supportAfterDrag(panel, plinth.id, 0) === plinth.id,
-    'nor does overhanging the edge — it is flagged, not re-homed');
-  ok(supportAfterDrag(panel, plinth.id, 0.8) === plinth.id,
-    'a small vertical wobble does not re-home it either');
-  panel.x = rnd(plinth.x + (plinth.w - panel.w) / 2);
-  ok(supportAfterDrag(panel, plinth.id, -40) === 'floor',
-    'but dragging it properly downwards does put it on the floor');
-  ok(supportAfterDrag(panel, 'floor', 44) === plinth.id,
-    'and dragging up from the floor lifts it back onto the plinth');
+  /* an upright object is unchanged by the projection maths */
+  const upright = { ...astro, lean: 0 };
+  ok(Math.abs(leanParts(upright).height - astro.h) < 0.01 && Math.abs(leanParts(upright).deck - astro.depth) < 0.01,
+    'an upright object still projects to exactly its own height and depth');
 
-  /* arrow keys step between supports rather than guessing */
-  ok(stepSupport(panel, -1) === 'floor', 'down steps to the next surface below — the floor');
-  ok(stepSupport(panel, 1) === shelf.id, 'up steps to the next surface above — the shelf');
-  const onShelf = { ...panel, support: shelf.id };
-  ok(stepSupport(onShelf, 1) === shelf.id, 'and stops at the top rather than wrapping round');
-
-  /* the plinth carries it */
+  /* the plinth carries whatever is stuck to it */
   const panelWasAt = panel.x, plinthWasAt = plinth.x;
-  ok(childrenOf(plinth.id).some(k => k.id === panel.id), 'the plinth counts the panel among its passengers');
+  ok(childrenOf(plinth.id).some(k => k.id === panel.id), 'the plinth counts the fixed panel among its passengers');
   for (const k of childrenOf(plinth.id)) k.x = rnd(k.x + 12, 2);
   plinth.x += 12;
-  ok(Math.abs(panel.x - (panelWasAt + 12)) < 0.01, 'so moving the plinth moves the panel with it');
+  ok(Math.abs(panel.x - (panelWasAt + 12)) < 0.01, 'so moving the plinth takes the panel with it');
+  ok(Math.abs(footprint(panel).z - (plinth.z + plinth.d)) < 0.01, 'and it stays on the face wherever the plinth goes');
   plinth.x = plinthWasAt;
   for (const k of childrenOf(plinth.id)) k.x = rnd(k.x - 12, 2);
+
+  /* objects genuinely placed on a plinth still behave */
+  ok(supportAfterDrag(astro, plinth.id, 0) === plinth.id,
+    'sliding a placed object sideways does not drop it to the floor');
+  ok(supportAfterDrag(astro, plinth.id, 0.8) === plinth.id, 'nor does a small vertical wobble');
+  ok(supportAfterDrag(astro, plinth.id, -40) === 'floor', 'but a proper downward drag does');
+  ok(supportAfterDrag(astro, 'floor', 44) === plinth.id, 'and dragging up lifts it back onto the plinth');
+  ok(stepSupport(astro, -1) === 'floor', 'down steps to the next surface below — the floor');
+  ok(stepSupport(astro, 1) === shelf.id, 'up steps to the next surface above — the shelf');
+  const onShelf = { ...astro, support: shelf.id };
+  ok(stepSupport(onShelf, 1) === shelf.id, 'and stops at the top rather than wrapping round');
+
+  /* --- 7c2. nothing is drawn under an object that has no stand --- */
+  const bare = { ...man, stand: { kind: 'none', w: 0, d: 0, h: 0 } };
+  ok(standBox(bare) === null, 'an object with no stand has nothing drawn beneath it');
+  ok(Math.abs(layout(bare).h - man.h * Math.cos(man.lean * DEG)) < 0.01,
+    `and a leaning object is just its foreshortened face — ${rnd(layout(bare).h)} cm, no extra bar`);
+
+  /* a cradle is cut to fit its book */
+  const cradled = { ...man, stand: { kind: 'cradle', w: 1, d: 1, h: 5 } };
+  const cb = standBox(cradled);
+  ok(Math.abs(cb.w - man.w) < 0.01, `a cradle takes the book's own ${rnd(cb.w)} cm width, not the number in the field`);
+  ok(Math.abs(cb.d - footprint(cradled).d) < 0.01, `and its own ${rnd(cb.d)} cm depth`);
+  ok(cb.h === 5, 'while the height stays yours to set');
+
+  /* --- 7c3. what is in front covers what is behind --- */
+  const wallPanel = { ...panel, mount: 'wall', face: 'back', z: 0 };
+  ok(depthKey(wallPanel) < depthKey(plinth),
+    `a panel on the back wall sits behind a plinth (${rnd(depthKey(wallPanel), 2)} vs ${rnd(depthKey(plinth))})`);
+
+  /* the back wall is the rearmost plane, whatever the stand-off */
+  const proudGraphic = { ...panel, mount: 'wall', face: 'back', z: 6 };
+  const closeHung = { ...hung, z: 0.2, depth: 0.5 };
+  ok(depthKey(proudGraphic) < depthKey(closeHung),
+    'a graphic on the back wall stays behind an object hung right against the wall');
+  ok(depthKey(proudGraphic) < depthKey(shelf) && depthKey(proudGraphic) < depthKey(astro),
+    'and behind the shelves and everything standing in the case');
+  ok(depthKey(proudGraphic) > depthKey(wallPanel),
+    'while a graphic on stand-offs still reads in front of one flat on the wall');
+  const facePanel = { ...panel, mount: 'wall', face: plinth.id };
+  ok(depthKey(facePanel) > depthKey(plinth), 'a panel on a plinth front sits in front of that plinth');
+  const inFront = { ...astro, mount: 'placed', support: 'floor', z: rnd(plinth.z + plinth.d + 1) };
+  ok(depthKey(inFront) > depthKey(facePanel),
+    'and an object standing in front of the plinth covers what is stuck to its face');
+  ok(depthKey(shelf) < depthKey(astro), 'a shelf stays behind whatever stands on it');
+
+  /* --- 7d. stands lift by their base height, whatever the kind --- */
+  for (const kind of ['block', 'stand', 'cradle']) {
+    astro.stand = { kind, w: 12, d: 14, h: 5 };
+    ok(standLift(astro) === 5 && Math.abs(bbox(astro).y0 - (plinth.h + 5)) < 0.01,
+      `a ${kind} raises the object by its base height (${rnd(bbox(astro).y0)} cm on a ${plinth.h} cm plinth)`);
+  }
+  astro.stand = { kind: 'cradle', w: 12, d: 14, h: 5 };
+  ok(standLift(astro) === 5, 'a book cradle now lifts like everything else, rather than sitting flush');
+  astro.stand = { kind: 'stand', w: 12, d: 14, h: 5 };
+
+  /* --- 7e. rulers toggle collapses the gutter --- */
+  S.opt.rulers = true; T = calcT();
+  const gutOn = GUT, scaleOn = T.sc;
+  S.opt.rulers = false; T = calcT();
+  ok(GUT < gutOn && T.sc > scaleOn, `turning the rulers off reclaims the gutter (${gutOn} px to ${GUT} px)`);
+  S.opt.rulers = true; T = calcT();
+
+  /* --- 7f. a graphic is just an object fixed to the wall --- */
+  stage(photo(400, 300, { kind: 'rect', col: '#8a6a4a' }), 'Wall graphic');
+  W.widthCm = 24; W.depthCm = 0.3;
+  Object.assign(W, { mount: 'wall', planShape: 'rect' });   /* what the preset does */
+  W.wallY = 100;
+  finishWizard();
+  const graphic = S.items.find(i => i.name === 'Wall graphic');
+  ok(graphic.mount === 'wall' && Math.abs(bbox(graphic).y0 - 100) < 0.01,
+    'a wall graphic lands flat on the back at the height given');
+  ok(graphic.render === 'image' && graphic.png, 'and is a normal cut-out object, so it can be resized and moved');
+
+  /* --- 7g. preview mode --- */
+  select(astro.id);
+  enterPreview();
+  ok(PREVIEW && document.body.classList.contains('preview'), 'preview hides the rails and the toolbar');
+  ok(S.sel === null, 'and drops the selection, so no handles are left on the drawing');
+  T = calcT();
+  ok(GUT === 0, 'the ruler gutter goes entirely, so the case fills the screen');
+  const beforePv = S.zoom;
+  S.zoom = 2; updateZoomLabel();
+  ok($('#pvZoom').textContent === '200%', 'the preview bar tracks the zoom');
+  S.zoom = beforePv;
+  render();
+  ok(true, 'and it renders without the grid, rulers, dimensions or labels');
+  setView('plan');
+  ok($('#pvSeg button[data-view="plan"]').getAttribute('aria-pressed') === 'true',
+    'the view toggle in the bar stays in step');
+  setView('front');
+  exitPreview();
+  ok(!PREVIEW && !document.body.classList.contains('preview'), 'and Close puts everything back');
+  T = calcT();
+  ok(GUT === 26, 'including the rulers');
+
+  /* --- 7h. undo --- */
+  resetUndo();
+  const countBefore = S.items.length;
+  const victim = S.items.find(i => i.name === 'Astrolabe');
+  const victimPng = victim.png;
+  removeItem(victim.id);
+  ok(S.items.length === countBefore - 1, 'deleting an object removes it');
+  await undo();
+  ok(S.items.length === countBefore, 'and undo brings it straight back');
+  const back = S.items.find(i => i.name === 'Astrolabe');
+  ok(back && back.png === victimPng, 'with its cut-out intact, not a blank');
+  ok(BMP.get(back.id), 'and its bitmap reloaded ready to draw');
+  await redo();
+  ok(S.items.length === countBefore - 1,
+    `redo takes it away again (${S.items.length} of ${countBefore - 1}, undo ${UNDO.length} redo ${REDO.length})`);
+  await undo();
+
+  /* moves are undoable too, and history is bounded */
+  const mover = S.items.find(i => i.name === 'Rete');
+  const wasX = mover.x;
+  mover.x = rnd(wasX + 25); commit();
+  await undo();
+  ok(Math.abs(byId(mover.id).x - wasX) < 0.01, 'undo also steps back a move');
+  ok(UNDO.length <= UNDO_MAX, `the history is capped at ${UNDO_MAX} steps`);
+
+  /* the picture data is shared, not copied per step */
+  const assetsBefore = ASSETS.size;
+  for (let i = 0; i < 12; i++) { mover.x = rnd(wasX + i); commit(); }
+  ok(ASSETS.size === assetsBefore, `twelve more steps added no new image copies (${ASSETS.size} held)`);
+  mover.x = wasX; commit();
+  resetUndo();
 
   /* --- 8. out-of-case detection --- */
   const n0 = outOfCase(astro).length;
@@ -211,9 +348,9 @@
   /* --- 10. round trip, including everything new --- */
   const snap = JSON.stringify(snapshot());
   await restore(JSON.parse(snap));
-  ok(S.items.length === 7, 'round trip keeps all 7 items, got ' + S.items.length);
+  ok(S.items.length === 8, 'round trip keeps all 8 items, got ' + S.items.length);
   ok(JSON.stringify(snapshot()) === snap, 'round trip is byte-identical');
-  ok(BMP.size === 3, 'all 3 bitmaps reloaded, got ' + BMP.size);
+  ok(BMP.size === 4, 'all 4 bitmaps reloaded, got ' + BMP.size);
   const man2 = S.items.find(i => i.name === 'Manuscript');
   ok(man2.stand.kind === 'cradle' && man2.leanFrom === 'flat', 'cradle and lean reference survive the round trip');
 
@@ -236,11 +373,24 @@
   ok(exported && exported.size > 20000, `PNG export produced ${exported ? exported.size : 0} bytes`);
 
   buildSchedule();
-  ok(($('#schedTable').dataset.tsv || '').split('\n').length === 6, 'schedule lists 5 objects + header');
+  ok(($('#schedTable').dataset.tsv || '').split('\n').length === 7, 'schedule lists 6 objects + header');
 
   if (location.hash === '#dark') document.documentElement.setAttribute('data-theme', 'dark');
 
   /* tidy the scene up for the README screenshots */
+  if (location.hash.startsWith('#card')) {
+    S.bg.colour = '';
+    const p2 = S.items.find(i => i.render === 'panel');
+    setMount(p2, 'wall'); p2.face = plinth.id;
+    p2.w = 22; p2.h = 10; p2.depth = 0.4; p2.textSize = 0.5;
+    p2.text = 'Astrolabe by Georg Hartmann, Nuremberg, 1537. Brass, 14 cm diameter.';
+    landOnFace(p2);
+    p2.wallY = rnd(plinth.h - p2.h - 6);
+    S.items.filter(i => i.type === 'object' && i !== p2 && i.name !== 'Astrolabe').forEach(i => i.hide = true);
+    plinth.w = 34; plinth.d = 26;
+    select(p2.id);
+    renderLists();
+  }
   if (location.hash.startsWith('#shot')) {
     S.name = 'Kepler case';
     S.bg.colour = '#3b2a1c';
@@ -252,13 +402,24 @@
     const r = S.items.find(i => i.name === 'Rete');
     r.x = 62; r.wires[0].len = 24; r.wires[1].len = 24;
     const p = S.items.find(i => i.render === 'panel');
-    p.x = 8; p.wallY = 122; p.w = 34; p.h = 20;
-    p.text = 'Instruments of the Rudolphine Tables, Prague, 1601–1627.';
+    setMount(p, 'wall');
+    p.face = 'back';
+    p.name = 'Wall panel';
+    p.x = 8; p.wallY = 118; p.w = 36; p.h = 24; p.textSize = 0.55;
+    p.text = 'Instruments of the Rudolphine Tables\nPrague, 1601–1627';
+    /* and a label stuck to the front of the plinth */
+    select(plinth.id);
+    addPanel();
+    const lab = S.items[S.items.length - 1];
+    lab.name = 'Plinth label';
+    lab.w = 26; lab.h = 11; lab.textSize = 0.45;
+    lab.text = 'Astrolabe by Georg Hartmann, Nuremberg, 1537.';
+    lab.wallY = 22;
     renderLists();
   }
 
   S.level = 'all';
-  setView((location.hash === '#plan' || location.hash === '#shotplan') ? 'plan' : 'front');
+  setView(/plan$/.test(location.hash) ? 'plan' : 'front');
   select(location.hash.startsWith('#shot') ? null : (location.hash === '#plan' ? S.items.find(i => i.name === 'Manuscript').id : S.items.find(i => i.name === 'Astrolabe').id));
   if (location.hash === '#wiz') {
     stage(photo(620, 800, { kind: 'ellipse', col: '#6b4a2f' }), 'Manuscript');
@@ -273,6 +434,13 @@
   }
   if (location.hash === '#sched') { buildSchedule(); $('#schedBack').hidden = false; }
   if (location.hash === '#shapes') { render(); openShapePicker('new'); }
+  if (/preview/.test(location.hash)) {
+    setView(/plan$/.test(location.hash) ? 'plan' : 'front');
+    enterPreview();
+    $('#previewBar').classList.remove('idle');
+    clearTimeout(barIdleT);
+    render();
+  }
   render();
   log('done');
 })();
