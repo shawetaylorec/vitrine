@@ -227,7 +227,36 @@ mouse without moving anything. The controls sit in a bar at the bottom and fade 
 after a couple of seconds of stillness — move the mouse and they return.
 <kbd>Esc</kbd> or <kbd>P</kbd> leaves.
 
-## 11. Getting it out
+## 11. Cases, and starting a new one
+
+**Cases** in the toolbar opens the library: every case you have worked on, as a
+thumbnail with its name, object count, case size and when you last touched it. Click a
+thumbnail to open it. The one you are on is outlined.
+
+Each has **Rename**, **Copy** and **Delete**. Deleting asks first and cannot be undone —
+the undo history is per-case and does not reach across.
+
+**+ New case** starts a fresh one. There is nothing to save first: whatever you were on
+is already filed, and it stays in the library. That is the whole point of it.
+
+**Open a file…** takes a `.vitrine.json` and brings it in as a new case in the library,
+leaving whatever you were on untouched.
+
+### Where cases actually live
+
+In the browser, not in `index.html`. The file is only the program.
+
+- Replacing `index.html` with a newer build keeps everything. Deleting it loses nothing.
+- Chrome treats all local files as one place, so a fresh copy of the file downloaded
+  anywhere on the same machine finds the same cases.
+- A different browser is a different drawer. Open it in Edge and the library looks
+  empty — nothing is lost, Edge simply has its own.
+- Clearing your browsing data **would** delete them.
+
+So: the library is a convenience, not a backup. Use **Save file** for anything that
+matters, and for moving a case to another machine or sending it to a colleague.
+
+## 12. Getting it out
 
 - **Export PNG** — the current view, at twice screen resolution, captioned with the
   case dimensions.
@@ -235,7 +264,7 @@ after a couple of seconds of stillness — move the mouse and they return.
   top heights, deck used, lean and wire lengths. **Copy as TSV** pastes straight into
   a spreadsheet.
 - **Save file** — a `.vitrine.json` holding the entire case including the cut-outs.
-  Autosave exists but is best-effort; this is the one to trust.
+  The library keeps your cases in the browser; this is the copy that leaves the machine.
 
 ## If something looks wrong
 

@@ -258,17 +258,70 @@ $('#btnClearWires').onclick = () => { W.points = []; drawWiz(); renderWirePanel(
 $('#btnSave').onclick = () => {
   download(new Blob([JSON.stringify(snapshot())], { type: 'application/json' }), `${S.name.replace(/[^\w -]+/g, '') || 'case'}.vitrine.json`);
 };
-$('#btnOpen').onclick = () => $('#fileJson').click();
 $('#fileJson').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
   try {
+    await persistCurrent();               /* keep whatever you were on */
     const ok = await restore(JSON.parse(await f.text()));
-    toast(ok ? 'Opened' : 'That file has no case in it');
-    if (ok) store.set('current', snapshot());
+    if (!ok) { toast('That file has no case in it'); return; }
+    S.projectId = uid();                  /* an opened file becomes its own case */
+    await persistCurrent();
+    closeCases();
+    toast(`Opened “${S.name}” — it is now one of your cases`);
   } catch (err) { toast('Could not read that file'); }
 });
 $('#btnExportPng').onclick = () => exportPNG(2);
+
+/* ---------- the case library ---------- */
+async function renderCases() {
+  const ix = (await loadIndex()).sort((a, b) => b.updated - a.updated);
+  const list = $('#caseList');
+  if (!ix.length) {
+    list.innerHTML = '<p class="empty" style="padding:6px">No saved cases yet. Whatever you draw is filed here automatically.</p>';
+  } else {
+    list.innerHTML = ix.map(r => `
+      <div class="casecard" data-open="${r.id === S.projectId ? 1 : 0}">
+        <img class="shot" data-open-id="${r.id}" src="${r.thumb || ''}" alt="${esc(r.name)}" title="Open this case">
+        <div class="meta">
+          <span class="nm">${esc(r.name)}${r.id === S.projectId ? ' — open' : ''}</span>
+          <span class="sub">${r.objects || 0} object${r.objects === 1 ? '' : 's'} · ${r.cs ? `${rnd(r.cs.w)}&times;${rnd(r.cs.h)}` : ''} · ${ago(r.updated)}</span>
+        </div>
+        <div class="acts">
+          <button data-rename="${r.id}">Rename</button>
+          <button data-dup="${r.id}">Copy</button>
+          <button class="del" data-del="${r.id}">Delete</button>
+        </div>
+      </div>`).join('');
+  }
+  $('#casesFoot').textContent = ix.length
+    ? `${ix.length} case${ix.length === 1 ? '' : 's'} kept in this browser. Use Save file for anything you want off the machine.`
+    : 'Cases live in this browser. Use Save file for anything you want off the machine.';
+
+  for (const el of $$('[data-open-id]')) el.onclick = async () => {
+    if (el.dataset.openId === S.projectId) { closeCases(); return; }
+    await persistCurrent();
+    await openCase(el.dataset.openId);
+    closeCases();
+  };
+  for (const el of $$('[data-rename]')) el.onclick = async () => {
+    const cur = (await loadIndex()).find(r => r.id === el.dataset.rename);
+    const nm = prompt('Name for this case', cur ? cur.name : '');
+    if (nm === null) return;
+    await renameCase(el.dataset.rename, nm);
+    renderCases();
+  };
+  for (const el of $$('[data-dup]')) el.onclick = async () => { await duplicateCase(el.dataset.dup); renderCases(); };
+  for (const el of $$('[data-del]')) el.onclick = async () => { await deleteCase(el.dataset.del); renderCases(); };
+}
+async function openCases() { $('#casesBack').hidden = false; await persistCurrent(); renderCases(); }
+function closeCases() { $('#casesBack').hidden = true; }
+
+$('#btnCases').onclick = openCases;
+$('#casesClose').onclick = closeCases;
+$('#casesBack').addEventListener('pointerdown', e => { if (e.target.id === 'casesBack') closeCases(); });
+$('#btnNewCase').onclick = async () => { await newCase(); renderCases(); };
+$('#btnImportCase').onclick = () => $('#fileJson').click();
 
 /* undo */
 $('#btnUndoStep').onclick = undo;
@@ -317,10 +370,27 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if
   window.addEventListener('resize', () => draw());
   resetUndo();                       /* history starts from the empty case */
   try {
-    const saved = await store.get('current');
-    /* Reading the autosave can take a moment — long enough to start
-       working in an apparently empty case. If anything has been changed
-       by the time it arrives, that is the real work: leave it alone. */
-    if (saved && !UNDO.length) await restore(saved);
-  } catch (e) { }
+    const ix = await loadIndex();
+    /* Reading storage takes a moment — long enough to start working in an
+       apparently empty case. If anything has been changed by the time it
+       arrives, that is the real work: leave it alone. */
+    if (UNDO.length) { S.projectId = S.projectId || uid(); return; }
+
+    if (ix.length) {
+      const last = await store.get('lastOpen');
+      const pick = ix.find(r => r.id === last) || ix.sort((a, b) => b.updated - a.updated)[0];
+      await openCase(pick.id, true);
+    } else {
+      /* one-off lift of the single case older builds kept */
+      const legacy = await store.get('current');
+      if (legacy) {
+        await restore(legacy);
+        S.projectId = uid();
+        await persistCurrent();
+        await store.del('current');
+      } else {
+        S.projectId = uid();
+      }
+    }
+  } catch (e) { S.projectId = S.projectId || uid(); }
 })();

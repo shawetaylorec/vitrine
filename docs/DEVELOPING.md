@@ -36,12 +36,12 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 94 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 107 assertions covering the
 cut-out crop, support heights, stand footprints, wire tilt, lean maths in both
 reference frames, rotation, plan-shape selection, panels fixed to plinth faces, depth
 ordering, overhang detection, the shape picker, panel text fitting, support stickiness
-while dragging, undo and redo, the save/open round trip, opening a file written by an
-older build, and PNG export.
+while dragging, undo and redo, the case library, the save/open round trip, opening a
+file written by an older build, and PNG export.
 
 Append a hash to the URL to screenshot a different state:
 
@@ -54,6 +54,7 @@ Append a hash to the URL to screenshot a different state:
 | `#wiz3` | the mounting step — also asserts the cursor is visible there |
 | `#sched` | the schedule |
 | `#shapes` | the shape picker |
+| `#cases` | the case library |
 | `#preview` | preview mode |
 | `#shot` / `#shotplan` / `#shotpreview` | the README screenshots |
 
@@ -222,11 +223,28 @@ removed rather than a second renderer. `body.preview` hides the rails and toolba
 CSS, and `fullscreenchange` drops the mode if the browser leaves full screen by any
 other route.
 
-## Storage
+## Storage and the case library
 
 `store` tries IndexedDB and falls back to `localStorage`. Every IndexedDB call is raced
 against a timer, because opened straight off the file system some browsers neither
 resolve nor reject `indexedDB.open`, which would hang the boot.
+
+Each case is its own record under `case:<id>`. A separate `index` record holds one row
+per case — name, timestamp, object count, case size and a thumbnail — so the picker can
+be drawn without loading a single case, which matters once they carry photographs.
+`lastOpen` remembers which to reopen.
+
+`renderThumb()` draws the case small by borrowing the main renderer: it swaps `ctx`,
+`VW` and `VH` for an offscreen canvas, turns `PREVIEW` on for a clean picture, paints,
+and puts everything back. Same trick as `exportPNG`.
+
+`persistCurrent()` is what `scheduleSave()` calls, so ordinary autosave and the library
+are the same path — there is no separate "save" concept and nothing to forget.
+
+Boot reads the index and reopens `lastOpen`. If the index is empty it looks for the
+single `current` record older builds kept, lifts it into a case and deletes it. And if
+anything has already been changed by the time storage answers — `UNDO.length` is the
+test — it leaves the work alone rather than loading over it.
 
 `upgrade()` fills in fields that files from older builds do not have, so a saved case
 keeps opening as the model grows.

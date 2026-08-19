@@ -15,6 +15,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 
 const S = {
   name: 'Untitled case',
+  projectId: null,
   cs: { w: 140, h: 160, d: 40 },
   rail: 156,
   bg: { colour: '', img: null, fade: 100 },

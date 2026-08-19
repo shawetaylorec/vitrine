@@ -817,8 +817,21 @@ async function kvGet(k) {
   });
 }
 
+async function kvDel(k) {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const t = db.transaction('kv', 'readwrite');
+    t.objectStore('kv').delete(k);
+    t.oncomplete = () => res(); t.onerror = () => rej(t.error);
+  });
+}
+
 let autosaveWarned = false;
 const store = {
+  async del(k) {
+    try { await withTimeout(kvDel(k), 3000); } catch (e) { }
+    try { localStorage.removeItem('vitrine:' + k); } catch (e) { }
+  },
   async get(k) {
     try { const v = await withTimeout(kvGet(k), 1500); if (v) return v; } catch (e) { }
     try { const s = localStorage.getItem('vitrine:' + k); return s ? JSON.parse(s) : undefined; } catch (e) { return undefined; }
@@ -923,10 +936,128 @@ function refreshUndoButtons() {
   if (r) r.disabled = !REDO.length;
 }
 
+/* ============================================================
+   The case library
+
+   Each case is its own record; an index holds the names, dates and
+   thumbnails so the picker can be drawn without loading every case.
+   ============================================================ */
+
+const caseKey = id => 'case:' + id;
+
+async function loadIndex() {
+  const ix = await store.get('index');
+  return Array.isArray(ix) ? ix : [];
+}
+const saveIndex = ix => store.set('index', ix);
+
+/* a small clean picture of the case, for the picker */
+function renderThumb(w = 280) {
+  const h = Math.round(w * 0.78);
+  const off = newCanvas(w, h);
+  const keep = { ctx, VW, VH, view: S.view, zoom: S.zoom, pan: S.pan, sel: S.sel, prev: PREVIEW };
+  S.view = 'front'; S.zoom = 1; S.pan = { x: 0, y: 0 }; S.sel = null; PREVIEW = true;
+  ctx = off.getContext('2d'); VW = w; VH = h;
+  try { readPalette(); T = calcT(); paint(); } catch (e) { }
+  ctx = keep.ctx; VW = keep.VW; VH = keep.VH;
+  S.view = keep.view; S.zoom = keep.zoom; S.pan = keep.pan; S.sel = keep.sel; PREVIEW = keep.prev;
+  return off.toDataURL('image/jpeg', 0.7);
+}
+
+async function persistCurrent() {
+  if (!S.projectId) S.projectId = uid();
+  await store.set(caseKey(S.projectId), snapshot());
+  const ix = await loadIndex();
+  const row = {
+    id: S.projectId,
+    name: S.name || 'Untitled case',
+    updated: Date.now(),
+    objects: S.items.filter(i => i.type === 'object').length,
+    cs: { ...S.cs },
+    thumb: renderThumb()
+  };
+  const at = ix.findIndex(r => r.id === S.projectId);
+  if (at >= 0) ix[at] = row; else ix.push(row);
+  await saveIndex(ix);
+  await store.set('lastOpen', S.projectId);
+}
+
+async function openCase(id, quiet) {
+  const data = await store.get(caseKey(id));
+  if (!data) { toast('That case could not be found'); return false; }
+  S.projectId = id;
+  await restore(data);
+  await store.set('lastOpen', id);
+  if (!quiet) toast('Opened “' + S.name + '”');
+  return true;
+}
+
+async function newCase() {
+  await persistCurrent();          /* file the one you were on */
+  S.projectId = uid();
+  S.name = 'Untitled case';
+  S.cs = { w: 140, h: 160, d: 40 };
+  S.rail = 156;
+  S.bg = { colour: '', img: null, fade: 100 };
+  S.items = []; S.sel = null; S.level = 'all';
+  BMP.clear(); TOP.clear(); BMPSRC.clear(); TOPSRC.clear(); BGIMG = null;
+  syncCaseFields(); renderLists(); renderInspector(); fitView(); draw();
+  resetUndo();
+  await persistCurrent();
+  toast('New case started — the last one is safe under Cases');
+}
+
+async function duplicateCase(id) {
+  const data = await store.get(caseKey(id));
+  if (!data) return;
+  const copy = JSON.parse(JSON.stringify(data));
+  copy.name = (copy.name || 'Untitled case') + ' copy';
+  const nid = uid();
+  await store.set(caseKey(nid), copy);
+  const ix = await loadIndex();
+  const src = ix.find(r => r.id === id) || {};
+  ix.push({ ...src, id: nid, name: copy.name, updated: Date.now() });
+  await saveIndex(ix);
+  toast(`Copied as “${copy.name}”`);
+}
+
+async function deleteCase(id) {
+  const ix = await loadIndex();
+  const row = ix.find(r => r.id === id);
+  if (!row) return;
+  if (!confirm(`Delete “${row.name}” for good? This cannot be undone.`)) return;
+  await store.del(caseKey(id));
+  await saveIndex(ix.filter(r => r.id !== id));
+  if (id === S.projectId) {
+    const rest = (await loadIndex()).sort((a, b) => b.updated - a.updated);
+    if (rest.length) await openCase(rest[0].id); else await newCase();
+  }
+  toast(`“${row.name}” deleted`);
+}
+
+async function renameCase(id, name) {
+  const nm = (name || '').trim() || 'Untitled case';
+  const ix = await loadIndex();
+  const row = ix.find(r => r.id === id);
+  if (row) { row.name = nm; row.updated = Date.now(); await saveIndex(ix); }
+  const data = await store.get(caseKey(id));
+  if (data) { data.name = nm; await store.set(caseKey(id), data); }
+  if (id === S.projectId) { S.name = nm; renderInspector(); }
+}
+
+function ago(ts) {
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  if (s < 90) return 'just now';
+  const m = s / 60; if (m < 60) return `${Math.round(m)} min ago`;
+  const h = m / 60; if (h < 24) return `${Math.round(h)} hr ago`;
+  const d = h / 24; if (d < 7) return `${Math.round(d)} day${Math.round(d) > 1 ? 's' : ''} ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
 let saveT = 0;
 function scheduleSave() {
   clearTimeout(saveT);
-  saveT = setTimeout(() => { store.set('current', snapshot()); }, 500);
+  saveT = setTimeout(() => { persistCurrent(); }, 600);
 }
 
 function commit() {

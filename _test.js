@@ -335,6 +335,57 @@
   mover.x = wasX; commit();
   resetUndo();
 
+  /* --- 7i. the case library --- */
+  {
+    /* a private in-memory store, so the test never touches real storage */
+    const mem = new Map();
+    const realGet = store.get, realSet = store.set, realDel = store.del;
+    store.get = async k => mem.get(k);
+    store.set = async (k, v) => { mem.set(k, JSON.parse(JSON.stringify(v))); return true; };
+    store.del = async k => { mem.delete(k); };
+
+    S.projectId = 'p1'; S.name = 'Kepler case';
+    await persistCurrent();
+    let ix = await loadIndex();
+    ok(ix.length === 1 && ix[0].name === 'Kepler case', 'saving files the case in the index');
+    ok(ix[0].objects === S.items.filter(i => i.type === 'object').length,
+      `with its object count (${ix[0].objects})`);
+    ok(typeof ix[0].thumb === 'string' && ix[0].thumb.startsWith('data:image'),
+      'and a thumbnail to recognise it by');
+
+    const keptItems = S.items.length;
+    await newCase();
+    ok(S.items.length === 0 && S.projectId !== 'p1', 'a new case starts empty under a new id');
+    ix = await loadIndex();
+    ok(ix.length === 2, 'and the old one is still in the library, not replaced');
+    ok(UNDO.length === 0, 'with a clean undo history');
+
+    const back = ix.find(r => r.id === 'p1');
+    await openCase(back.id, true);
+    ok(S.items.length === keptItems && S.name === 'Kepler case',
+      `reopening the old case brings all ${keptItems} items back`);
+    ok(BMP.size > 0, 'with its cut-outs');
+
+    await renameCase('p1', 'Rudolphine case');
+    ok(S.name === 'Rudolphine case', 'renaming the open case renames it live');
+    ok((await loadIndex()).find(r => r.id === 'p1').name === 'Rudolphine case', 'and in the library');
+
+    await duplicateCase('p1');
+    ix = await loadIndex();
+    ok(ix.length === 3 && ix.some(r => r.name === 'Rudolphine case copy'), 'a case can be copied');
+
+    const doomed = ix.find(r => r.name === 'Rudolphine case copy');
+    const realConfirm = window.confirm; window.confirm = () => true;
+    await deleteCase(doomed.id);
+    window.confirm = realConfirm;
+    ix = await loadIndex();
+    ok(ix.length === 2 && !ix.some(r => r.id === doomed.id), 'and deleted');
+    ok(await store.get(caseKey(doomed.id)) === undefined, 'taking its stored case with it');
+
+    store.get = realGet; store.set = realSet; store.del = realDel;
+    S.name = 'Kepler case';
+  }
+
   /* --- 8. out-of-case detection --- */
   const n0 = outOfCase(astro).length;
   astro.x = 132;
@@ -433,6 +484,18 @@
     ok(getComputedStyle(wizCv).cursor === 'crosshair', 'the wire step always shows a cursor, whatever brush was last used');
   }
   if (location.hash === '#sched') { buildSchedule(); $('#schedBack').hidden = false; }
+  if (location.hash === '#cases') {
+    const mem = new Map();
+    store.get = async k => mem.get(k); store.set = async (k, v) => { mem.set(k, JSON.parse(JSON.stringify(v))); return true; };
+    S.projectId = 'c1'; S.name = 'Kepler case'; S.bg.colour = '#3b2a1c';
+    await persistCurrent();
+    S.projectId = 'c2'; S.name = 'Ptolemy case'; S.bg.colour = '#26303a';
+    S.items = S.items.slice(0, 3); await persistCurrent();
+    S.projectId = 'c3'; S.name = 'Instruments, bay 4'; S.bg.colour = '';
+    S.items = S.items.slice(0, 2); await persistCurrent();
+    await openCase('c1', true);
+    render(); await openCases();
+  }
   if (location.hash === '#shapes') { render(); openShapePicker('new'); }
   if (/preview/.test(location.hash)) {
     setView(/plan$/.test(location.hash) ? 'plan' : 'front');

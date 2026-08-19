@@ -90,6 +90,12 @@ surround. Zoom and pan still work; nothing can be moved by accident.
 **Undo** covers everything, sixty steps deep: <kbd>Ctrl</kbd>+<kbd>Z</kbd>, or the
 arrows in the toolbar.
 
+**Cases are kept as a library.** Work on as many as you like and switch between them
+from a picker of thumbnails. **New case** starts a fresh one without losing the last —
+everything is filed as you go, so there is nothing to remember to save.
+
+![The case picker](docs/images/cases.png)
+
 Also: shelves and plinths, a back wall colour or image, graphics fixed to the wall, a
 plan-level filter, a turn handle for rotating objects, toggles for grid, dimensions and
 rulers, PNG export of either view, light and dark, and save/open to a `.vitrine.json`
@@ -100,9 +106,13 @@ file that carries the cut-outs with it.
 Open `index.html` in Chrome. That is the whole thing — no install, no server, no build
 step, nothing to sign into. Download the file on its own and it still works.
 
-Your case is saved by the browser, not written into the file, so replacing `index.html`
-with a newer build keeps whatever you were working on. **Save file** writes a
-`.vitrine.json` you can keep, move between machines, or send to someone.
+Your cases are saved by the browser, not written into the file, so replacing
+`index.html` with a newer build keeps everything you were working on. Chrome treats all
+local files as one place, which is why a fresh copy of the file finds your cases.
+
+That also means they live in *that browser on that machine*. **Save file** writes a
+`.vitrine.json` you can keep, move between machines, or send to someone — the only copy
+that survives a cleared browser.
 
 ### Keys
 

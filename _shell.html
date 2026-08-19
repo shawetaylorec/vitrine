@@ -213,6 +213,22 @@ body.preview .previewbar{display:flex}
 .previewbar .pname{font-size:12px;letter-spacing:.06em;color:rgba(255,255,255,.55);padding:0 8px 0 4px;
   max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scroller{overflow:auto;max-height:56vh}
+.caselist{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:12px;padding:15px}
+.casecard{border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel-2);display:flex;flex-direction:column}
+.casecard[data-open="1"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.casecard .shot{display:block;width:100%;aspect-ratio:280/218;object-fit:cover;background:var(--sunk);border:0;padding:0;cursor:pointer}
+.casecard .shot:hover{opacity:.86}
+.casecard .meta{padding:8px 9px 4px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.casecard .nm{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.casecard .sub{font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+.casecard .acts{display:flex;gap:4px;padding:6px 9px 9px;margin-top:auto}
+.casecard .acts button{flex:1;font-size:11px;padding:3px 2px;border:1px solid var(--line);background:var(--panel);border-radius:4px;cursor:pointer;color:var(--ink-2)}
+.casecard .acts button:hover{border-color:var(--line-strong);color:var(--ink)}
+.casecard .acts button.del:hover{border-color:var(--warn);color:var(--warn)}
+.casename{background:none;border:0;border-bottom:1px dashed transparent;font-size:13px;padding:2px 4px;min-width:60px;max-width:200px;
+  font-family:"Barlow Semi Condensed",sans-serif;color:var(--ink-2);text-overflow:ellipsis}
+.casename:hover{border-bottom-color:var(--line-strong)}
+.casename:focus{border-bottom-color:var(--accent);color:var(--ink);outline:none}
 .shapegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;padding:15px;overflow-y:auto}
 .shapecell{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);cursor:pointer;color:var(--ink-2)}
 .shapecell:hover{border-color:var(--accent);color:var(--ink)}
@@ -237,10 +253,10 @@ body.preview .previewbar{display:flex}
     <button class="btn ghost" id="btnRedoStep" title="Redo" style="padding:5px 9px;font-size:15px;line-height:1">&#8631;</button>
     <button class="btn" id="btnAddImg">Add object&hellip;</button>
     <button class="btn ghost" id="btnPreview">Preview<span class="k" style="margin-left:6px">P</span></button>
+    <button class="btn ghost" id="btnCases">Cases</button>
     <button class="btn ghost" id="btnSchedule">Schedule</button>
     <button class="btn ghost" id="btnExportPng">Export PNG</button>
     <button class="btn ghost" id="btnSave">Save file</button>
-    <button class="btn ghost" id="btnOpen">Open file</button>
     <button class="btn ghost" id="btnTheme" title="Toggle light / dark">&#9682;</button>
     <input type="file" id="fileImg" accept="image/*" multiple hidden>
     <input type="file" id="fileTop" accept="image/*" hidden>
@@ -522,6 +538,20 @@ body.preview .previewbar{display:flex}
       <button class="btn ghost" id="wizBack1">Back</button>
       <button class="btn primary" id="wizNext">Next</button>
     </footer>
+  </div>
+</div>
+
+<div class="backdrop" id="casesBack" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="casesTitle" style="width:min(920px,100%)">
+    <header>
+      <h3 id="casesTitle">Cases</h3>
+      <div class="spacer"></div>
+      <button class="btn" id="btnNewCase">+ New case</button>
+      <button class="btn ghost" id="btnImportCase">Open a file&hellip;</button>
+      <button class="btn ghost" id="casesClose">Close</button>
+    </header>
+    <div class="scroller"><div class="caselist" id="caseList"></div></div>
+    <footer><span class="note" id="casesFoot"></span></footer>
   </div>
 </div>
 
