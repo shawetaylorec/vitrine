@@ -1,0 +1,4 @@
+# build artefact from the test harness
+_t.html
+# stray screenshots from local test runs
+/shot*.png
