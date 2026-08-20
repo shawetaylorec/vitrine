@@ -191,6 +191,7 @@ that survives a cleared browser.
 
 - [User guide](docs/GUIDE.md) — laying out a case, start to finish
 - [Developing](docs/DEVELOPING.md) — build, tests, architecture
+- [Handover](docs/HANDOVER.md) — what is queued next, and what is already diagnosed
 
 ## Licence
 

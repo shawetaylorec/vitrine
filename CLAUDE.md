@@ -56,6 +56,12 @@ Append a hash to the URL to screenshot a state: `#plan`, `#dark`, `#wiz`, `#wiz3
 - Displayed scholarly content — object names, dates, interpretation wording — is
   the owner's call. Do not invent or alter it.
 
+## Start here
+
+**`docs/HANDOVER.md` carries the queue.** Eight items are waiting, each with where
+it lives in the code, what is already diagnosed, and which decisions need settling
+before writing anything. Read it before asking what to work on.
+
 ## Where the thinking is written down
 
 `docs/DEVELOPING.md` explains *why* the non-obvious parts are the way they are:
