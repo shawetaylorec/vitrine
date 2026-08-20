@@ -982,7 +982,20 @@ async function applyState(str) {
   const d = JSON.parse(str);
   S.name = d.name; S.cs = d.cs; S.rail = d.rail; S.level = d.level ?? 'all';
   S.bg = { ...d.bg, img: getAsset(d.bg.img) };
-  S.items = d.items.map(i => ({ ...i, png: getAsset(i.png), raw: getAsset(i.raw), topPng: getAsset(i.topPng) }));
+  /* If a key ever fails to resolve, keep the picture the item already
+     has rather than blanking it. A silent grey rectangle where a
+     photograph used to be is much worse than a stale one. */
+  const held = new Map(S.items.map(i => [i.id, i]));
+  const pick = (k, cur) => (k ? (getAsset(k) || cur || null) : null);
+  S.items = d.items.map(i => {
+    const was = held.get(i.id);
+    return {
+      ...i,
+      png: pick(i.png, was && was.png),
+      raw: pick(i.raw, was && was.raw),
+      topPng: pick(i.topPng, was && was.topPng)
+    };
+  });
   S.sel = S.items.some(i => i.id === d.sel) ? d.sel : null;
   BGIMG = null;
   if (S.bg.img) { try { BGIMG = await loadImage(S.bg.img); } catch (e) { } }
@@ -1188,6 +1201,8 @@ function upgrade(o) {
     planShape: o.planShape || 'auto',
     spin: o.spin || 0,
     yaw: o.yaw || 0,
+    baseW: o.baseW || 0,
+    baseD: o.baseD || 0,
     wallY: o.wallY ?? 100
   });
   migrateWires(up);
@@ -1200,7 +1215,7 @@ async function restore(data) {
   S.cs = data.cs || S.cs;
   S.rail = data.rail ?? S.rail;
   S.bg = Object.assign({ colour: '', img: null, fade: 100 }, data.bg || {});
-  S.opt = Object.assign({ grid: true, dims: true, snap: true, rulers: true }, data.opt || {});
+  S.opt = Object.assign({ grid: true, dims: true, snap: true, rulers: true, lock: false }, data.opt || {});
   S.items = data.items.map(upgrade);
   S.sel = null;
   BMP.clear(); TOP.clear(); BMPSRC.clear(); TOPSRC.clear(); BGIMG = null;
@@ -1246,42 +1261,149 @@ async function download(blob, filename) {
    is the same paint() at a bigger scale with the drafting options set to
    whatever was asked for, then everything put back. */
 
-const EXP = { fmt: 'png', view: 'front', scale: 2, rulers: false, grid: false, dims: false, caption: true };
+const EXP = {
+  fmt: 'png', view: 'front', scale: 2,
+  style: 'sheet',            // 'sheet' = as drawn, 'plain' = the preview look
+  marks: 'none',             // 'none' | 'selected' | 'all'
+  rulers: false, grid: false, caption: true
+};
 
 const viewWord = v => v === 'front' ? 'elevation' : 'plan';
 
+const CAPTION_H = 22;            // strip left for the caption, in CSS px
+
+/* What the picture should contain: the case, the dimensions hung off
+   it, and — when the rulers are on — the gutter carrying their marks.
+   Not the acre of drafting plane around the outside, which is screen
+   furniture and nothing to do with the drawing. */
+function exportCrop(view, opt, w, h, caption) {
+  const isPlan = view === 'plan';
+  const tl = w2s(0, isPlan ? 0 : S.cs.h);
+  const br = w2s(S.cs.w, isPlan ? S.cs.d : 0);
+  /* room for the dimension arrows and the BACK WALL / GLASS FRONT
+     captions, which sit just outside the case */
+  const pad = 34;
+  const rulers = opt.rulers !== false && !PREVIEW;
+  const x0 = rulers ? 0 : Math.max(0, tl.x - pad);
+  const y0 = rulers ? 0 : Math.max(0, tl.y - pad);
+  const x1 = Math.min(w, br.x + pad);
+  const y1 = Math.min(h, br.y + pad + (caption ? CAPTION_H : 0));
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+}
+
+/* the finished pixel size, without painting anything — the crop needs a
+   transform for the target view, so borrow one and put it back */
+function exportSize(view) {
+  const w = cvs.clientWidth, h = cvs.clientHeight;
+  const keepView = S.view, keepPrev = PREVIEW, keepW = VW, keepH = VH;
+  S.view = view; VW = w; VH = h; PREVIEW = EXP.style === 'plain';
+  T = calcT();
+  const crop = exportCrop(view, { rulers: EXP.style === 'sheet' && EXP.rulers }, w, h,
+    EXP.style === 'sheet' && EXP.caption);
+  S.view = keepView; PREVIEW = keepPrev; VW = keepW; VH = keepH;
+  T = calcT();                    /* also puts GUT back */
+  return { w: Math.round(crop.w * EXP.scale), h: Math.round(crop.h * EXP.scale) };
+}
+
 function renderSheet(view, scale, opt, caption) {
   const w = cvs.clientWidth, h = cvs.clientHeight;
-  const off = newCanvas(Math.round(w * scale), Math.round(h * scale));
-  const oc = off.getContext('2d');
+  const full = newCanvas(Math.round(w * scale), Math.round(h * scale));
+  const oc = full.getContext('2d');
   oc.setTransform(scale, 0, 0, scale, 0, 0);
   const keepCtx = ctx, keepW = VW, keepH = VH, keepView = S.view, keepOpt = S.opt, keepT = T;
+  const keepPrev = PREVIEW, keepMark = MARK_ALL, keepExp = EXPORTING;
   ctx = oc; VW = w; VH = h; S.view = view; S.opt = { ...S.opt, ...opt };
+  /* "Just the case" is the preview look, which the renderer already
+     knows how to draw — same flag, offscreen */
+  PREVIEW = EXP.style === 'plain';
+  MARK_ALL = EXP.marks === 'all';
+  EXPORTING = true;
   readPalette();
-  /* JPEG has no transparency, so the sheet has to be painted in or the
+  const ground = PREVIEW ? C.previewBg : C.sheet;
+  /* JPEG has no transparency, so the ground has to be painted in or the
      picture comes out on black */
-  oc.fillStyle = C.sheet; oc.fillRect(0, 0, w, h);
+  oc.fillStyle = ground; oc.fillRect(0, 0, w, h);
   T = calcT();
   paint();
+  /* preview stops before the annotation pass, so a marked-up plain
+     export has to ask for the dimensions itself */
+  if (PREVIEW && MARK_ALL) { PREVIEW = false; drawAllDims(); PREVIEW = true; }
+
+  const crop = exportCrop(view, opt, w, h, caption);
+  const off = newCanvas(Math.round(crop.w * scale), Math.round(crop.h * scale));
+  const cc = off.getContext('2d');
+  cc.fillStyle = ground; cc.fillRect(0, 0, off.width, off.height);
+  cc.drawImage(full,
+    Math.round(crop.x * scale), Math.round(crop.y * scale),
+    Math.round(crop.w * scale), Math.round(crop.h * scale),
+    0, 0, Math.round(crop.w * scale), Math.round(crop.h * scale));
+
   if (caption) {
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    ctx.fillStyle = C.ink3; ctx.font = `11px ${MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(`${S.name} — ${viewWord(view)} — case ${rnd(S.cs.w)}×${rnd(S.cs.h)}×${rnd(S.cs.d)} cm`, GUT + 4, h - 8);
+    cc.setTransform(scale, 0, 0, scale, 0, 0);
+    cc.fillStyle = ground;
+    cc.fillRect(0, crop.h - CAPTION_H, crop.w, CAPTION_H);
+    cc.fillStyle = C.ink3; cc.font = `11px ${MONO}`; cc.textAlign = 'left'; cc.textBaseline = 'alphabetic';
+    cc.fillText(`${S.name} — ${viewWord(view)} — case ${rnd(S.cs.w)}×${rnd(S.cs.h)}×${rnd(S.cs.d)} cm`, 4, crop.h - 7);
   }
+
   ctx = keepCtx; VW = keepW; VH = keepH; S.view = keepView; S.opt = keepOpt; T = keepT;
+  PREVIEW = keepPrev; MARK_ALL = keepMark; EXPORTING = keepExp;
   readPalette();
   return off;
 }
 
+function sheetFor(view) {
+  return renderSheet(view, EXP.scale, {
+    rulers: EXP.style === 'sheet' && EXP.rulers,
+    grid: EXP.style === 'sheet' && EXP.grid,
+    dims: EXP.marks !== 'none'
+  }, EXP.style === 'sheet' && EXP.caption);
+}
+
 function saveSheet(view) {
-  const off = renderSheet(view, EXP.scale, { rulers: EXP.rulers, grid: EXP.grid, dims: EXP.dims }, EXP.caption);
+  const off = sheetFor(view);
   const jpeg = EXP.fmt === 'jpeg';
   off.toBlob(b => {
     download(b, `${S.name.replace(/[^\w -]+/g, '') || 'case'} ${viewWord(view)}.${jpeg ? 'jpg' : 'png'}`);
   }, jpeg ? 'image/jpeg' : 'image/png', jpeg ? 0.92 : undefined);
 }
 
+/* A document is HTML with a .doc name — which Word, Pages and Google
+   Docs have all opened for twenty years — with the drawing embedded as
+   a data URI so the file stands on its own. Reuses the schedule, so the
+   table can never drift from what the schedule window shows. */
+function saveDoc() {
+  const views = EXP.view === 'both' ? ['front', 'plan'] : [EXP.view];
+  const pics = views.map(v => `<p><img src="${sheetFor(v).toDataURL('image/png')}" style="width:100%"></p>
+    <p style="font:italic 10pt Georgia,serif;color:#555">${esc(S.name)} — ${viewWord(v)}</p>`).join('');
+  const rows = scheduleRows();
+  const head = Object.keys(rows[0] || { Object: '' });
+  const table = `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;font:10pt Georgia,serif">
+    <tr>${head.map(h => `<th align="left" bgcolor="#eeeae2">${esc(h)}</th>`).join('')}</tr>
+    ${rows.map(r => `<tr>${head.map(h => `<td>${esc(r[h] ?? '')}</td>`).join('')}</tr>`).join('')}
+  </table>`;
+  const doc = `<html><head><meta charset="utf-8"><title>${esc(S.name)}</title></head>
+    <body style="font:11pt Georgia,serif">
+      <h1 style="font-size:18pt">${esc(S.name)}</h1>
+      <p>Case ${rnd(S.cs.w)} &times; ${rnd(S.cs.h)} &times; ${rnd(S.cs.d)} cm.
+         ${rows.length} object${rows.length === 1 ? '' : 's'}.
+         Drawn ${new Date().toLocaleDateString()}.</p>
+      ${pics}
+      <h2 style="font-size:14pt">Objects</h2>
+      ${table}
+    </body></html>`;
+  download(new Blob([doc], { type: 'application/msword' }),
+    `${S.name.replace(/[^\w -]+/g, '') || 'case'}.doc`);
+}
+
 function runExport() {
+  if (EXP.fmt === 'doc') {
+    saveDoc();
+    closeExport();
+    toast('Document written — it opens in Word');
+    draw();
+    return;
+  }
   const views = EXP.view === 'both' ? ['front', 'plan'] : [EXP.view];
   views.forEach((v, i) => setTimeout(() => saveSheet(v), i * 350));
   closeExport();
@@ -1293,15 +1415,25 @@ function syncExport() {
   $$('#expFormat button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.fmt === EXP.fmt)));
   $$('#expView button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ev === EXP.view)));
   $$('#expScale button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.sc === EXP.scale)));
+  $$('#expStyle button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.st === EXP.style)));
+  $$('#expMarks button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mk === EXP.marks)));
   $('#expRulers').checked = EXP.rulers;
   $('#expGrid').checked = EXP.grid;
-  $('#expDimsOn').checked = EXP.dims;
   $('#expCaption').checked = EXP.caption;
-  $('#expFmtHelp').textContent = EXP.fmt === 'jpeg'
-    ? 'Smaller file, no transparency, and fine detail softens a little. Right for pasting into a document.'
-    : 'Lossless, and every line stays crisp. Right for anything that will be printed or drawn over.';
-  const w = Math.round(cvs.clientWidth * EXP.scale), h = Math.round(cvs.clientHeight * EXP.scale);
-  $('#expDims').innerHTML = `<span><b class="mono">${w} × ${h}</b> px</span><span>${EXP.view === 'both' ? 'two files' : 'one file'}</span>`;
+  $('#expDrawing').classList.toggle('hidden', EXP.style !== 'sheet');
+  $('#expFmtHelp').textContent = EXP.fmt === 'doc'
+    ? 'A document you can open in Word: the drawing, then a table of every object with its size and position.'
+    : EXP.fmt === 'jpeg'
+      ? 'Smaller file, no transparency, and fine detail softens a little. Right for pasting into a document.'
+      : 'Lossless, and every line stays crisp. Right for anything that will be printed or drawn over.';
+  $('#expStyleHelp').textContent = EXP.style === 'plain'
+    ? 'The case on its own against a dark surround, with no grid, rulers or labels — what you see in Preview.'
+    : 'The drawing as it stands on screen, on its sheet, with whatever furniture you tick below.';
+  $('#expMarksHelp').textContent = EXP.marks === 'all'
+    ? 'Every object, panel and plinth gets the four dimension lines you see when you select one, so the drawing can be installed from.'
+    : 'No dimensions at all.';
+  const px = exportSize(EXP.view === 'both' ? 'front' : EXP.view);
+  $('#expDims').innerHTML = `<span><b class="mono">${px.w} × ${px.h}</b> px</span><span>${EXP.view === 'both' ? 'two files' : 'one file'}</span>`;
   $('#expFoot').textContent = EXP.view === 'both'
     ? 'Both views come out as two separate files.'
     : `The ${viewWord(EXP.view)}, framed as it is on screen.`;
@@ -1309,15 +1441,16 @@ function syncExport() {
 
 function openExport() {
   EXP.view = S.view;
-  EXP.rulers = S.opt.rulers; EXP.grid = S.opt.grid; EXP.dims = S.opt.dims;
+  EXP.rulers = S.opt.rulers; EXP.grid = S.opt.grid;
+  if (EXP.marks === 'selected') EXP.marks = 'all';
   $('#expBack').hidden = false;
   syncExport();
 }
 function closeExport() { $('#expBack').hidden = true; }
 
-function buildSchedule() {
-  const objs = S.items.filter(i => i.type === 'object');
-  const rows = objs.map(o => {
+/* one row per object, shared by the schedule window and the document */
+function scheduleRows() {
+  return S.items.filter(i => i.type === 'object').map(o => {
     const b = bbox(o), f = footprint(o), st = standOf(o);
     return {
       Object: o.name,
@@ -1336,6 +1469,10 @@ function buildSchedule() {
       Wires: o.mount === 'hanging' ? o.wires.map(w => rnd(wireLen(o, w), 1)).join(' / ') : '—'
     };
   });
+}
+
+function buildSchedule() {
+  const rows = scheduleRows();
   const cols = rows.length ? Object.keys(rows[0]) : [];
   $('#schedTable').innerHTML = rows.length
     ? `<thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>

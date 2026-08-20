@@ -61,6 +61,9 @@ let drag = null;
    nearest within a few pixels, and note it so a guide can be drawn. */
 
 const SNAP_PX = 7;
+/* how far the pointer must travel before a press becomes a drag */
+const DRAG_SLOP = 4;
+const locked = () => !!S.opt.lock;
 let GUIDES = [];
 
 function itemExtent(it, axis) {
@@ -77,6 +80,26 @@ function itemExtent(it, axis) {
   return [0, it.h];
 }
 
+/* what an object is standing on or fixed to, for snapping purposes */
+function hostOf(it) {
+  if (it.type !== 'object') return null;
+  if (it.mount === 'placed') return it.support || 'floor';
+  if (it.mount === 'wall') return it.face || 'back';
+  return null;
+}
+
+/* Which alignments people actually mean, best first. Centring
+   something on the thing it stands on is most of what this tool is
+   for, so it has to outrank an exact edge match against something
+   unrelated. Without that ordering an object a shade wider than its
+   plinth locks to the plinth's edge — an exact zero — and can never be
+   centred on it, which is precisely the case that matters. */
+function snapTier(t, i) {
+  const centre = i === 1 && t.mid;
+  if (t.host) return centre ? 0 : 2;
+  return centre ? 1 : 3;
+}
+
 /* how far to move along `axis` to line up; 0 if nothing is near */
 function alignSnap(it, axis) {
   if (!S.opt.snap || !T) return 0;
@@ -84,20 +107,29 @@ function alignSnap(it, axis) {
   const [lo, hi] = itemExtent(it, axis);
   const mine = [lo, (lo + hi) / 2, hi];
   const span = axis === 'z' ? S.cs.d : axis === 'y' ? S.cs.h : S.cs.w;
-  const targets = [{ v: 0 }, { v: span / 2, mid: true }, { v: span }];
+  const host = hostOf(it);
+  /* the case itself is the host of anything standing on its floor */
+  const caseIsHost = host === 'floor' || host === 'back';
+  const targets = [
+    { v: 0, host: caseIsHost },
+    { v: span / 2, mid: true, host: caseIsHost },
+    { v: span, host: caseIsHost }
+  ];
   for (const o of S.items) {
     if (o.id === it.id || !visible(o)) continue;
     const [a, b] = itemExtent(o, axis);
-    targets.push({ v: a }, { v: (a + b) / 2, mid: true }, { v: b });
+    const isHost = o.id === host;
+    targets.push({ v: a, host: isHost }, { v: (a + b) / 2, mid: true, host: isHost }, { v: b, host: isHost });
   }
   let best = null;
   for (const t of targets) {
     for (let i = 0; i < 3; i++) {
       const d = t.v - mine[i];
       if (Math.abs(d) > tol) continue;
-      /* centre-to-centre wins ties: it is the one people mean */
-      const score = Math.abs(d) - (t.mid && i === 1 ? tol * 0.35 : 0);
-      if (!best || score < best.score) best = { d, v: t.v, score };
+      const tier = snapTier(t, i);
+      if (!best || tier < best.tier || (tier === best.tier && Math.abs(d) < Math.abs(best.d))) {
+        best = { d, v: t.v, tier };
+      }
     }
   }
   if (!best) return 0;
@@ -168,7 +200,9 @@ function stepSupport(o, dir) {
    otherwise leave it exactly where it is — so anything can sit
    wherever you want on a plinth, not only in the middle. */
 function landOn(o, s) {
-  const e = envelope(o), f = footprint(o);
+  /* judged on what actually touches down, so a wide top over a narrow
+     foot is left where you put it rather than shoved to the middle */
+  const e = contactPatch(o), f = footprint(o);
   if (e.x < s.x - 0.01 || e.x + e.w > s.x + s.w + 0.01) {
     o.x = rnd(o.x + (s.x + (s.w - e.w) / 2 - e.x), 1);
   }
@@ -221,8 +255,11 @@ cvs.addEventListener('pointerdown', e => {
     return;
   }
 
+  /* the padlock takes precedence over everything on the sheet */
+  if (overLockButton(px, py)) { toggleLock(); return; }
+
   /* the rotation handle sits on top of everything */
-  const h = spinHandlePos();
+  const h = locked() ? null : spinHandlePos();
   if (h && Math.hypot(px - h.x, py - h.y) < 11) {
     const o = byId(S.sel);
     const c = h.prop === 'yaw'
@@ -235,10 +272,12 @@ cvs.addEventListener('pointerdown', e => {
   const hit = (e.button === 1 || e.shiftKey) ? null : hitTest(px, py);
   if (hit) {
     select(hit.id);
+    /* locked: you can still look at anything, you just cannot shift it */
+    if (locked()) { drag = { pan: true, sx: px, sy: py, px: S.pan.x, py: S.pan.y }; return; }
     const pt = s2w(px, py);
     drag = {
       id: hit.id, sx: px, sy: py, a0: pt.a, b0: pt.b,
-      snap: pick(hit), moved: false,
+      snap: pick(hit), moved: false, armed: false,
       /* `stuck` marks the ones glued to a face rather than resting on top —
          they travel in both views, since you cannot see them in plan */
       kids: hit.type !== 'object'
@@ -272,10 +311,15 @@ cvs.addEventListener('pointermove', e => {
 
   if (!drag) {
     if (PREVIEW) { cvs.style.cursor = 'default'; return; }
-    const h = spinHandlePos();
+    if (overLockButton(px, py)) {
+      cvs.style.cursor = 'pointer';
+      if (HOVER !== 'lock') { HOVER = 'lock'; draw(); }
+      return;
+    }
+    const h = locked() ? null : spinHandlePos();
     const over = hitTest(px, py);
     const onHandle = h && Math.hypot(px - h.x, py - h.y) < 11;
-    cvs.style.cursor = onHandle ? 'grab' : over ? 'grab' : 'default';
+    cvs.style.cursor = onHandle ? 'grab' : over ? (locked() ? 'pointer' : 'grab') : 'default';
     const nh = over ? over.id : null;
     if (nh !== HOVER) { HOVER = nh; draw(); }
     return;
@@ -305,6 +349,20 @@ cvs.addEventListener('pointermove', e => {
   }
 
   const it = byId(drag.id); if (!it) return;
+  /* Clicking something to look at it must not nudge it. The pointer has
+     to travel a few pixels before a drag begins at all — below that the
+     press is a selection and nothing moves. Measured in screen pixels,
+     so it is the same small physical wobble at every zoom. */
+  if (!drag.armed) {
+    if (Math.hypot(px - drag.sx, py - drag.sy) < DRAG_SLOP) return;
+    drag.armed = true;
+    /* re-read the grab point, so the object does not jump by the slop */
+    drag.a0 = pt.a; drag.b0 = pt.b;
+    drag.snap = pick(it);
+    drag.kids = it.type !== 'object'
+      ? childrenOf(it.id).map(k => ({ id: k.id, x: k.x, z: k.z, stuck: k.mount === 'wall' }))
+      : [];
+  }
   cvs.style.cursor = 'grabbing';
   const fine = e.shiftKey ? 0.1 : 1;
   const q = v => Math.round(v / fine) * fine;
@@ -408,7 +466,14 @@ document.addEventListener('keydown', e => {
   if (e.key === '1') { setView('front'); return; }
   if (e.key === '2') { setView('plan'); return; }
   if (e.key.toLowerCase() === 'f') { fitView(); return; }
+  if (e.key.toLowerCase() === 'l') { toggleLock(); return; }
   if (!o) return;
+  /* locked: look all you like, change nothing */
+  if (locked() && (e.key === 'Delete' || e.key === 'Backspace' || e.key.startsWith('Arrow') || e.key.toLowerCase() === 'r')) {
+    e.preventDefault();
+    toast('The case is locked — press L to unlock it');
+    return;
+  }
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeItem(o.id); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicate(o.id); return; }
   if (e.key.toLowerCase() === 'r' && o.type === 'object') {
@@ -495,7 +560,7 @@ function blankObject(extra) {
     x: rnd(S.cs.w / 2 - 10), z: 4, wallY: 100, spin: 0,
     mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright',
     stand: { kind: 'none', w: 0, d: 0, h: 0 },
-    rail: S.rail, hangY: null, yaw: 0, wires: [], flip: false, flipV: false, hide: false
+    rail: S.rail, hangY: null, yaw: 0, baseW: 0, baseD: 0, wires: [], flip: false, flipV: false, hide: false
   }, extra || {});
 }
 
@@ -601,8 +666,10 @@ async function duplicate(id) {
   c.id = uid(); c.name = it.name + ' copy';
   S.items.push(c);
   freeSpot(c);
-  if (c.png) BMP.set(c.id, await loadImage(c.png));
-  if (c.topPng) TOP.set(c.id, await loadImage(c.topPng));
+  /* One code path for decoding, and it must not be able to throw past
+     the commit: a copy left in the case but never filed, with no
+     bitmap decoded, is the anonymous grey rectangle. */
+  try { await syncBitmaps(); } catch (e) { }
   select(c.id); commit();
 }
 
@@ -610,6 +677,28 @@ function select(id) {
   if (S.sel === id) return;
   S.sel = id;
   renderLists(); renderInspector(); draw();
+}
+
+/* Freeze the layout. Selection, inspection, zoom, export and preview
+   all carry on as normal — the only thing locking stops is the case
+   changing shape under your hands. It rides in S.opt, so it is saved
+   with the case and comes back with it. */
+function toggleLock(on) {
+  S.opt.lock = on === undefined ? !S.opt.lock : !!on;
+  syncLockChrome();
+  toast(S.opt.lock ? 'Locked — nothing in the case will move' : 'Unlocked');
+  renderInspector();
+  draw();
+  scheduleSave();
+}
+function syncLockChrome() {
+  const b = $('#btnLock');
+  if (b) {
+    b.setAttribute('aria-pressed', String(!!S.opt.lock));
+    b.innerHTML = S.opt.lock ? '&#128274; Locked' : '&#128275; Lock';
+    b.title = S.opt.lock ? 'Everything is frozen (L)' : 'Freeze everything so nothing moves (L)';
+  }
+  document.body.classList.toggle('locked', !!S.opt.lock);
 }
 
 function setView(v) {
@@ -748,10 +837,67 @@ function renderLists() {
    Inspector
    ============================================================ */
 
+/* A shown-but-not-typed measurement, for the gaps that are a
+   consequence of something else rather than a thing you set. */
+function roFld(lab, id, value) {
+  return `<label class="f"><span>${lab}</span><input type="number" id="${id}" value="${value}" disabled></label>`;
+}
+
+/* The six clearances round an object, all measured to the case. Any of
+   them can be typed and the object moves; the ones that are decided by
+   something else — the height of a thing standing on a plinth, the
+   depth of a panel stuck to a face — are shown but not editable, since
+   letting you type them would only mean watching the number spring
+   back. */
+function positionFields(o) {
+  const b = bbox(o), f = footprint(o);
+  const freeY = o.mount === 'hanging' || o.mount === 'wall';
+  const freeZ = o.mount === 'placed' && !faceOf(o);
+  const gap = (v) => rnd(v, 1);
+  return `
+      <div class="fields two">
+        ${fld('From the left', 'iFromL', gap(b.x0), { step: 0.5 })}
+        ${fld('From the right', 'iFromR', gap(S.cs.w - b.x1), { step: 0.5 })}
+      </div>
+      <div class="fields two">
+        ${freeZ || o.mount === 'hanging'
+      ? fld('From the back', 'iFromBk', gap(f.z), { step: 0.5 })
+      : roFld('From the back', 'iFromBk', gap(f.z))}
+        ${freeZ || o.mount === 'hanging'
+      ? fld('From the front', 'iFromFr', gap(S.cs.d - (f.z + f.d)), { step: 0.5 })
+      : roFld('From the front', 'iFromFr', gap(S.cs.d - (f.z + f.d)))}
+      </div>
+      <div class="fields two">
+        ${freeY ? fld('From the floor', 'iFromB', gap(b.y0), { step: 0.5 }) : roFld('From the floor', 'iFromB', gap(b.y0))}
+        ${freeY ? fld('From the top', 'iFromT', gap(S.cs.h - b.y1), { step: 0.5 }) : roFld('From the top', 'iFromT', gap(S.cs.h - b.y1))}
+      </div>`;
+}
+
+/* the same four clearances for a shelf or a plinth, which have no
+   orientation to complicate them */
+function structPosition(o) {
+  return `
+      <div class="fields two">
+        ${fld('From the left', 'iFromL', rnd(o.x), { step: 0.5 })}
+        ${fld('From the right', 'iFromR', rnd(S.cs.w - (o.x + o.w)), { step: 0.5 })}
+      </div>
+      <div class="fields two">
+        ${fld('From the back', 'iFromBk', rnd(o.z), { step: 0.5 })}
+        ${fld('From the front', 'iFromFr', rnd(S.cs.d - (o.z + o.d)), { step: 0.5 })}
+      </div>`;
+}
+
 function fld(lab, id, value, { step = 0.5, min = null } = {}) {
   return `<label class="f"><span>${lab}</span><input type="number" id="${id}" value="${value}" step="${step}"${min !== null ? ` min="${min}"` : ''}></label>`;
 }
 const shownLean = o => o.leanFrom === 'flat' ? 90 - (o.lean || 0) : (o.lean || 0);
+
+const LOCKBAR = `<section class="sect lockbar">
+  <div class="row">
+    <span style="flex:1">&#128274; The case is locked. Nothing will move.</span>
+    <button class="btn sm" id="iUnlock">Unlock</button>
+  </div>
+</section>`;
 
 function renderInspector() {
   const box = $('#inspector');
@@ -779,6 +925,7 @@ function renderInspector() {
           <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate &nbsp; <kbd>Del</kbd> remove<br>
           <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo &nbsp; <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo<br>
           <kbd>Ctrl</kbd>+<kbd>V</kbd> paste a picture straight in<br>
+          <kbd>L</kbd> lock everything in place<br>
           Drag empty sheet to pan &middot; scroll to zoom
         </p>
       </section>
@@ -787,6 +934,10 @@ function renderInspector() {
         <label class="f full"><span>Name</span><input type="text" id="projName" value="${esc(S.name)}"></label>
       </section>`;
     $('#projName').onchange = e => { S.name = e.target.value || 'Untitled case'; commit(); };
+    if (locked()) {
+      box.insertAdjacentHTML('afterbegin', LOCKBAR);
+      bindInspector(null);
+    }
     return;
   }
 
@@ -832,6 +983,14 @@ function renderInspector() {
         ${fld('Depth cm', 'iD', rnd(o.depth, 2), { step: 0.1, min: 0.1 })}
       </div>
       <label class="chk"><input type="checkbox" id="iAspect" ${o.keepAspect === false ? '' : 'checked'}>Keep proportions when I change one</label>
+      ${o.mount === 'placed' ? `
+      <div class="fields two">
+        ${fld('Base W cm', 'iBaseW', o.baseW ? rnd(o.baseW, 2) : '', { step: 0.5, min: 0 })}
+        ${fld('Base D cm', 'iBaseD', o.baseD ? rnd(o.baseD, 2) : '', { step: 0.5, min: 0 })}
+      </div>
+      <p class="note">${st
+        ? `Leave these be while it is on a ${st.kind === 'cradle' ? 'cradle' : 'stand'} &mdash; the ${st.kind === 'cradle' ? 'cradle' : 'stand'} is what rests on the surface, and that is what the overhang warnings measure.`
+        : 'Only if the foot is smaller than the object above it &mdash; a bowl on a stem, a bust on a socle. Leave them empty and the whole footprint counts. What you put here is what has to fit the plinth; the rest may overhang without complaint.'}</p>` : ''}
       <div class="fields">
         ${fld('Turn &deg;', 'iSpin', rnd(o.spin || 0), { step: 1 })}
         <label class="f"><span>Quick</span><button class="btn" id="iSpin90" style="padding:4px">&#8635; 90&deg;</button></label>
@@ -940,11 +1099,13 @@ function renderInspector() {
 
     <section class="sect">
       <h2>Position</h2>
-      <div class="fields">
-        ${fld('X from left', 'iX', rnd(o.x), { step: 0.5 })}
-        ${fld('Z from back', 'iZ', rnd(o.z), { step: 0.5 })}
-        <label class="f"><span>&nbsp;</span><button class="btn" id="iCentre" style="padding:4px">Centre</button></label>
+      ${positionFields(o)}
+      <div class="row">
+        <button class="btn" id="iCentre" style="flex:1">Centre it</button>
       </div>
+      <p class="note">Every edge is measured to the case, and setting any one of them
+      moves the object &mdash; they are six ways of saying the same thing.${
+        o.mount === 'placed' ? ' Its height is set by what it rests on, so top and bottom are shown but not typed.' : ''}</p>
     </section>
 
     <section class="sect">
@@ -970,11 +1131,10 @@ function renderInspector() {
       <div class="fields">
         ${fld('Height cm', 'iY', rnd(o.y), { step: 0.5, min: 0 })}
         ${fld('Thickness', 'iT', rnd(o.t), { step: 0.1, min: 0.1 })}
-        ${fld('X from left', 'iX', rnd(o.x), { step: 0.5 })}
         ${fld('Width cm', 'iW', rnd(o.w), { step: 0.5, min: 1 })}
-        ${fld('Z from back', 'iZ', rnd(o.z), { step: 0.5 })}
         ${fld('Depth cm', 'iD', rnd(o.d), { step: 0.5, min: 1 })}
       </div>
+      ${structPosition(o)}
       <button class="btn ghost" id="iFull">Fill the case width and depth</button>
       <div class="readout"><span>carrying <b>${childrenOf(o.id).length}</b> objects</span></div>
       <p class="note">Moving it sideways takes whatever is standing on it along too.</p>
@@ -996,10 +1156,9 @@ function renderInspector() {
         ${fld('Width cm', 'iW', rnd(o.w), { step: 0.5, min: 1 })}
         ${fld('Depth cm', 'iD', rnd(o.d), { step: 0.5, min: 1 })}
         ${fld('Height cm', 'iH', rnd(o.h), { step: 0.5, min: 0.5 })}
-        ${fld('X from left', 'iX', rnd(o.x), { step: 0.5 })}
-        ${fld('Z from back', 'iZ', rnd(o.z), { step: 0.5 })}
-        <label class="f"><span>&nbsp;</span><button class="btn" id="iCentre" style="padding:4px">Centre</button></label>
       </div>
+      ${structPosition(o)}
+      <div class="row"><button class="btn" id="iCentre" style="flex:1">Centre it</button></div>
       <div class="readout"><span>top at <b>${rnd(o.h)}</b> cm</span><span>carrying <b>${childrenOf(o.id).length}</b> objects</span></div>
       <p class="note">Dragging it in elevation takes whatever is on it along. In plan it moves alone, so you can slide things about its top.</p>
     </section>
@@ -1026,12 +1185,24 @@ function renderInspector() {
     </section>`;
   }
 
-  box.innerHTML = html;
+  box.innerHTML = (locked() ? LOCKBAR : '') + html;
+  /* Locking freezes the layout, not the labelling: you can still rename
+     things, rewrite a panel and change colours, because none of that can
+     happen by accident the way a stray drag can. */
+  if (locked()) {
+    const stillYours = new Set(['iUnlock', 'iName', 'iText', 'iBold', 'iFitText', 'iTextSize', 'iTextPt', 'iColour', 'iPlinthColour', 'iThumb']);
+    for (const el of $$('#inspector input, #inspector select, #inspector button, #inspector textarea')) {
+      if (!stillYours.has(el.id)) el.disabled = true;
+    }
+  }
   bindInspector(o);
 }
 
 function bindInspector(o) {
   const on = (id, ev, fn) => { const el = $('#' + id); if (el) el.addEventListener(ev, fn); };
+  const unlock = $('#iUnlock');
+  if (unlock) unlock.onclick = () => toggleLock(false);
+  if (!o) return;
   const setNum = (id, fn) => on(id, 'change', e => { fn(num(e.target.value)); commit(); });
 
   on('iName', 'change', e => { o.name = e.target.value || o.name; commit(); });
@@ -1079,6 +1250,32 @@ function bindInspector(o) {
   setNum('iX', moveWithKids('x'));
   setNum('iZ', moveWithKids('z'));
 
+  /* The clearance fields work by difference: whatever edge you typed,
+     work out how far that edge has to move and shift the object by it.
+     That way spin, yaw and lean are all accounted for without any of
+     these needing to know about them. */
+  if (o.type !== 'object') {
+    /* a shelf or a plinth carries its passengers when it moves */
+    setNum('iFromL', v => moveWithKids('x')(rnd(v, 2)));
+    setNum('iFromR', v => moveWithKids('x')(rnd(S.cs.w - v - o.w, 2)));
+    setNum('iFromBk', v => moveWithKids('z')(rnd(v, 2)));
+    setNum('iFromFr', v => moveWithKids('z')(rnd(S.cs.d - v - o.d, 2)));
+  }
+  if (o.type === 'object') {
+    const shiftX = (d) => { o.x = rnd(o.x + d, 2); };
+    const shiftZ = (d) => { o.z = rnd(o.z + d, 2); };
+    const shiftY = (d) => {
+      if (o.mount === 'hanging') o.hangY = rnd((o.hangY || 0) + d, 2);
+      else if (o.mount === 'wall') o.wallY = rnd((o.wallY || 0) + d, 2);
+    };
+    setNum('iFromL', v => shiftX(v - bbox(o).x0));
+    setNum('iFromR', v => shiftX((S.cs.w - v) - bbox(o).x1));
+    setNum('iFromBk', v => shiftZ(v - footprint(o).z));
+    setNum('iFromFr', v => { const f = footprint(o); shiftZ((S.cs.d - v) - (f.z + f.d)); });
+    setNum('iFromB', v => shiftY(v - bbox(o).y0));
+    setNum('iFromT', v => shiftY((S.cs.h - v) - bbox(o).y1));
+  }
+
   if (o.type === 'object') {
     const aspect = o.h / o.w;
     setNum('iW', v => {
@@ -1092,6 +1289,9 @@ function bindInspector(o) {
       o.h = v;
     });
     on('iAspect', 'change', e => { o.keepAspect = e.target.checked; });
+    /* blank or zero means "the whole object", which is the safe default */
+    setNum('iBaseW', v => o.baseW = Math.max(0, v));
+    setNum('iBaseD', v => o.baseD = Math.max(0, v));
     setNum('iD', v => o.depth = Math.max(0.1, v));
     setNum('iSpin', v => o.spin = rnd(((v % 360) + 360) % 360, 1));
     setNum('iYaw', v => o.yaw = rnd(((v % 360) + 360) % 360, 1));
@@ -1257,6 +1457,16 @@ function syncInspector() {
   const o = byId(S.sel); if (!o) return;
   const set = (id, v) => { const el = $('#' + id); if (el && document.activeElement !== el) el.value = v; };
   set('iX', rnd(o.x)); set('iZ', rnd(o.z));
+  if (o.type !== 'object') {
+    set('iFromL', rnd(o.x)); set('iFromR', rnd(S.cs.w - (o.x + o.w)));
+    set('iFromBk', rnd(o.z)); set('iFromFr', rnd(S.cs.d - (o.z + o.d)));
+  }
+  if (o.type === 'object') {
+    const b = bbox(o), f = footprint(o);
+    set('iFromL', rnd(b.x0)); set('iFromR', rnd(S.cs.w - b.x1));
+    set('iFromBk', rnd(f.z)); set('iFromFr', rnd(S.cs.d - (f.z + f.d)));
+    set('iFromB', rnd(b.y0)); set('iFromT', rnd(S.cs.h - b.y1));
+  }
   if (o.type === 'shelf') set('iY', rnd(o.y));
   if (o.type === 'plinth') set('iH', rnd(o.h));
   if (o.type === 'object') {

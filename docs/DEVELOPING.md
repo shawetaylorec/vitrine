@@ -36,13 +36,15 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 158 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 196 assertions covering the
 cut-out crop, dragging the measurement box, support heights, stand footprints, derived
 wire lengths, lean maths in both reference frames, yaw, rotation, plan-shape selection,
 panels fixed to plinth faces, panel auto-fit and title lines, depth ordering, overhang
 detection, the shape picker, support stickiness while dragging, alignment snapping,
-plan pick order, cascade placement, undo and redo, the case library, the save/open
-round trip, opening a file written by an older build, and PNG and JPEG export.
+plan pick order, cascade placement, base footprints and what they excuse, the six
+clearance fields, duplication keeping its picture, the lock, the export crop, the
+document, undo and redo, the case library, the save/open round trip, opening a file
+written by an older build, and PNG and JPEG export.
 
 Append a hash to the URL to screenshot a different state:
 
@@ -120,6 +122,14 @@ a mount where nothing shows it silently bloats the footprint.
 `footprint(o)` treats `z` as the back edge of the span. `envelope(o)` is the footprint
 unioned with the stand's.
 
+**What has to fit is what touches down.** `contactPatch(o)` answers that: the stand if
+there is one, since the stand is what actually meets the surface; otherwise the base
+you gave (`baseW`/`baseD`, centred under the object, zero meaning "all of it");
+otherwise the whole footprint. The overhang warnings and `landOn` test that patch and
+not the widest part, so a bowl on a stem or a plate on a small easel is not accused of
+overhanging a plinth its foot sits well inside. The case tests still use the full
+extent — a top that projects past the glass is a real problem however narrow the foot.
+
 ## Mounting
 
 `mount` is one of `placed`, `hanging` or `wall`.
@@ -181,18 +191,39 @@ further towards the glass than the small thing on top of it.
 
 `alignSnap(it, axis)` collects candidate lines — the centre and both edges of every other
 visible item, plus the case — and matches them against the dragged item's own left,
-centre and right. Nearest within `SNAP_PX` screen pixels wins, with a bias of about a
-third of the tolerance towards centre-to-centre, since that is the intent nearly every
-time. The winner is pushed onto `GUIDES` so `drawGuides()` can show it.
+centre and right, keeping anything within `SNAP_PX` screen pixels.
+
+**Choosing between them is ranked, not scored.** In order: centre-to-centre on the thing
+the item stands on or is fixed to; centre-to-centre on anything else; an edge of its
+host; anything else. Nearest wins only *within* a rank.
+
+This matters more than it sounds. A weighted score cannot express it, because an edge
+match is often an exact zero and no bias survives that. An object a shade wider than
+its plinth has its left and right edges crossing the plinth's edges just as its centre
+reaches the plinth's centre — so the edge match wins every time, the object locks to
+the edge, and it can never be centred on the plinth at all. Which is precisely the
+thing people most want to do. Ranking fixes it outright: within the tolerance the
+centre of your own plinth beats an exact edge alignment against something unrelated.
 
 Working in screen pixels rather than centimetres is deliberate: it makes the snap scale
 with zoom, so close in you get fine control and far out you get help.
 
 `applyAlign(it)` runs it on both axes of the current view, and knows which property
-carries "vertical" for each mount — `y` for a shelf, `wallY` for a fixed panel, wire
-lengths for a hung object, and nothing for a placed object, whose base is decided by its
+carries "vertical" for each mount — `y` for a shelf, `wallY` for a fixed panel, `hangY`
+for a hung object, and nothing for a placed object, whose base is decided by its
 support. It runs after the drag quantiser, so an aligned position is exact rather than
 rounded to the nudge grid.
+
+## Position
+
+`positionFields(o)` renders all six clearances round an object, each measured to the
+case. The setters work by difference — read the edge you typed, work out how far it has
+to move, shift the object by that — so spin, yaw and lean are all accounted for without
+any of the fields knowing they exist.
+
+The ones that are a consequence rather than a setting are shown but disabled: the
+height of something standing on a plinth, the depth of a panel stuck to a face. Letting
+you type those would only mean watching the number spring back.
 
 ## Panel text
 
@@ -209,10 +240,20 @@ what wants weight on a panel is the heading, and this way you can see at a glanc
 which lines are titles. `layoutText` returns `{text, bold}` per line and measures each
 in the face it will be drawn in, or a bold line wraps a word short.
 
-**Auto-fit bisects rather than steps.** Wrapping makes the fit lumpy — a point smaller
-can save two lines — so there is no useful increment to walk. `bestTextSize` halves
-the interval between "certainly fits" and "certainly does not" twenty-six times, which
-lands well inside the rounding.
+**Fitting is measured at a fixed reference scale**, `FIT_SC`, never at the current
+zoom. Measured in screen pixels the same wording would fit at one magnification and
+overflow at another, which is nonsense: the board is the size it is. `panelRoom()` is
+the single routine that says how the wording breaks and how many lines there is room
+for, and the inspector's warning, the red rule on the drawing and the auto-fit all go
+through it, so they cannot disagree.
+
+**Auto-fit bisects rather than steps.** Wrapping makes the fit lumpy — a hundredth of a
+centimetre smaller can save two lines — so there is no useful increment to walk.
+`bestTextSize` halves the interval between "certainly fits" and "certainly does not"
+thirty times, then **rounds down and verifies**. Rounding to nearest was a real bug:
+bisection converges onto the boundary from below, so rounding up crossed it about half
+the time and the button produced a size that immediately reported itself as
+overflowing.
 
 ## Choosing a support
 
@@ -280,17 +321,56 @@ The same box is the crop box, which is why *Crop* lives on the size step rather 
 the cut-out step: what you measure is what you keep. `finishWizard` trims to `theBB()`
 and not to the ink, or a box you dragged would not match the centimetres it produced.
 
+## The lock
+
+`S.opt.lock` freezes the layout: dragging, the turn handle, arrow nudges, delete, and
+the placement and size fields in the inspector. Selecting, inspecting, renaming,
+rewriting a panel, zooming, preview and export all carry on, because none of those
+happen by accident the way a stray drag does. It rides in `S.opt`, so it saves with the
+case and comes back with it.
+
+**The control is drawn on the sheet, not in the toolbar.** `drawLockButton()` puts a
+padlock at the top left of the drafting plane and records its rect in `LOCKBTN` for
+`overLockButton()` to hit-test; `pointerdown` checks it before anything else. The reason
+it is there rather than in the chrome is that the person who needs it most is whoever
+you sent the file to — they want to click round the case reading dimensions without
+nudging anything, and they will not go hunting for a control they have never seen.
+`EXPORTING` suppresses it, so it never lands in a file.
+
+A press only becomes a drag once the pointer has travelled `DRAG_SLOP` screen pixels.
+Below that it is a selection and nothing moves. The grab point is re-read when the drag
+arms, so the object does not jump by the slop.
+
 ## Exporting a picture
 
 `renderSheet(view, scale, opt, caption)` is the whole of it: point `ctx`, `VW` and `VH`
 at an offscreen canvas, override `S.view` and `S.opt` with what was asked for, run the
 ordinary `paint()`, then put everything back. So the export is the same renderer, not a
 second one, and the options in the dialogue are the same options as on the left rail.
+*Just the case* is simply `PREVIEW` turned on offscreen.
 
-The sheet colour is painted in explicitly before anything else, because JPEG has no
+**The picture is cropped to the case.** `exportCrop()` trims to the case plus enough
+margin for the dimension arrows and the plan's BACK WALL / GLASS FRONT captions, keeping
+the ruler gutter when the rulers are on and nothing else. The acre of drafting plane
+round the outside is screen furniture and has no business in a file. It is done by
+painting the full sheet and copying the region out, rather than by fighting the
+transform, and the caption is written onto the cropped canvas afterwards.
+`exportSize()` runs the same crop without painting, so the dialogue can report the size
+it will actually write.
+
+The ground colour is painted in explicitly before anything else, because JPEG has no
 transparency and would otherwise come out on black. *Both* is two files rather than one
 composite, staggered by a third of a second so the browser does not swallow the second
 download.
+
+*Position of every object* sets `MARK_ALL`, which makes `drawSelectionDims` run
+`drawDimsFor` over every visible item instead of the selection. It is deliberately not a
+different drawing — it is the witness lines you already know, for everything at once.
+
+A **document** is HTML under a `.doc` name, which Word, Pages and Google Docs have all
+opened for twenty years. The drawing goes in as a data URI so the file stands alone, and
+the table comes from `scheduleRows()` — the same rows the schedule window shows, so the
+two cannot drift apart.
 
 ## Preview
 

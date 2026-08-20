@@ -24,7 +24,7 @@ const S = {
   view: 'front',
   zoom: 1,
   pan: { x: 0, y: 0 },
-  opt: { grid: true, dims: true, snap: true, rulers: true },
+  opt: { grid: true, dims: true, snap: true, rulers: true, lock: false },
   level: 'all'
 };
 
@@ -38,6 +38,7 @@ const TOPSRC = new Map();
 let BGIMG = null;           // back-wall image
 let PREVIEW = false;        // full-screen, no drafting furniture
 let HOVER = null;           // what the pointer is over, for a soft outline
+let EXPORTING = false;      // true while painting offscreen for a file
 
 function loadImage(src) {
   return new Promise((res, rej) => {
@@ -228,6 +229,28 @@ function envelope(o) {
   return { x: x0, w: x1 - x0, z: z0, d: z1 - z0 };
 }
 
+/* What an object actually stands on. Plenty of things are widest well
+   above the surface — a bowl on a foot, a sculpture on a socle, a
+   framed panel on a narrow edge — and it is the foot that has to fit
+   the plinth, not the widest part. Left unset it is the whole
+   footprint, which is the safe assumption. */
+function basePatch(o) {
+  const bw = o.baseW || 0, bd = o.baseD || 0;
+  if (!bw && !bd) return null;
+  const b = bbox(o), f = footprint(o);
+  const w = bw || (b.x1 - b.x0), d = bd || f.d;
+  return { x: (b.x0 + b.x1) / 2 - w / 2, w, z: f.z + f.d / 2 - d / 2, d };
+}
+
+/* The patch that meets the surface underneath: the stand if there is
+   one, since that is what is really in contact, otherwise the base you
+   gave, otherwise everything. This is what the overhang warnings test
+   — an object whose foot sits well within the plinth is not
+   overhanging it, however far the top spreads. */
+function contactPatch(o) {
+  return standBox(o) || basePatch(o) || footprint(o);
+}
+
 function outOfCase(o) {
   const msgs = [];
   if (o.type !== 'object') return msgs;
@@ -238,8 +261,9 @@ function outOfCase(o) {
   if (e.z < -0.05 || e.z + e.d > S.cs.d + 0.05) msgs.push('past the case depth');
   if (o.mount === 'placed') {
     const s = supportOf(o);
-    if (e.x < s.x - 0.05 || e.x + e.w > s.x + s.w + 0.05) msgs.push('overhanging ' + s.name);
-    if (e.z < s.z - 0.05 || e.z + e.d > s.z + s.d + 0.05) msgs.push('deeper than ' + s.name);
+    const c = contactPatch(o);
+    if (c.x < s.x - 0.05 || c.x + c.w > s.x + s.w + 0.05) msgs.push('overhanging ' + s.name);
+    if (c.z < s.z - 0.05 || c.z + c.d > s.z + s.d + 0.05) msgs.push('deeper than ' + s.name);
   }
   const f = faceOf(o);
   if (f) {
@@ -297,7 +321,8 @@ function readPalette() {
     accent: g('--accent'), plan: g('--plan'), warn: g('--warn'),
     caseFill: g('--case-fill'), caseEdge: g('--case-edge'),
     struct: g('--struct'), structEdge: g('--struct-edge'), panel: g('--panel'),
-    previewBg: g('--preview-bg')
+    previewBg: g('--preview-bg'),
+    lineStrong: g('--line-strong'), accentInk: g('--accent-ink')
   };
 }
 /* the back-wall colour dresses the elevation only — in plan you are
@@ -577,6 +602,70 @@ function paint() {
   drawSelectionDims();
   drawSpinHandle();
   if (S.opt.rulers !== false) drawRulers();
+  drawLockButton();
+}
+
+/* ---------------- the padlock ----------------
+   On the sheet itself rather than in the toolbar, because the person
+   who needs it most is whoever you sent the file to: they want to click
+   round the case reading dimensions without nudging anything, and they
+   will not go hunting for a control they have never seen. Top left, on
+   the plane, where the eye lands first. */
+
+let LOCKBTN = null;              // where it was last drawn, for hit testing
+const LOCK_SIZE = 54;
+
+function lockButtonRect() {
+  return { x: GUT + 14, y: GUT + 14, w: LOCK_SIZE, h: LOCK_SIZE };
+}
+
+function drawLockButton() {
+  if (EXPORTING) { LOCKBTN = null; return; }
+  const r = lockButtonRect();
+  LOCKBTN = r;
+  const on = !!S.opt.lock;
+  const hot = HOVER === 'lock';
+  const cx = r.x + r.w / 2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y, r.w, r.h, 10);
+  ctx.fillStyle = on ? C.accent : C.panel;
+  ctx.shadowColor = 'rgba(20,22,26,.18)'; ctx.shadowBlur = hot ? 10 : 5; ctx.shadowOffsetY = 2;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = on ? C.accent : (hot ? C.lineStrong : C.line);
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  /* the padlock: a body, a shackle over it, a keyhole. Open, the
+     shackle lifts and swings clear on one side. */
+  const ink = on ? C.accentInk : C.ink2;
+  const bodyW = 23, bodyH = 18;
+  const bodyY = r.y + r.h / 2 - 1;
+  ctx.strokeStyle = ink; ctx.fillStyle = ink;
+  ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.roundRect(cx - bodyW / 2, bodyY, bodyW, bodyH, 3);
+  ctx.fill();
+
+  ctx.beginPath();
+  if (on) ctx.arc(cx, bodyY - 1, 7.5, Math.PI, 0);
+  else ctx.arc(cx + 7.5, bodyY - 4, 7.5, Math.PI, Math.PI * 1.85);
+  ctx.stroke();
+
+  ctx.fillStyle = on ? C.accent : C.panel;
+  ctx.beginPath(); ctx.arc(cx, bodyY + bodyH / 2, 2.8, 0, 7); ctx.fill();
+
+  ctx.fillStyle = on ? C.accent : C.ink3;
+  label(on ? 'LOCKED' : 'LOCK', cx, r.y + r.h + 11,
+    { size: 11, font: UIFONT, fill: on ? C.accent : C.ink2, box: true, bg: C.sheet });
+  ctx.restore();
+}
+
+function overLockButton(px, py) {
+  const r = LOCKBTN;
+  return !!r && px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
 }
 
 /* the lines something has just snapped to, so you can see why it stopped */
@@ -769,6 +858,19 @@ function drawStandFront(o) {
 }
 
 /* Seen from above: a V stand splays, everything else is a plain base. */
+/* the foot, when it is smaller than the object above it — drawn so you
+   can see what is actually resting on the plinth */
+function drawBasePlan(o) {
+  if (PREVIEW || standOf(o) || o.mount !== 'placed') return;
+  const bp = basePatch(o);
+  if (!bp) return;
+  const a = w2s(bp.x, bp.z), b = w2s(bp.x + bp.w, bp.z + bp.d);
+  ctx.save();
+  ctx.strokeStyle = C.accent; ctx.lineWidth = 1.4; ctx.setLineDash([2, 3]);
+  ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
+  ctx.restore();
+}
+
 function drawStandPlan(o) {
   const st = standBox(o);
   if (!st) return;
@@ -801,36 +903,80 @@ const PANEL_PAD = 1.0;                    // cm of margin inside the panel
 const textSizeOf = o => o.textSize || 0.55;
 const ptOf = cm => Math.round(cm * 28.35);
 
+/* Whether a wording fits is a question about the real panel, not about
+   the screen. Measured at whatever the current zoom happens to be, the
+   same text would fit at one magnification and overflow at another —
+   so all the fit maths runs at one fixed reference scale, and only the
+   drawing uses the live one. */
+const FIT_SC = 20;                        // px per cm, for fit maths only
+const LINE_H = 1.32;
+
 function panelLines(o, wpx, sizePx) {
   const padPx = PANEL_PAD * (T ? T.sc : 1);
   return layoutText(o.text || '', Math.abs(wpx) - padPx * 2, sizePx);
 }
 
-/* would this wording fit the panel at this size, in cm? */
+/* how the wording breaks at a given size, and how many lines the board
+   has room for. One routine, so the warning in the inspector, the red
+   rule on the drawing and the auto-fit can never disagree. */
+function panelRoom(o, cm) {
+  const sizePx = Math.max(1, cm * FIT_SC);
+  const padPx = PANEL_PAD * FIT_SC;
+  return {
+    lines: layoutText(o.text || '', o.w * FIT_SC - padPx * 2, sizePx),
+    room: Math.max(0, Math.floor((o.h * FIT_SC - padPx * 2) / (sizePx * LINE_H)))
+  };
+}
 function panelFitsAt(o, cm) {
-  const sc = T ? T.sc : 20;
-  const sizePx = Math.max(1, cm * sc);
-  const lines = panelLines(o, o.w * sc, sizePx);
-  const padPx = PANEL_PAD * sc;
-  return lines.length * sizePx * 1.32 <= o.h * sc - padPx * 2 + 0.5;
+  const { lines, room } = panelRoom(o, cm);
+  return lines.length <= room;
 }
 function panelFits(o) {
   if (o.render !== 'panel' || !o.text) return true;
   return panelFitsAt(o, textSizeOf(o));
 }
 
-/* the largest size the wording still fits at. Bisecting beats stepping
-   because wrapping makes the fit lumpy — one point smaller can save two
-   lines — so there is no useful increment to walk. */
+/* The largest size the wording still fits at. Bisecting beats stepping
+   because wrapping makes the fit lumpy — a hundredth smaller can save
+   two lines — so there is no useful increment to walk.
+
+   The answer is rounded *down* and then verified. Rounding to nearest
+   was the bug: bisection converges onto the boundary from below, so
+   rounding up crossed it about half the time and the button produced a
+   size that immediately reported itself as overflowing. */
 function bestTextSize(o) {
   if (o.render !== 'panel' || !o.text || !o.text.trim()) return textSizeOf(o);
-  let lo = 0.08, hi = Math.max(o.h, 1);
+  const floor2 = v => Math.floor(v * 100) / 100;
+  let lo = 0.05, hi = Math.max(o.h, 1);
   if (panelFitsAt(o, hi)) return rnd(hi, 2);
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 30; i++) {
     const mid = (lo + hi) / 2;
     if (panelFitsAt(o, mid)) lo = mid; else hi = mid;
   }
-  return Math.max(0.08, rnd(lo, 2));
+  let cm = floor2(lo);
+  while (cm > 0.05 && !panelFitsAt(o, cm)) cm = rnd(cm - 0.01, 2);
+  return Math.max(0.05, cm);
+}
+
+/* A photograph that has not arrived — still decoding, or lost. It used
+   to fall back to a plain grey slab, which is indistinguishable from a
+   rectangular stand-in shape, so the only clue anything was wrong was
+   that your object had turned into a grey square. Say so instead. */
+function missingPicture(o, dx, dy, wpx, hpx) {
+  const w = Math.abs(wpx), h = Math.abs(hpx);
+  ctx.save();
+  ctx.fillStyle = C.sheet;
+  ctx.fillRect(dx, dy, wpx, hpx);
+  ctx.strokeStyle = C.warn; ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+  ctx.strokeRect(dx + .5, dy + .5, wpx - 1, hpx - 1);
+  ctx.setLineDash([]);
+  if (!PREVIEW && w > 46 && h > 22) {
+    ctx.fillStyle = C.warn;
+    ctx.font = `10px ${MONO}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('picture not loaded', dx + wpx / 2, dy + hpx / 2);
+  }
+  ctx.restore();
 }
 
 /* draw the object's own body into a rect in its own rotated frame */
@@ -838,7 +984,7 @@ function paintBody(o, dx, dy, wpx, hpx, forPlan) {
   const img = forPlan ? (TOP.get(o.id) || BMP.get(o.id)) : BMP.get(o.id);
   if (o.render === 'image') {
     if (img) ctx.drawImage(img, dx, dy, wpx, hpx);
-    else { ctx.fillStyle = C.struct; ctx.fillRect(dx, dy, wpx, hpx); }
+    else missingPicture(o, dx, dy, wpx, hpx);
     return;
   }
 
@@ -855,10 +1001,14 @@ function paintBody(o, dx, dy, wpx, hpx, forPlan) {
 
   const sizePx = textSizeOf(o) * (T ? T.sc : 1);
   const padPx = PANEL_PAD * (T ? T.sc : 1);
-  const lineH = sizePx * 1.32;
+  const lineH = sizePx * LINE_H;
   if (lineH < 1) return;
+  /* the wrap is measured at the drawing size so the type sits right,
+     but how many lines the board holds comes from the reference
+     calculation — otherwise the red rule and the inspector's warning
+     could disagree at some zooms and not others */
   const lines = panelLines(o, wpx, Math.max(sizePx, 1));
-  const room = Math.floor((Math.abs(hpx) - padPx * 2) / lineH);
+  const room = panelRoom(o, textSizeOf(o)).room;
   const shown = lines.slice(0, Math.max(room, 0));
 
   ctx.save();
@@ -1094,6 +1244,7 @@ function drawPlan() {
     if (w > 26 && mode !== 'image' && mode !== 'top' && mode !== 'panel') {
       label(o.name, a.x + w / 2, a.y + h / 2, { size: 10, font: UIFONT, fill: C.ink2, box: true, bg: caseGround() });
     }
+    drawBasePlan(o);
     if (sel) outline(a.x, a.y, w, h);
     else if (o.id === HOVER) frame(a.x, a.y, w, h, 'hover');
   }
@@ -1101,23 +1252,52 @@ function drawPlan() {
 
 /* ---------------- dimensions for the selection ---------------- */
 
+/* Every object called out at once, for a drawing somebody else has to
+   install from. One tag apiece rather than witness lines all round —
+   a dozen sets of witness lines is an unreadable thicket, whereas a
+   dozen tags is a schedule you can read off the picture. */
+/* Marking everything is not a different drawing — it is the witness
+   lines you already get on a selection, drawn for every item at once,
+   as though you had selected the lot. */
+let MARK_ALL = false;
+
+function drawAllDims() {
+  for (const it of S.items.filter(visible)) drawDimsFor(it);
+}
+
 function drawSelectionDims() {
+  if (!S.opt.dims) return;
+  if (MARK_ALL) { drawAllDims(); return; }
   const o = byId(S.sel);
-  if (!o || !S.opt.dims) return;
+  if (o) drawDimsFor(o);
+}
+
+/* All four clearances, not two: the near pair hung off the bottom-left
+   corner and the far pair off the top-right, so the lines never double
+   back over each other and every gap round the thing is dimensioned. */
+function drawDimsFor(o) {
   ctx.save();
-  ctx.setLineDash([2, 3]); ctx.strokeStyle = C.accent; ctx.lineWidth = 1; ctx.globalAlpha = .8;
+
+  /* one witness line and the dimension along it, in screen coordinates */
+  const gap = (from, to, cm) => {
+    ctx.save();
+    ctx.setLineDash([2, 3]); ctx.strokeStyle = C.accent; ctx.lineWidth = 1; ctx.globalAlpha = .8;
+    ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
+    ctx.restore();
+    if (cm > 1.5) arrowDim(from.x, from.y, to.x, to.y, `${rnd(cm)}`, C.accent);
+  };
 
   if (S.view === 'front') {
-    let x0, y0;
-    if (o.type === 'object') { const b = bbox(o); x0 = b.x0; y0 = b.y0; }
-    else if (o.type === 'shelf') { x0 = o.x; y0 = o.y - o.t; }
-    else { x0 = o.x; y0 = 0; }
-    const l = w2s(x0, y0);
-    ctx.beginPath(); ctx.moveTo(w2s(0, y0).x, l.y); ctx.lineTo(l.x, l.y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(l.x, w2s(0, 0).y); ctx.lineTo(l.x, l.y); ctx.stroke();
-    ctx.globalAlpha = 1; ctx.setLineDash([]);
-    if (x0 > 1.5) arrowDim(w2s(0, y0).x, l.y, l.x, l.y, `${rnd(x0)}`, C.accent);
-    if (y0 > 1.5) arrowDim(l.x, w2s(0, 0).y, l.x, l.y, `${rnd(y0)}`, C.accent);
+    let x0, y0, x1, y1;
+    if (o.type === 'object') { const b = bbox(o); x0 = b.x0; y0 = b.y0; x1 = b.x1; y1 = b.y1; }
+    else if (o.type === 'shelf') { x0 = o.x; y0 = o.y - o.t; x1 = o.x + o.w; y1 = o.y; }
+    else { x0 = o.x; y0 = 0; x1 = o.x + o.w; y1 = o.h; }
+
+    gap(w2s(0, y0), w2s(x0, y0), x0);                       /* from the left  */
+    gap(w2s(x0, 0), w2s(x0, y0), y0);                       /* from the floor */
+    gap(w2s(S.cs.w, y1), w2s(x1, y1), S.cs.w - x1);         /* from the right */
+    gap(w2s(x1, S.cs.h), w2s(x1, y1), S.cs.h - y1);         /* from the top   */
+
     if (o.type === 'object' && o.mount === 'hanging' && o.wires && o.wires[0]) {
       const wr = o.wires[0];
       const att = attachWorld(o, wr);
@@ -1126,10 +1306,12 @@ function drawSelectionDims() {
     }
   } else {
     const f = o.type === 'object' ? envelope(o) : { x: o.x, w: o.w, z: o.z, d: o.d };
-    const l = w2s(f.x, f.z);
-    ctx.globalAlpha = 1; ctx.setLineDash([]);
-    if (f.x > 1.5) arrowDim(w2s(0, f.z).x, l.y, l.x, l.y, `${rnd(f.x)}`, C.accent);
-    if (f.z > 1.5) arrowDim(l.x, w2s(0, 0).y, l.x, l.y, `${rnd(f.z)}`, C.accent);
+    const x1 = f.x + f.w, z1 = f.z + f.d;
+
+    gap(w2s(0, f.z), w2s(f.x, f.z), f.x);                   /* from the left  */
+    gap(w2s(f.x, 0), w2s(f.x, f.z), f.z);                   /* from the back  */
+    gap(w2s(S.cs.w, z1), w2s(x1, z1), S.cs.w - x1);         /* from the right */
+    gap(w2s(x1, S.cs.d), w2s(x1, z1), S.cs.d - z1);         /* from the front */
   }
   ctx.restore();
 }

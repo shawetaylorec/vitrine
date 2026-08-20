@@ -10,6 +10,7 @@ function syncCaseFields() {
   $('#bgColour').value = S.bg.colour || defaultCaseColour();
   $('#bgFade').value = S.bg.fade ?? 100;
   $('#bgFadeVal').textContent = (S.bg.fade ?? 100) + '%';
+  syncLockChrome();
 }
 function defaultCaseColour() {
   const c = getComputedStyle(document.documentElement).getPropertyValue('--case-fill').trim();
@@ -301,7 +302,15 @@ $('#expScale').addEventListener('click', e => {
   const b = e.target.closest('[data-sc]'); if (!b) return;
   EXP.scale = +b.dataset.sc; syncExport();
 });
-for (const [id, key] of [['expRulers', 'rulers'], ['expGrid', 'grid'], ['expDimsOn', 'dims'], ['expCaption', 'caption']]) {
+$('#expStyle').addEventListener('click', e => {
+  const b = e.target.closest('[data-st]'); if (!b) return;
+  EXP.style = b.dataset.st; syncExport();
+});
+$('#expMarks').addEventListener('click', e => {
+  const b = e.target.closest('[data-mk]'); if (!b) return;
+  EXP.marks = b.dataset.mk; syncExport();
+});
+for (const [id, key] of [['expRulers', 'rulers'], ['expGrid', 'grid'], ['expCaption', 'caption']]) {
   $('#' + id).addEventListener('change', e => { EXP[key] = e.target.checked; syncExport(); });
 }
 
@@ -384,6 +393,7 @@ $('#btnUndoStep').onclick = undo;
 $('#btnRedoStep').onclick = redo;
 
 /* preview */
+$('#btnLock').onclick = () => toggleLock();
 $('#btnPreview').onclick = enterPreview;
 $('#pvExit').onclick = exitPreview;
 $('#pvSeg').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });

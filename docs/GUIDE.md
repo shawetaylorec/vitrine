@@ -137,9 +137,11 @@ On the mounting page, or in the inspector afterwards.
 
 Every kind raises the object by its **base height**.
 
-Give a block or a V stand its own width and depth. This is the important part: a V stand
-is usually deeper than the object it holds, and it is the *stand* that has to fit on the
-plinth. The overhang warnings use whichever is bigger.
+Give a block or a V stand its own width and depth. This is the important part: the stand
+is what actually rests on the plinth, so the stand is what has to fit, and that is what
+the overhang warnings measure. A V stand deeper than the object it holds is checked on
+its own depth; equally, a plate much wider than its little easel is not called an
+overhang as long as the easel sits well within the plinth.
 
 A V stand's splay runs front to back, so it only shows in the **plan** view, where it
 points to the back and opens towards the glass. From the front you see its base and the
@@ -147,6 +149,23 @@ little notches that stop the object sliding off.
 
 The stand is always centred under its object and moves with it. With no stand, nothing
 at all is drawn beneath the object.
+
+### When the foot is smaller than the object
+
+Plenty of things are widest well above the surface: a bowl on a stem, a bust on a socle,
+a ewer with a spreading lip. Left alone, Vitrine assumes the whole footprint rests on
+the plinth and warns you when the widest part hangs over the edge — which is not what
+is happening at all.
+
+**Base W** and **Base D** in the inspector let you say what actually touches down. Give
+the foot's dimensions and the overhang warnings measure that instead; the rest may
+project over the edge without complaint, which is exactly what it does in the case. In
+plan the foot is drawn as a small dotted rectangle inside the footprint, so you can see
+what is really carrying the weight.
+
+Leave them empty and the whole footprint counts, which is the safe assumption. You never
+have to fill them in. And if the object is on a stand or in a cradle, the stand is
+already the thing in contact, so it governs and these are ignored.
 
 ## 5. Manuscripts
 
@@ -168,7 +187,20 @@ Add a book cradle underneath and give the height of its base.
 
 ## 6. Moving things about
 
-Drag in either view.
+Drag in either view. Clicking something to look at it will not shift it: the pointer has
+to travel a few pixels before a drag starts at all, so a click that only means "what is
+this?" leaves everything where it was.
+
+### Locking it
+
+The **padlock** at the top left of the drawing freezes the case. Nothing can be dragged,
+turned, nudged or deleted, and the placement and size fields grey out — but you can still
+click anything to read its dimensions, rename it, rewrite a panel, zoom, preview and
+export. <kbd>L</kbd> does the same, as does the button in the toolbar.
+
+This is mostly for handing a design to somebody else. They will want to click round the
+case reading measurements, and locking it first means they cannot nudge your layout
+while doing so. The lock is saved with the case, so it arrives locked.
 
 - Elevation, placed object: sideways moves it, and only sideways — an object worked
   along its plinth stays on that plinth even when it overhangs the edge, which is
@@ -181,6 +213,28 @@ Drag in either view.
 **Arrow up and down step between surfaces** — from the floor to a plinth to a shelf and
 back — rather than guessing from how far you nudged.
 
+### Typing a position
+
+Select anything and four orange lines are drawn: from its left edge to the left of the
+case and from its base to the floor, hung off the bottom-left corner; from its right
+edge and its top to the other two sides, hung off the top-right. Each carries its
+measurement. In plan the same four give you left, back, right and front.
+
+The **Position** section gives the same six clearances as numbers, each measured to the
+case: from the left, right, back, front, floor and top. Type into any one of them and
+the object moves so that edge sits where you said. They are six ways of saying the same
+thing, so setting one changes the others.
+
+They are measured to the object as it actually stands — turned, leaning, whatever — so
+"12 cm from the left" means 12 cm of clear deck to its leftmost point, not to some
+unrotated corner.
+
+Two of them are shown but greyed for a placed object: its height above the floor is
+decided by what it rests on, so typing it would only mean watching the number spring
+back. Put it on a taller plinth, or add a block stand. Hung and fixed objects can be set
+by any of the six. Shelves and plinths get the four horizontal ones, and carry their
+contents when you use them.
+
 ### Lining things up
 
 Drag anything and it looks for a line to settle on: the centre or either edge of any
@@ -188,9 +242,14 @@ other item, and of the case itself. It matches the dragged item's own left, cent
 right against all of those and takes the nearest.
 
 A dashed line appears across the case showing what it found, so you can see why it
-stopped where it did. Centre-to-centre is given a deliberate nudge over the alternatives,
-since that is nearly always the one you meant — a label on the centre line of its plinth,
-an object on the centre line of the case.
+stopped where it did.
+
+When more than one line is in reach, they are taken in a definite order: the middle of
+the thing you are standing on first, then the middle of anything else, then an edge of
+what you stand on, then everything else. Centring on your own plinth therefore wins
+outright rather than by a whisker &mdash; which matters, because an object a shade wider
+than its plinth has its edges lining up with the plinth's edges at exactly the moment
+its centre reaches the middle, and those edge matches used to win and hold it there.
 
 The tolerance is a few *screen* pixels, so zooming in gives you finer control and zooming
 out makes it grabbier. It works sideways in both views, front-to-back in plan, and
@@ -337,11 +396,26 @@ matters, and for moving a case to another machine or sending it to a colleague.
 
 ## 12. Getting it out
 
-- **Export image** — a PNG or a JPEG. The dialogue lets you choose the format, which
-  view (or both, as two files), the size from ×1 to ×4 of what is on screen, and
-  whether to draw the rulers, the grid, the dimensions and the caption. PNG keeps every
-  line crisp and is the one to print or draw over; JPEG is smaller and right for
-  pasting into a document.
+**Export image** opens a dialogue:
+
+- **File** — **PNG** keeps every line crisp and is the one to print or draw over.
+  **JPEG** is smaller, right for pasting into an email or a report. **Document** writes
+  a `.doc` that opens in Word: the drawing, then a table of every object with its size,
+  mount, support and position.
+- **Look** — **Drawing** is the sheet as you see it, with whatever furniture you tick.
+  **Just the case** is the Preview look: the case alone against a dark surround, no
+  grid, rulers or labels.
+- **View** — elevation, plan, or both as two files.
+- **Size** — ×1 to ×4 of the drawing on screen. The dialogue tells you the pixel size
+  you will actually get.
+- **Measurements** — **Position of every object** marks the drawing up with the same
+  four dimension lines you see when you select something, for every object, panel and
+  plinth at once, so it can be installed from.
+
+The picture is cropped to the case, plus the ruler marks when the rulers are on. You do
+not get the grey drafting plane from round the outside.
+
+Other ways out:
 - **Schedule** — every object with its size, mount, support, stand, position, base and
   top heights, deck used, lean and wire lengths. **Copy as TSV** pastes straight into
   a spreadsheet.
@@ -365,6 +439,16 @@ near flat is mostly depth. Either stand it up more, or it needs a deeper case.
 
 **The cut-out ate part of my object.** Lower the tolerance, or switch back to *from
 edges* if you are on *everywhere*, then tidy up with the restore brush.
+
+**It says my object overhangs the plinth, but only the top does.** Give it a **Base W**
+and **Base D** — see *When the foot is smaller than the object* above. Once Vitrine knows
+what actually touches down it stops complaining about the part that hangs over.
+
+**An object shows a dashed red box saying "picture not loaded".** Its photograph did not
+come back. Reopen its cut-out from the inspector and the picture should return; if it
+does not, the cut-out is lost and the object needs adding again. This is deliberately
+loud — it used to draw as a plain grey rectangle, which looked like an ordinary shape
+and told you nothing.
 
 **Something is hidden behind something else.** Check its **Z from back**. Things are
 drawn in depth order, so an object with a small z sits behind one with a large z.

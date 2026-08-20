@@ -52,7 +52,9 @@ is always centred underneath and travels with it. A V stand only splays seen fro
 get its base and its notches. A book cradle is cut to fit its book, so it takes the
 object's own width and depth and you give only the height.
 Whatever the stand, its own footprint is what has to fit on the plinth, and the overhang
-warnings use it.
+warnings use it. Where there is no stand you can give the object its own **base**
+measurements, so a bowl on a stem or a bust on a socle is judged on what actually
+touches down rather than on its widest part.
 
 **Lean can be measured from upright or from flat.** For a manuscript in a cradle,
 "15° from flat" is the natural way to say it. The elevation shows the foreshortened
@@ -75,8 +77,10 @@ front of an object in the case, whatever its stand-off.
 
 **Things line themselves up.** Drag anything and it looks for a line to settle on — the
 centre or either edge of any other item, or of the case — and shows you which one it
-found. Centre-to-centre wins ties, because that is the one people mean. The tolerance is
-in screen pixels, so zooming in gives finer control automatically.
+found. The candidates are ranked, not scored: the middle of the thing you stand on
+beats everything, so an object a shade wider than its plinth can still be centred on it
+instead of locking to its edge. The tolerance is in screen pixels, so zooming in gives
+finer control automatically.
 
 **Plinths have a face.** A colour, a picture, or a graphic cut out and fixed to the
 front, exactly as the back wall works.
@@ -84,6 +88,15 @@ front, exactly as the back wall works.
 **It tells you when things do not fit** — past the case sides, above the top, deeper
 than the case, overhanging whatever it stands on, or wider than the plinth face it is
 stuck to.
+
+**Every edge is dimensioned.** Select anything and four orange lines are drawn — to the
+left and the floor off one corner, to the right and the top off the other — each with
+its measurement. The Position fields give the same six clearances as numbers, measured
+to the object as it actually stands, turned or leaning; set any one and it moves there.
+
+**A padlock on the drawing freezes the case.** Click round it reading dimensions with
+no risk of nudging anything — which is the state you want a design in before you send
+it to somebody else. It saves with the case, so it arrives locked.
 
 **It produces an install schedule** — every object's size, base height, top height,
 distance from the left and back, lean and wire lengths, copyable straight into a
@@ -125,9 +138,14 @@ everything is filed as you go, so there is nothing to remember to save.
 
 Also: shelves and plinths, a back wall colour or image, graphics fixed to the wall, a
 plan-level filter, a turn handle for rotating objects, toggles for grid, dimensions and
-rulers, PNG and JPEG export of either view or both at up to four times screen size,
-light and dark, and save/open to a `.vitrine.json` file that carries the cut-outs with
-it.
+rulers, light and dark, and save/open to a `.vitrine.json` file that carries the
+cut-outs with it.
+
+**Export is a dialogue.** PNG, JPEG, or a Word document with the drawing and a table of
+every object. Either view or both. The sheet as drawn, or just the case against a dark
+surround. Up to four times screen size. And an option to mark the whole drawing up with
+the position of every object, so it can be installed from. The picture is cropped to the
+case — you do not get the grey drafting plane from round the outside.
 
 ## Running it
 
@@ -156,6 +174,7 @@ that survives a cleared browser.
 | <kbd>Enter</kbd> | reopen the mounting page |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Del</kbd> | duplicate / remove |
 | <kbd>Ctrl</kbd>+<kbd>V</kbd> | paste a picture, or text into a selected panel |
+| <kbd>L</kbd> | lock everything in place |
 | double-click | reopen an object's cut-out, size and mounting pages |
 
 ## Known limits

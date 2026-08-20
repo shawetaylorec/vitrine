@@ -115,6 +115,34 @@
   ok(sb && Math.abs((sb.x + sb.w / 2) - cx) < 0.01, 'the stand is centred under the object');
   ok(envelope(astro).d >= sb.d - 0.01, `the envelope makes room for the deeper stand (${rnd(envelope(astro).d)} cm)`);
 
+  /* --- 3b. what actually rests on the plinth is what has to fit --- */
+  {
+    const keep = { w: astro.w, x: astro.x, stand: astro.stand, baseW: astro.baseW, baseD: astro.baseD };
+    astro.stand = { kind: 'none', w: 0, d: 0, h: 0 };
+    astro.w = rnd(plinth.w + 8, 2);                 /* wider than the plinth */
+    astro.x = rnd(plinth.x + (plinth.w - astro.w) / 2, 2);
+    ok(outOfCase(astro).some(m => /overhanging/.test(m)),
+      'a wide object with no base given is reported as overhanging its plinth');
+    astro.baseW = 6; astro.baseD = 6;               /* but it stands on a small foot */
+    ok(!outOfCase(astro).some(m => /overhanging|deeper than/.test(m)),
+      'give it a narrow foot that fits and the complaint goes away');
+    const bp = basePatch(astro);
+    ok(Math.abs((bp.x + bp.w / 2) - (bbox(astro).x0 + bbox(astro).x1) / 2) < 0.01,
+      'the foot is centred under the object');
+    astro.baseW = rnd(plinth.w + 4, 2);
+    ok(outOfCase(astro).some(m => /overhanging/.test(m)),
+      'and a foot that really is too wide is still reported');
+    /* a stand is what touches down, so it governs instead */
+    astro.baseW = 0; astro.baseD = 0;
+    astro.stand = { kind: 'stand', w: 10, d: 10, h: 5 };
+    ok(!outOfCase(astro).some(m => /overhanging/.test(m)),
+      'a stand well inside the plinth stops the object above it being called an overhang');
+    ok(contactPatch(astro).w === 10, 'because the stand is what meets the surface');
+    Object.assign(astro, keep);
+    ok(contactPatch(astro) && basePatch(astro) === null,
+      'with nothing set, the whole footprint counts — the safe assumption');
+  }
+
   /* --- 4. moving a plinth carries its objects --- */
   const before = astro.x;
   plinth.x += 10;
@@ -573,6 +601,30 @@
   S.opt.snap = true;
   GUIDES = [];
 
+  /* --- 7k2. centring on the thing you stand on beats an exact edge match ---
+     An object a shade wider than its plinth used to lock to the plinth's
+     edge, which is a perfect zero, and could never be centred on it. */
+  {
+    const wide = S.items.find(i => i.name === 'Manuscript');
+    const keepX = wide.x, keepSup = wide.support, keepW = wide.w;
+    wide.support = pl2.id;
+    wide.w = rnd(pl2.w + 2, 2);            /* wider than the plinth it is on */
+    const mid = pl2.x + pl2.w / 2;
+    let worst = 0;
+    for (const off of [-1, -0.5, 0.5, 1]) {
+      const b0 = bbox(wide);
+      wide.x = rnd(mid - (b0.x1 - b0.x0) / 2 + off, 2);
+      GUIDES = [];
+      applyAlign(wide);
+      const b = bbox(wide);
+      worst = Math.max(worst, Math.abs((b.x0 + b.x1) / 2 - mid));
+    }
+    ok(worst < 0.05,
+      `an object wider than its plinth still centres on it from either side (worst ${rnd(worst, 3)} cm out)`);
+    wide.x = keepX; wide.support = keepSup; wide.w = keepW;
+    GUIDES = [];
+  }
+
   S.view = 'front'; T = calcT();
 
   /* --- 7l. nothing lands on top of anything else --- */
@@ -604,6 +656,137 @@
     ok(q1.x === wasQ1 && q3.x === wasQ3, 'moving one panel moves only that panel');
 
     S.items = keep; S.sel = null;
+  }
+
+  /* --- 7m. the six clearances, driven through the actual fields --- */
+  {
+    const type = (id, v) => {
+      const el = $('#' + id);
+      if (!el || el.disabled) return false;
+      el.value = String(v);
+      el.dispatchEvent(new Event('change'));
+      return true;
+    };
+    S.view = 'front'; VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
+    const m = S.items.find(i => i.name === 'Manuscript');
+    m.spin = 12;                          /* turned, so o.x is not the left edge */
+    select(m.id); renderInspector();
+    ok(type('iFromR', 9), 'the from-the-right field is editable for a placed object');
+    ok(Math.abs((S.cs.w - bbox(m).x1) - 9) < 0.05,
+      `typing "from the right" moves it there even when it is turned (${rnd(S.cs.w - bbox(m).x1, 2)} cm)`);
+    renderInspector();
+    type('iFromL', 12);
+    ok(Math.abs(bbox(m).x0 - 12) < 0.05, `and "from the left" likewise (${rnd(bbox(m).x0, 2)} cm)`);
+    renderInspector();
+    type('iFromFr', 5);
+    const fp = footprint(m);
+    ok(Math.abs((S.cs.d - (fp.z + fp.d)) - 5) < 0.05,
+      `"from the front" leaves the gap you asked for (${rnd(S.cs.d - (fp.z + fp.d), 2)} cm)`);
+    renderInspector();
+    ok($('#iFromB').disabled && $('#iFromT').disabled,
+      'a placed object shows its height but does not let you type it — that is the support’s job');
+    m.spin = 0;
+
+    /* a hung object can be placed by any of the four */
+    const r = S.items.find(i => i.name === 'Rete');
+    select(r.id); renderInspector();
+    ok(!$('#iFromT').disabled, 'a hung object can be set from the top');
+    type('iFromT', 20);
+    ok(Math.abs((S.cs.h - bbox(r).y1) - 20) < 0.05,
+      `and lands with that clearance (${rnd(S.cs.h - bbox(r).y1, 2)} cm), wires following`);
+
+    /* a plinth moves its passengers when placed by a clearance */
+    const p3 = S.items.find(i => i.type === 'plinth');
+    const rider3 = childrenOf(p3.id)[0];
+    if (rider3) {
+      const gap = rider3.x - p3.x;
+      select(p3.id); renderInspector();
+      type('iFromL', 8);
+      ok(Math.abs(p3.x - 8) < 0.05 && Math.abs((rider3.x - p3.x) - gap) < 0.05,
+        'a plinth placed by a clearance carries what stands on it');
+    }
+    select(null);
+  }
+
+  /* --- 7n. duplicating never leaves an object without its picture --- */
+  {
+    const src = S.items.find(i => i.render === 'image');
+    await duplicate(src.id);
+    const copy = S.items[S.items.length - 1];
+    ok(copy.id !== src.id && copy.png === src.png, 'a duplicate carries the same picture');
+    ok(BMP.get(copy.id), 'and its bitmap is decoded, so it cannot draw as an anonymous grey rectangle');
+    ok(BMPSRC.get(copy.id) === copy.png, 'with the source recorded, so it is not needlessly decoded again');
+    removeItem(copy.id);
+  }
+
+  /* --- 7o. the lock --- */
+  {
+    S.view = 'front'; VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
+    const a = S.items.find(i => i.name === 'Astrolabe');
+    select(a.id);
+    toggleLock(true);
+    ok(locked() && S.opt.lock, 'the lock goes on');
+    const wasX = a.x;
+    document.body.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    ok(a.x === wasX, 'and an arrow key no longer nudges the selected object');
+    renderInspector();
+    ok($('#iFromL').disabled && $('#iW').disabled, 'placement and size fields are frozen');
+    ok(!$('#iName').disabled, 'but naming still works — labelling is not moving');
+    ok($('#iUnlock'), 'and there is a way out of it in the inspector');
+    /* the padlock on the sheet is a real target, and it is where it says */
+    draw();
+    const r = lockButtonRect();
+    ok(overLockButton(r.x + r.w / 2, r.y + r.h / 2), 'the padlock on the sheet takes a click');
+    ok(!overLockButton(r.x - 30, r.y + r.h / 2), 'and does not swallow one beside it');
+    ok(r.x > 0 && r.y > 0 && r.x < 120 && r.y < 120, `it sits at the top left of the plane (${r.x}, ${r.y})`);
+    /* it saves with the case */
+    const s = JSON.parse(JSON.stringify(snapshot()));
+    toggleLock(false);
+    await restore(s);
+    ok(locked(), 'and the lock comes back with a reopened case');
+    toggleLock(false);
+    ok(!locked(), 'unlocking again lets go');
+    /* and the same keystroke does move it once unlocked, so the test
+       above is measuring the lock and not a dead event */
+    const a2 = S.items.find(i => i.name === 'Astrolabe');
+    select(a2.id);
+    const freeX = a2.x;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    ok(a2.x !== freeX, `unlocked, the same arrow key moves it (${rnd(freeX)} → ${rnd(a2.x)})`);
+    a2.x = freeX;
+    select(null);
+  }
+
+  /* --- 7p. exporting is cropped to the case --- */
+  {
+    S.view = 'front'; VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
+    const full = Math.round(cvs.clientWidth * 2);
+    EXP.fmt = 'png'; EXP.scale = 2; EXP.style = 'sheet';
+    EXP.marks = 'none'; EXP.rulers = true; EXP.grid = true; EXP.caption = true;
+    const sheet = renderSheet('front', 2, { rulers: true, grid: true, dims: false }, true);
+    ok(sheet.width < full, `the drawing is trimmed to the case, not the window (${sheet.width} of ${full} px)`);
+    ok(sheet.width > full * 0.5, 'but not so tight that the case itself is cut');
+    ok(exportSize('front').w === sheet.width, 'and the dialogue reports the size it will actually write');
+    EXP.style = 'plain';
+    const plain = renderSheet('front', 2, { rulers: false, grid: false, dims: false }, false);
+    ok(plain.width <= sheet.width, 'with no rulers or caption, "just the case" is tighter still');
+    ok(!PREVIEW && !EXPORTING, 'and the flags it borrows are put back afterwards');
+    EXP.style = 'sheet'; EXP.marks = 'none';
+    /* the document carries the drawing and the schedule */
+    const realDl = download;
+    let doc = null;
+    download = (blob, name) => { doc = { blob, name }; };
+    EXP.fmt = 'doc';
+    saveDoc();
+    download = realDl;
+    ok(doc && /\.doc$/.test(doc.name), `a document is written as ${doc ? doc.name : 'nothing'}`);
+    const text = await doc.blob.text();
+    ok(/<table/.test(text) && /data:image\/png/.test(text),
+      'holding both the drawing and a table of the objects');
+    ok(text.includes(esc(S.items.find(i => i.type === 'object').name)),
+      'with the objects named in it');
+    EXP.fmt = 'png';
   }
 
   /* --- 7m. objects, panels and casework are listed apart --- */
