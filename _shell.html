@@ -325,11 +325,14 @@ body.preview .previewbar{display:flex}
       </div>
       <label class="f full"><span>Hanging rail height cm</span><input type="number" id="railH" min="0" step="0.5"></label>
       <div class="row wrap">
-        <label class="chk"><input type="checkbox" id="optGrid" checked>Grid</label>
+        <label class="chk" title="10 cm squares on the drafting plane. Drawn only &mdash; it does not affect how anything moves."><input type="checkbox" id="optGrid" checked>Grid</label>
         <label class="chk"><input type="checkbox" id="optDims" checked>Dimensions</label>
-        <label class="chk"><input type="checkbox" id="optSnap" checked>Snap</label>
+        <label class="chk" title="Dragging steps in whole centimetres and lines up with other objects. Turn it off to move freely; hold Shift for tenths either way."><input type="checkbox" id="optSnap" checked>Snap to 1 cm</label>
         <label class="chk"><input type="checkbox" id="optRulers" checked>Rulers</label>
       </div>
+      <p class="note">Grid, Dimensions and Rulers only change what is drawn. <b>Snap</b> is the
+      one that changes how things move: on, a drag steps in whole centimetres and lines up
+      with its neighbours; off, it moves freely. Hold <kbd>Shift</kbd> for tenths either way.</p>
     </section>
 
     <section class="sect">
@@ -537,13 +540,7 @@ body.preview .previewbar{display:flex}
           <section class="sect" id="panelPlaced">
             <h2>Support</h2>
             <label class="f full"><span>Rests on</span><select id="supportSel"></select></label>
-            <div class="row">
-              <label class="f" style="flex:1"><span>Lean measured from</span><select id="leanFrom">
-                <option value="upright">Upright</option>
-                <option value="flat">Flat</option>
-              </select></label>
-              <label class="f" style="width:78px"><span>Angle &deg;</span><input type="number" id="leanNum" min="0" max="90" step="1"></label>
-            </div>
+            <label class="f full"><span>Lean from upright &deg;</span><input type="number" id="leanNum" min="0" max="90" step="1"></label>
             <input type="range" id="lean" min="0" max="90" value="0">
             <p class="help" id="leanHelp"></p>
             <div class="fields two">

@@ -32,16 +32,22 @@ calls the app's own functions rather than simulating clicks.
 { cat _shell.html; echo '<script>'; cat _p1.js _p2.js _p3.js _p4.js _test.js; echo '</script>'; } > _t.html
 
 "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu \
-  --window-size=1600,1000 --screenshot=shot.png --virtual-time-budget=15000 \
-  --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
+  --window-size=1600,1000 --virtual-time-budget=25000 \
+  --enable-logging=stderr --log-level=0 "file:///C:/Users/shawe/code/vitrine/_t.html"
 ```
+
+Use the absolute `file:///C:/...` URL. `file:///$PWD/...` from Git Bash yields
+`file:///c/...`, which Chrome cannot open, and the run passes with zero assertions.
 
 Console lines are tagged `[PASS]` / `[FAIL]`. Add assertions for anything you
 change. Run it more than once if a result looks marginal — a real race was found
 that way. Delete `_t.html` afterwards; it is git-ignored.
 
-Append a hash to the URL to screenshot a state: `#plan`, `#dark`, `#wiz`, `#wiz3`,
-`#sched`, `#shapes`, `#preview`, `#shot` / `#shotplan` / `#shotpreview`.
+Append a hash to the URL to screenshot a state: `#plan`, `#dark`, `#wiz`, `#wiz2`,
+`#wiz3`, `#wiz3p`, `#face`, `#export`, `#sched`, `#shapes`, `#cases`, `#preview`,
+`#shot` / `#shotplan` / `#shotpreview`. Pass `--screenshot=` a path **outside the
+repo** — writing into the project fails with "Access is denied" and no file, which
+looks exactly like a screenshot that rendered nothing.
 
 ## House rules
 
@@ -58,9 +64,10 @@ Append a hash to the URL to screenshot a state: `#plan`, `#dark`, `#wiz`, `#wiz3
 
 ## Start here
 
-**`docs/HANDOVER.md` carries the queue.** Eight items are waiting, each with where
-it lives in the code, what is already diagnosed, and which decisions need settling
-before writing anything. Read it before asking what to work on.
+**`docs/HANDOVER.md` carries the state of play.** The queue of eight is done and
+unpushed; the file records what was decided and by whom, the two things waiting on the
+owner's eye, and the traps that bite every session. Read it before asking what to work
+on.
 
 ## Where the thinking is written down
 

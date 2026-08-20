@@ -626,14 +626,18 @@ function renderSupportSel() {
   $('#wizBaseD').value = W.baseD ? rnd(W.baseD, 2) : '';
   syncLeanFields();
 }
+/* In the case the angle is stated by the view — from upright in
+   elevation, from flat looking down. This step has no view of its own,
+   so it names its datum instead: always from upright, which is how the
+   lean is stored and how the elevation reads it. Both ends are spelled
+   out, so a manuscript at 75° is as easy to describe as one at 15°. */
 function syncLeanFields() {
-  const shown = W.leanFrom === 'flat' ? 90 - W.lean : W.lean;
-  $('#lean').value = shown;
-  $('#leanNum').value = rnd(shown);
-  $('#leanFrom').value = W.leanFrom;
-  $('#leanHelp').textContent = W.leanFrom === 'flat'
-    ? 'Measured up from lying flat — 0° is flat on the deck, 90° is standing upright. This is the natural way to describe a manuscript in a cradle.'
-    : 'Measured back from standing upright — 0° is vertical, 90° is flat on the deck.';
+  $('#lean').value = W.lean;
+  $('#leanNum').value = rnd(W.lean);
+  $('#leanHelp').textContent =
+    'Measured back from standing upright: 0° is vertical, 90° is flat on the deck. '
+    + 'A manuscript lying open in a cradle is usually 70–80°. '
+    + 'In the case itself the angle follows the view — the same lean reads from flat when you look down.';
 }
 function syncStandFields() {
   const k = W.stand.kind;
@@ -1366,6 +1370,7 @@ function renderSheet(view, scale, opt) {
   PREVIEW = EXP.style === 'plain';
   SHOW_FURNITURE = true;
   EXPORTING = true;
+  EXPORT_SC = scale;
   readPalette();
   const ground = PREVIEW ? C.previewBg : C.sheet;
   /* JPEG has no transparency, so the ground has to be painted in or the
@@ -1392,6 +1397,7 @@ function renderSheet(view, scale, opt) {
   ctx = keepCtx; VW = keepW; VH = keepH; S.view = keepView; S.opt = keepOpt; T = keepT;
   S.pan = keepPan;
   PREVIEW = keepPrev; EXPORTING = keepExp; SHOW_FURNITURE = keepF;
+  EXPORT_SC = 1;
   readPalette();
   return off;
 }
@@ -1465,7 +1471,10 @@ function scheduleRows() {
       'Top cm': rnd(b.y1, 1),
       'Z cm': rnd(f.z, 1),
       'Deck cm': rnd(f.d, 1),
-      Lean: o.mount === 'placed' ? leanLabel(o) || '0°' : '—',
+      /* The schedule leaves the app, so it cannot lean on a view for its
+         datum the way the drawing does — it names it in the heading and
+         gives the stored value, degrees from upright. */
+      'Lean from upright': o.mount === 'placed' ? `${rnd(o.lean || 0)}°` : '—',
       Wires: o.mount === 'hanging' ? o.wires.map(w => rnd(wireLen(o, w), 1)).join(' / ') : '—'
     };
   });

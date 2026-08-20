@@ -174,10 +174,17 @@ already the thing in contact, so it governs and these are ignored.
 
 ## 5. Manuscripts
 
-Set **lean measured from** to **flat**, then give the angle the way a mount-maker would
-— 15° means 15° up from lying flat.
+Give the angle the way the view you are in states it. **In the plan that is degrees up
+from flat**, which is how a mount-maker describes it: 15° means 15° up from lying flat.
+Switch to the elevation and the same manuscript reads **75°**, because there the angle
+is measured back from upright. Nothing has moved and there is no setting to check — the
+drawing you are looking at is the datum, and the field says which it is using.
 
-What follows from that:
+The mounting page in the wizard has no view of its own, so it names its datum outright:
+**lean from upright**, the same as the elevation. A manuscript in a cradle is 70–80°
+there.
+
+What follows from the angle:
 
 - the **elevation** foreshortens the height, so a 50 cm manuscript at 15° from flat
   stands about 13 cm tall;
@@ -261,12 +268,22 @@ out makes it grabbier. It works sideways in both views, front-to-back in plan, a
 vertically in elevation for the things that can move vertically — shelves, wall-fixed
 panels, and hung objects, whose wires are recalculated to match.
 
-**Snap** in the case panel governs all of this, along with the surface snapping above.
-Turn it off and everything moves freely.
+**Snap to 1 cm** in the case panel governs all of this: the alignment lines, the surface
+snapping above, and the step a drag moves in. On, a drag rounds to whole centimetres and
+lines itself up with its neighbours. Off, it moves freely, to the hundredth of a
+centimetre. Hold <kbd>Shift</kbd> for tenths either way.
 
-**Centre**, in the inspector, centres an object on whatever it belongs to — its plinth
-face, the shelf it stands on — and only falls back to the case if it belongs to nothing.
-In plan it centres front-to-back on that surface too.
+It is the only toggle there that changes how anything moves. **Grid**, **Dimensions**
+and **Rulers** only change what is drawn — the grid's 10 cm squares have never had
+anything to do with the step a drag takes.
+
+**Centre it**, in the inspector, centres an object on whatever it belongs to — its
+plinth face, the shelf it stands on — and only falls back to the case if it belongs to
+nothing. It centres across *and* front-to-back, and does the same thing in both views.
+
+If a centred object still reports itself as overhanging, it is telling you its foot is
+wider than the surface it stands on, and it says so in those words — no amount of moving
+will help, and the number it gives you is what will.
 
 To turn something, drag the round handle above it, press <kbd>R</kbd>, or type an angle
 in **Turn**. A turned object still settles properly onto its support.
@@ -298,23 +315,62 @@ casework. **+ Panel** adds an interpretation panel: a flat card stuck to a verti
 surface, so its mounting is **Fixed** (or **Wires**) — never *Placed*.
 
 - With **a plinth selected**, the new panel goes straight onto that plinth's front face,
-  sized to fit it and centred.
+  sized to sit comfortably on it and centred. **Fit the face**, below, takes the whole
+  front if that is what you want.
 - With nothing selected it goes on the **back wall**.
 
 Either way, **Fixed to** in the inspector moves it between surfaces afterwards. On a
-plinth front it faces you in elevation and is barely a line in plan, and it travels with
-the plinth.
+plinth front it faces you in elevation and is barely a line in plan.
+
+### A panel on a plinth face is glued to it
+
+The two travel as one object. **Dragging the panel drags the plinth**, along with
+everything else riding on it, in both views — which is what stops a panel sized to the
+whole front from swallowing every click and leaving the plinth underneath ungrabbable.
+
+So its place on the face is *typed*, not dragged. An **On the face of…** section appears
+in the inspector with four clearances measured to the plinth's own front — from its
+left, right, top and bottom — and two buttons:
+
+- **Centre on the face** puts it in the middle of the front, both ways.
+- **Fit the face** sizes it to the whole front with a centimetre of plinth showing all
+  round.
+
+The Position fields below still measure to the case, and setting one of those moves the
+plinth too, so the panel keeps its place on the face either way.
 
 Panel text is set in **real centimetres**, with the equivalent in points shown beside
 it. This is the point of it: a 30 × 20 cm panel at 0.55 cm (16 pt) holds about ninety
 words, and the panel will tell you when your wording runs past the bottom — a red
 warning in the inspector and a red rule on the drawing. Shrink the type or grow the
-panel until it stops complaining. When the type is too small to read on screen it is
-drawn as grey rules, so a full panel still looks full; zoom in for the words.
+panel until it stops complaining.
 
-**Set the type as large as it will go** finds the largest size the wording still fits
-at and uses it. Useful for a short caption on a big board, and for seeing at once
+When the type is too small to read it is drawn as grey rules instead, so a full panel
+still looks full. That judgement is made about *the picture being drawn*, not about the
+screen: zoom in and the words appear, and an export is measured against the file's own
+scale, so a ×4 export sets as words what the screen was greeking.
+
+### Solving for the type, or for the board
+
+Two buttons, working in opposite directions from the same fit calculation.
+
+**Set the type as large as it will go** holds the board and finds the largest type the
+wording still fits at. Useful for a short caption on a big board, and for seeing at once
 whether a long text is ever going to work at a readable size.
+
+**Grow the panel to fit the text** is the reverse: it holds the type at the size you
+chose and finds the board that suits it.
+
+- On the **back wall** you get two: *keep proportions*, which is the smallest
+  enlargement of the same shape that fits and may come out taller than strictly needed,
+  and *grow taller only*, which keeps the width you drew.
+- On a **plinth face** there is one, and it takes the plinth's width less a centimetre
+  each side — the same measurement **Fit the face** uses — so only the height is free,
+  capped by the plinth's own height.
+
+It never shrinks a board you drew. And if the wording will not fit even at the largest
+the case or the plinth allows, it grows as far as there is room and then tells you the
+size it would actually have needed, rather than stopping at the limit without a word.
 
 **Titles are bold.** Put the caret on a line and press **B — Make this line a title**,
 and the line is wrapped in `**` and drawn bold; press it again to undo. Select several

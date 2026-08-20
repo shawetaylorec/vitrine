@@ -56,13 +56,16 @@ warnings use it. Where there is no stand you can give the object its own **base*
 measurements, so a bowl on a stem or a bust on a socle is judged on what actually
 touches down rather than on its widest part.
 
-**Lean can be measured from upright or from flat.** For a manuscript in a cradle,
-"15° from flat" is the natural way to say it. The elevation shows the foreshortened
-height, the plan shows the deck it actually covers, and once something leans past
-halfway to flat the plan draws the picture itself rather than a rectangle. Looking
-down, a lean would otherwise be invisible &mdash; a 0.5 cm panel covering 7 cm of deck with
-nothing to explain it &mdash; so the plan rakes the span, weights the edge it touches down
-on, and writes the angle beside it.
+**A lean is stated by the view you are in.** In the elevation the angle is measured
+from upright; looking down it is measured from flat, which is how a mount-maker
+describes a manuscript in a cradle. So the same object reads 15&deg; in elevation and
+75&deg; in plan, and there is no wording to check and no datum to set &mdash; the drawing
+in front of you is the datum. The elevation shows the foreshortened height, the plan
+shows the deck it actually covers, and once something leans past halfway to flat the
+plan draws the picture itself rather than a rectangle. Looking down, a lean would
+otherwise be invisible &mdash; a 0.5 cm panel covering 7 cm of deck with nothing to
+explain it &mdash; so the plan rakes the span, weights the edge it touches down on, and
+writes the angle beside it.
 
 **Turning an object in plan is the same projection in the other plane.** Swing an
 astrolabe round to face the corner and the elevation narrows by exactly as much as the
@@ -116,10 +119,23 @@ there, so a second plinth never lands invisibly on the first.
 
 **Interpretation panels carry real type.** Text size is set in centimetres and shown in
 points, so the panel tells you whether that wording actually fits at 16 pt on a
-30 × 20 cm board before anyone sets it. One button sets the type as large as it will go
-and still fit; a line wrapped in `**` is a title and is set bold. Paste wording straight
-in from a label document; line breaks are kept. Select a plinth before adding one and it
-goes on that plinth's front face, sized to fit.
+30 × 20 cm board before anyone sets it. A line wrapped in `**` is a title and is set
+bold. Paste wording straight in from a label document; line breaks are kept. Select a
+plinth before adding one and it goes on that plinth's front face.
+
+**The board and the type can each be solved for the other.** One button sets the type
+as large as it will go and still fit. The reverse button holds the type at the size you
+chose and grows the board to suit it &mdash; keeping the panel's proportions, or growing
+it taller only, or on a plinth face taking the plinth's own width less a centimetre each
+side. If the wording will not fit even at the largest the case or the plinth allows, it
+says so and gives the size it would have needed, rather than stopping at the limit
+without a word.
+
+**A panel fixed to a plinth is glued to it.** Dragging the panel drags the plinth and
+everything riding on it, so a panel sized to the whole face can no longer swallow every
+click and strand the plinth underneath. Where it sits on the face is typed instead:
+four clearances measured to the plinth's own front, with buttons to centre it there or
+size it to the whole face with an even margin all round.
 
 **Preview mode** goes full screen and strips every drafting mark — grid, rulers,
 dimensions, labels, handles — leaving the case as it would be seen, lit against a dark
@@ -136,10 +152,14 @@ everything is filed as you go, so there is nothing to remember to save.
 
 ![The case picker](docs/images/cases.png)
 
+**One toggle changes how things move; the rest only change what is drawn.** Grid,
+Dimensions and Rulers are purely visual. **Snap to 1 cm** is the one that decides
+whether a drag steps in whole centimetres and lines itself up with its neighbours, or
+moves freely to the hundredth. <kbd>Shift</kbd> gives tenths either way.
+
 Also: shelves and plinths, a back wall colour or image, graphics fixed to the wall, a
-plan-level filter, a turn handle for rotating objects, toggles for grid, dimensions and
-rulers, light and dark, and save/open to a `.vitrine.json` file that carries the
-cut-outs with it.
+plan-level filter, a turn handle for rotating objects, light and dark, and save/open to
+a `.vitrine.json` file that carries the cut-outs with it.
 
 **Export is a dialogue.** PNG or JPEG, either view or both, at up to four times screen
 size. The sheet as drawn, or just the case against a dark surround — with the grid and

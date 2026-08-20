@@ -83,12 +83,48 @@
 
   W.widthCm = 34; W.depthCm = 4;
   W.mount = 'placed'; W.support = 'floor';
-  W.leanFrom = 'flat'; W.lean = 90 - 15;          /* 15 degrees up from flat */
+  /* the wizard names its datum rather than borrowing a view's: always
+     degrees from upright, which is also how it is stored */
+  W.leanFrom = 'flat'; W.lean = 75;               /* 15 degrees up from flat */
   W.stand = { kind: 'cradle', w: 30, d: 26, h: 6 };
   finishWizard();
   const man = S.items.find(i => i.name === 'Manuscript');
-  ok(Math.abs(man.lean - 75) < .01, `lean stored from upright (${man.lean}°) while typed as 15° from flat`);
-  ok(Math.abs(shownLean(man) - 15) < .01, 'and reads back as 15° from flat');
+  ok(Math.abs(man.lean - 75) < .01, `lean stored from upright (${man.lean}°)`);
+
+  /* --- 1b. the angle is stated by the view, not by a chosen datum --- */
+  {
+    const keepView = S.view;
+    S.view = 'front';
+    ok(Math.abs(shownLean(man) - 75) < .01, 'in elevation the angle reads from upright (75°)');
+    ok(leanLabel(man) === '75°', 'and the label is the bare angle, with no "from flat" wording');
+    ok(leanDatum() === 'upright', 'elevation names its datum as upright');
+    ok(Math.abs(storedLean(75) - 75) < .01, 'and what you type in elevation is stored as it stands');
+    S.view = 'plan';
+    ok(Math.abs(shownLean(man) - 15) < .01, 'looking down the same lean reads from flat (15°)');
+    ok(leanLabel(man) === '15°', 'the plan tag is the bare angle too');
+    ok(leanDatum() === 'flat', 'plan names its datum as flat');
+    ok(Math.abs(storedLean(15) - 75) < .01, 'and 15 typed in plan comes back as 75 from upright');
+    /* leanFrom is carried for older files but no longer decides anything */
+    const wasFrom = man.leanFrom;
+    man.leanFrom = 'upright';
+    ok(Math.abs(shownLean(man) - 15) < .01, 'leanFrom no longer changes what is shown');
+    man.leanFrom = wasFrom;
+    S.view = 'front';
+    const upright = { ...man, lean: 10 };
+    ok(Math.abs(shownLean(upright) - 10) < .01, '10° off upright shows as 10 in elevation');
+    S.view = 'plan';
+    ok(Math.abs(shownLean(upright) - 80) < .01, 'and as 80 in plan — the owner\'s worked example');
+
+    /* the wizard has no view to take a datum from, so it names one */
+    W.lean = 62; syncLeanFields();
+    ok(!$('#leanFrom'), 'the wizard no longer asks you to choose a datum');
+    ok(+$('#leanNum').value === 62 && +$('#lean').value === 62,
+      'it states the lean from upright, whatever view the case happens to be in');
+    ok(/from standing upright/.test($('#leanHelp').textContent) &&
+      /follows the view/.test($('#leanHelp').textContent),
+      'and says so, along with what happens once the object is in the case');
+    S.view = keepView;
+  }
   ok(planMode(man) === 'image', 'a near-flat manuscript shows its picture in plan');
   ok(standOf(man) && standLift(man) === 6 && Math.abs(bbox(man).y0 - 6) < 0.01,
     'a book cradle is a base under the book, raising it by the base height');
@@ -373,6 +409,154 @@
   const onShelf = { ...astro, support: shelf.id };
   ok(stepSupport(onShelf, 1) === shelf.id, 'and stops at the top rather than wrapping round');
 
+  /* --- 7c4. a panel is glued to its face: it drags the plinth, and is
+     placed on the face by typing --- */
+  {
+    const press = id => { const el = $('#' + id); if (!el || el.disabled) return false; el.click(); return true; };
+    const type = (id, v) => {
+      const el = $('#' + id);
+      if (!el || el.disabled) return false;
+      el.value = String(v); el.dispatchEvent(new Event('change'));
+      return true;
+    };
+    S.view = 'front'; VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
+
+    /* fit it to the face — the whole front, less the margin all round */
+    select(panel.id); renderInspector();
+    ok(press('iFaceFit'), 'a panel on a plinth face is offered a fit-the-face button');
+    ok(Math.abs(panel.w - (plinth.w - FACE_MARGIN * 2)) < 0.02 &&
+      Math.abs(panel.h - (plinth.h - FACE_MARGIN * 2)) < 0.02,
+      `and it takes the face less ${FACE_MARGIN} cm each side (${rnd(panel.w, 2)} × ${rnd(panel.h, 2)} cm)`);
+    const fb = bbox(panel);
+    ok(Math.abs((fb.x0 - plinth.x) - FACE_MARGIN) < 0.02 &&
+      Math.abs((plinth.x + plinth.w - fb.x1) - FACE_MARGIN) < 0.02 &&
+      Math.abs(fb.y0 - FACE_MARGIN) < 0.02 &&
+      Math.abs((plinth.h - fb.y1) - FACE_MARGIN) < 0.02,
+      'with an even margin on all four sides');
+    ok(!outOfCase(panel).some(m => /wider than|above the top/.test(m)),
+      'a fitted panel does not report itself as off its own face');
+
+    /* now it covers the plinth, which is the fault that started this */
+    const cen = w2s(plinth.x + plinth.w / 2, plinth.h / 2);
+    ok(hitTest(cen.x, cen.y).id === panel.id,
+      'a fitted panel does take every click on the plinth front');
+
+    /* so dragging it drags the plinth, and everything else riding on it.
+       Snapping is off for this, both to make the arithmetic exact and
+       because that is the case worth checking: with Snap off a drag is
+       free rather than rounded to the nearest centimetre. */
+    const rider = S.items.find(i => i.type === 'object' && i.mount === 'placed' && i.support === plinth.id);
+    const rect = cvs.getBoundingClientRect();
+    cvs.setPointerCapture = () => { };        /* headless has no real pointer */
+    const wasSnap = S.opt.snap;
+    /* Two moves, not one: the first only arms the drag, and the grab
+       point is deliberately re-read there so the item does not jump by
+       the slop. The travel that counts is measured from the second. */
+    const dragBy = (dxCm) => {
+      const arm = DRAG_SLOP + 2;
+      cvs.dispatchEvent(new PointerEvent('pointerdown', {
+        clientX: rect.left + cen.x, clientY: rect.top + cen.y, bubbles: true, pointerId: 1, button: 0
+      }));
+      const armed = drag && drag.id;
+      for (const px of [arm, arm + dxCm * T.sc]) {
+        cvs.dispatchEvent(new PointerEvent('pointermove', {
+          clientX: rect.left + cen.x + px, clientY: rect.top + cen.y, bubbles: true, pointerId: 1
+        }));
+      }
+      cvs.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+      return armed;
+    };
+
+    S.opt.snap = false;
+    const p0 = plinth.x, n0 = panel.x, r0 = rider ? rider.x : 0;
+    const armedOn = dragBy(6.37);
+    ok(armedOn === plinth.id, 'pressing on the panel arms a drag of the plinth, not of the panel');
+    ok(S.sel === panel.id, 'while the selection stays on what was actually clicked');
+    ok(Math.abs(plinth.x - (p0 + 6.37)) < 0.06, `and the plinth actually moves (${rnd(plinth.x - p0, 2)} cm)`);
+    ok(Math.abs((panel.x - n0) - (plinth.x - p0)) < 0.02, 'the panel travelling with it, unchanged on its face');
+    if (rider) ok(Math.abs((rider.x - r0) - (plinth.x - p0)) < 0.02, 'as does whatever is standing on top');
+    ok(rnd(plinth.x, 2) !== rnd(plinth.x, 0), 'with Snap off the drag is free, not rounded to the centimetre');
+
+    /* Snap on and the same travel no longer arrives untouched — it is
+       either rounded to the centimetre or pulled onto an alignment
+       line, which is the whole of what Snap does. */
+    S.opt.snap = true;
+    const p1 = rnd(plinth.x, 2);
+    dragBy(4.37);
+    ok(Math.abs((plinth.x - p1) - 4.37) > 0.02,
+      `with Snap on the drag is taken in hand rather than landing where the pointer did (${rnd(plinth.x - p1, 2)} cm, not 4.37)`);
+    /* and the grid has nothing to do with it — it only draws squares */
+    S.opt.snap = false; S.opt.grid = true;
+    const p2 = rnd(plinth.x, 2);
+    dragBy(3.21);
+    ok(Math.abs((plinth.x - p2) - 3.21) < 0.06,
+      'the grid being on does not round a drag — Grid is drawn, Snap is what moves things');
+    S.opt.snap = wasSnap;
+
+    /* placing it on the face is typed, in the plinth's own frame */
+    renderInspector();
+    ok(type('iFaceL', 3), 'the face clearances are typeable');
+    ok(Math.abs((bbox(panel).x0 - plinth.x) - 3) < 0.05,
+      `3 cm from the plinth's left puts it there (${rnd(bbox(panel).x0 - plinth.x, 2)} cm)`);
+    renderInspector(); type('iFaceT', 2);
+    ok(Math.abs((plinth.h - bbox(panel).y1) - 2) < 0.05,
+      `and 2 cm from its top likewise (${rnd(plinth.h - bbox(panel).y1, 2)} cm)`);
+    renderInspector(); press('iFaceCentre');
+    ok(Math.abs(((bbox(panel).x0 + bbox(panel).x1) / 2) - (plinth.x + plinth.w / 2)) < 0.05,
+      'centre-on-the-face centres it across the front');
+    ok(Math.abs(((bbox(panel).y0 + bbox(panel).y1) / 2) - plinth.h / 2) < 0.05,
+      'and up it');
+
+    /* the case clearances move the assembly, matching the drag */
+    renderInspector();
+    const onFace = panel.x - plinth.x;
+    type('iFromL', 20);
+    ok(Math.abs(bbox(panel).x0 - 20) < 0.05,
+      `a case clearance still puts the panel's edge where you asked (${rnd(bbox(panel).x0, 2)} cm)`);
+    ok(Math.abs((panel.x - plinth.x) - onFace) < 0.05,
+      'by moving the plinth, so the panel keeps its place on the face');
+
+    /* --- 7c5. grow the board to fit the type — the reverse of auto-fit --- */
+    const LONG = 'Astrolabe, brass, Persian, dated 1073 AH. The rete carries twenty-eight star pointers and the plate is engraved for the latitude of Isfahan. Acquired 1897 from the collection of a Cambridge orientalist, and shown here with its original wooden case.';
+    panel.w = 10; panel.h = 3; panel.text = LONG; panel.textSize = 0.5;
+    const gFace = panelGrow(panel, 'face');
+    ok(Math.abs(gFace.w - (plinth.w - FACE_MARGIN * 2)) < 0.02,
+      `growing a face panel takes the plinth width, less the margin (${rnd(gFace.w, 2)} cm)`);
+    ok(gFace.ok && panelFitsAt({ ...panel, w: gFace.w, h: gFace.h }, panel.textSize),
+      `and the height it returns really does hold the wording (${rnd(gFace.h, 2)} cm)`);
+    ok(!panelFitsAt({ ...panel, w: gFace.w, h: rnd(gFace.h - 0.05, 2) }, panel.textSize),
+      'with nothing to spare — it is the size needed, not a generous guess');
+    ok(gFace.h <= gFace.cap.h + 0.005, 'capped by the plinth height');
+
+    /* on the back wall, both ways of growing */
+    const wall = { ...panel, face: 'back', w: 10, h: 3, text: LONG, textSize: 0.5 };
+    const gProp = panelGrow(wall, 'prop');
+    ok(gProp.ok && panelFitsAt({ ...wall, w: gProp.w, h: gProp.h }, wall.textSize),
+      `proportional growth fits (${rnd(gProp.w, 2)} × ${rnd(gProp.h, 2)} cm)`);
+    ok(Math.abs((gProp.w / gProp.h) - (wall.w / wall.h)) < 0.02, 'and keeps the panel’s shape');
+    ok(!panelFitsAt({ ...wall, w: rnd(gProp.w * 0.99, 2), h: rnd(gProp.h * 0.99, 2) }, wall.textSize),
+      'and is the smallest such enlargement — a per cent smaller already overflows');
+    const gTall = panelGrow(wall, 'tall');
+    ok(Math.abs(gTall.w - wall.w) < 0.01, 'growing taller leaves the width alone');
+    ok(gTall.ok && panelFitsAt({ ...wall, w: gTall.w, h: gTall.h }, wall.textSize),
+      `and finds the height that holds it (${rnd(gTall.h, 2)} cm)`);
+    ok(!panelFitsAt({ ...wall, w: gTall.w, h: rnd(gTall.h - 0.05, 2) }, wall.textSize),
+      'exactly, not approximately');
+    ok(gTall.h > gTall.cap.h * 0 + wall.h, 'it grows — it never shrinks the board you drew');
+    ok(gTall.h > gProp.h, 'and holding the width costs height, as it must');
+
+    /* the honest failure: too big for the cap, and it says what it needs */
+    const huge = { ...panel, w: 12, h: 6, textSize: 4, text: LONG };
+    const gBad = panelGrow(huge, 'face');
+    ok(!gBad.ok, 'a wording too big for the plinth face is reported as not fitting');
+    ok(gBad.need && gBad.need.h > gBad.cap.h,
+      `and says the height it would actually need (${rnd(gBad.need.h, 1)} cm against a ${rnd(gBad.cap.h, 1)} cm face)`);
+    ok(gBad.h <= gBad.cap.h + 0.005, 'while still growing as far as there is room, rather than stopping silently');
+    panel.text = ''; panel.w = 14; panel.h = 9;
+    landOnFace(panel);
+    select(null);
+  }
+
   /* --- 7c2. nothing is drawn under an object that has no stand --- */
   const bare = { ...man, stand: { kind: 'none', w: 0, d: 0, h: 0 } };
   ok(standBox(bare) === null, 'an object with no stand has nothing drawn beneath it');
@@ -497,6 +681,14 @@
        and then renameCase no longer matches the case under test. A slow
        flake that depends only on how long the earlier sections took. */
     clearTimeout(saveT);
+
+    /* The other half of the same flake, and the one that survived: boot
+       reads storage asynchronously, and if that read landed *after* the
+       stub below was installed it found a non-empty index, saw an empty
+       undo history, and dutifully opened a case over the one under test
+       — so the rename assertion failed about three runs in eight. Wait
+       for the opening read to be over before taking storage away. */
+    await BOOTED;
 
     /* a private in-memory store, so the test never touches real storage */
     const mem = new Map();
@@ -813,6 +1005,17 @@
     ok(sheet.width > full * 0.5, 'but not so tight that the case itself is cut');
     ok(exportSize('front').w === sheet.width, 'and the dialogue reports the size it will actually write');
     ok(!PREVIEW && !EXPORTING && !SHOW_FURNITURE, 'the flags it borrows are put back afterwards');
+    ok(EXPORT_SC === 1, 'the export scale among them');
+
+    /* --- 7p2. an export writes words, not greeked rules --- */
+    ok(!EXPORTING && greeked(3) && !greeked(5),
+      'on screen, type under four pixels is greeked as grey rules');
+    EXPORTING = true; EXPORT_SC = 4;
+    ok(!greeked(3),
+      'but a ×4 export sets the same type as words — the threshold is measured in the pixels the file gets, not the ones the screen would have got');
+    ok(greeked(0.9), 'while type that really would be illegible even at ×4 is still greeked there');
+    EXPORTING = false; EXPORT_SC = 1;
+    ok(greeked(3), 'and the screen judgement is unchanged once the export is over');
 
     /* "just the case" still answers to the grid and ruler tick boxes,
        because the surround and the drafting furniture are separate
@@ -823,6 +1026,101 @@
     ok(ruled.width > bare.width,
       `just the case keeps its rulers when asked (${ruled.width} px with, ${bare.width} without)`);
     EXP.style = 'sheet';
+  }
+
+  /* --- 7q. a selected object's wires stay grey ---
+     Accent orange is the dimension colour, so wires drawn in it read as
+     measurements. The selection shows in the line weight instead. */
+  {
+    S.view = 'front'; S.pan = { x: 0, y: 0 }; S.zoom = 1;
+    VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
+    const r = S.items.find(i => i.name === 'Rete');
+    const wr = r.wires[0];
+    const att = attachWorld(r, wr);
+    const rail = r.rail ?? S.rail;
+    /* a point on the wire itself, a little below the rail */
+    const on = w2s(att.x, rail - Math.max(1, (rail - att.y) * 0.3));
+    const at = (dx) => mainCtx.getImageData(Math.round(on.x) + dx - 1, Math.round(on.y), 3, 1).data;
+    const warmest = d => {
+      let m = -999;
+      for (let i = 0; i < d.length; i += 4) m = Math.max(m, d[i] - d[i + 2]);
+      return m;
+    };
+    const wasDims = S.opt.dims;
+    S.opt.dims = false;
+    select(r.id); draw();
+    const onWire = at(0), offWire = at(30);
+    ok(warmest(onWire) < 55,
+      `a selected object's wire is grey, not accent orange (r−b ${warmest(onWire)}, where the accent runs past 100)`);
+    ok(Math.abs(onWire[0] - offWire[0]) > 6 || Math.abs(onWire[2] - offWire[2]) > 6,
+      'and the sample really is on the wire, not on empty ground');
+    /* the wire's own dimension is a measurement, and keeps the accent */
+    ok(/arrowDim\(.*wireLen.*C\.accent/.test(String(drawDimsFor)),
+      'while the wire dimension stays accent — it genuinely is a dimension');
+    S.opt.dims = wasDims;
+    select(null); draw();
+  }
+
+  /* --- 7r. Centre it means the same thing in both views --- */
+  {
+    const p = S.items.find(i => i.type === 'plinth');
+    const rider = S.items.find(i => i.type === 'object' && i.mount === 'placed' && i.support === p.id);
+    if (rider) {
+      const centred = () => {
+        const c = contactPatch(rider);
+        return {
+          dx: (c.x + c.w / 2) - (p.x + p.w / 2),
+          dz: (c.z + c.d / 2) - (p.z + p.d / 2)
+        };
+      };
+      for (const view of ['front', 'plan']) {
+        S.view = view;
+        rider.x = p.x - 3; rider.z = p.z + 1;
+        select(rider.id); renderInspector();
+        $('#iCentre').click();
+        const g = centred();
+        ok(Math.abs(g.dx) < 0.05,
+          `Centre it centres across the plinth in ${view === 'front' ? 'elevation' : 'plan'} (${rnd(g.dx, 2)} cm out)`);
+        ok(Math.abs(g.dz) < 0.05,
+          `and front to back too — the axis the elevation used to leave alone (${rnd(g.dz, 2)} cm out)`);
+        ok(!outOfCase(rider).some(m => /overhanging|off the front or back/.test(m)),
+          'so a centred object no longer reports itself as sticking off its plinth');
+      }
+      S.view = 'front'; select(null);
+    }
+  }
+
+  /* --- 7s. too big to fit is a different complaint from off-centre --- */
+  {
+    const p = S.items.find(i => i.type === 'plinth');
+    const wide = { ...S.items.find(i => i.name === 'Astrolabe') };
+    wide.stand = { kind: 'none', w: 0, d: 0, h: 0 };
+    wide.baseW = rnd(p.w + 6, 2); wide.baseD = 4;
+    wide.support = p.id; wide.x = rnd(p.x + (p.w - wide.w) / 2, 2);
+    const msg = outOfCase(wide).find(m => /overhanging/.test(m));
+    ok(msg && /will not help/.test(msg),
+      'a foot wider than the plinth says so, rather than sending you hunting for a position that does not exist');
+    wide.baseW = 4;
+    wide.x = rnd(wide.x - 30, 2);
+    const msg2 = outOfCase(wide).find(m => /overhanging/.test(m));
+    ok(msg2 && !/will not help/.test(msg2),
+      'while a foot that would fit if you moved it gets the plain overhang message');
+
+    /* the same distinction for something stuck to a plinth face */
+    const pan = S.items.find(i => i.render === 'panel' && faceOf(i));
+    if (pan) {
+      const keep = { w: pan.w, x: pan.x };
+      const face = faceOf(pan);
+      pan.w = rnd(face.w + 5, 2);
+      pan.x = rnd(face.x + (face.w - pan.w) / 2, 2);
+      ok(outOfCase(pan).some(m => /wider than the front of .* and the face only/.test(m)),
+        'a board wider than the plinth front says by how much');
+      pan.w = keep.w;
+      pan.x = rnd(face.x + face.w - 1, 2);
+      ok(outOfCase(pan).some(m => /off the edge of/.test(m)),
+        'while one that has simply slid off the side says that instead');
+      Object.assign(pan, keep);
+    }
   }
 
   /* --- 7m. objects, panels and casework are listed apart --- */
@@ -869,10 +1167,15 @@
   const realDownload = download;
   let exported = [];
   download = (blob, name) => { exported.push({ size: blob.size, name }); };
-  /* toBlob is asynchronous and slow enough in headless to race a fixed
-     sleep, so wait on the result rather than on the clock */
+  /* toBlob is asynchronous, and under --virtual-time-budget the clock
+     runs far faster than the encoder does: 120 sleeps of 50 ms is six
+     seconds on paper and can be a fraction of a real one, which is why
+     this test failed about one run in four with "0 bytes". So the wait
+     is counted in event-loop turns rather than in milliseconds — every
+     turn is another chance for the blob to arrive, whatever the clock
+     is doing. */
   const waitFiles = async n => {
-    for (let i = 0; i < 120 && exported.length < n; i++) await new Promise(r => setTimeout(r, 50));
+    for (let i = 0; i < 2000 && exported.length < n; i++) await new Promise(r => setTimeout(r, 10));
     return exported.length >= n;
   };
   EXP.fmt = 'png'; EXP.scale = 2; EXP.view = 'front'; EXP.style = 'sheet';
@@ -959,6 +1262,23 @@
     W.mount = 'hanging'; W.points = [{ x: 200, y: 150 }, { x: 420, y: 150 }];
     showWizard('Add object'); setStep(3);
     ok(getComputedStyle(wizCv).cursor === 'crosshair', 'the wire step always shows a cursor, whatever brush was last used');
+  }
+  /* the mounting step with a placed object, where the lean field is */
+  if (location.hash === '#wiz3p') {
+    stage(photo(620, 800, { kind: 'ellipse', col: '#6b4a2f' }), 'Manuscript');
+    W.mount = 'placed'; W.lean = 72; W.stand = { kind: 'cradle', w: 30, d: 26, h: 6 };
+    showWizard('Add object'); setStep(3);
+  }
+  /* a panel fixed to a plinth face, with its own clearances */
+  if (location.hash === '#face') {
+    const pl = S.items.find(i => i.type === 'plinth');
+    const pan = S.items.find(i => i.render === 'panel' && i.face === pl.id)
+      || S.items.find(i => i.render === 'panel');
+    pan.mount = 'wall'; pan.face = pl.id;
+    pan.text = '**Astrolabe**\nBrass, Persian, dated 1073 AH. The rete carries twenty-eight star pointers.';
+    pan.textSize = 0.5; pan.w = 24; pan.h = 12; pan.wallY = 20;
+    pan.x = rnd(pl.x + (pl.w - pan.w) / 2, 2);
+    select(pan.id); renderInspector();
   }
   if (location.hash === '#sched') { buildSchedule(); $('#schedBack').hidden = false; }
   if (location.hash === '#cases') {

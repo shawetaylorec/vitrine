@@ -274,14 +274,23 @@ cvs.addEventListener('pointerdown', e => {
     select(hit.id);
     /* locked: you can still look at anything, you just cannot shift it */
     if (locked()) { drag = { pan: true, sx: px, sy: py, px: S.pan.x, py: S.pan.y }; return; }
+    /* A panel fitted to a plinth face covers the plinth, so the plinth
+       could not be grabbed at all — the panel took every click. It is
+       glued on, so the honest answer is that dragging it drags the
+       plinth: the two move as one object, and where the panel sits on
+       the face is typed rather than dragged. Selection stays on what you
+       actually clicked, so the inspector still shows the panel. */
+    /* faceOf gives the support record, not the item — resolve it back */
+    const face = faceOf(hit);
+    const moves = (face && byId(face.id)) || hit;
     const pt = s2w(px, py);
     drag = {
-      id: hit.id, sx: px, sy: py, a0: pt.a, b0: pt.b,
-      snap: pick(hit), moved: false, armed: false,
+      id: moves.id, sx: px, sy: py, a0: pt.a, b0: pt.b,
+      snap: pick(moves), moved: false, armed: false,
       /* `stuck` marks the ones glued to a face rather than resting on top —
          they travel in both views, since you cannot see them in plan */
-      kids: hit.type !== 'object'
-        ? childrenOf(hit.id).map(k => ({ id: k.id, x: k.x, z: k.z, stuck: k.mount === 'wall' }))
+      kids: moves.type !== 'object'
+        ? childrenOf(moves.id).map(k => ({ id: k.id, x: k.x, z: k.z, stuck: k.mount === 'wall' }))
         : []
     };
   } else {
@@ -364,8 +373,14 @@ cvs.addEventListener('pointermove', e => {
       : [];
   }
   cvs.style.cursor = 'grabbing';
-  const fine = e.shiftKey ? 0.1 : 1;
-  const q = v => Math.round(v / fine) * fine;
+  /* What rounds a drag is Snap, and it is the only thing that does.
+     Grid, Dimensions and Rulers are all purely visual — the grid draws
+     10 cm squares and has never had anything to say about the 1 cm
+     step. With Snap off a drag moves freely, to the hundredth; Shift
+     is the fine override either way, so you can still work in tenths
+     without giving up the alignment guides. */
+  const fine = e.shiftKey ? 0.1 : S.opt.snap ? 1 : 0.01;
+  const q = v => rnd(Math.round(v / fine) * fine, 2);
   const da = pt.a - drag.a0, db = pt.b - drag.b0;
   drag.moved = true;
 
@@ -869,6 +884,35 @@ function positionFields(o) {
       </div>`;
 }
 
+/* The four clearances round something stuck to a plinth face, measured
+   to the face rather than to the case. That is the frame you are
+   actually working in when you are placing a caption on a plinth — and
+   since dragging the panel now moves the plinth it is glued to, this is
+   where its place on the face gets set. */
+function faceFields(o) {
+  const f = faceOf(o);
+  if (!f) return '';
+  const b = bbox(o);
+  const g = v => rnd(v, 1);
+  return `
+      <div class="fields two">
+        ${fld('From its left', 'iFaceL', g(b.x0 - f.x), { step: 0.5 })}
+        ${fld('From its right', 'iFaceR', g(f.x + f.w - b.x1), { step: 0.5 })}
+      </div>
+      <div class="fields two">
+        ${fld('From its bottom', 'iFaceB', g(o.wallY || 0), { step: 0.5 })}
+        ${fld('From its top', 'iFaceT', g(f.top - ((o.wallY || 0) + o.h)), { step: 0.5 })}
+      </div>
+      <div class="row">
+        <button class="btn sm" id="iFaceCentre" style="flex:1">Centre on the face</button>
+        <button class="btn sm" id="iFaceFit" style="flex:1">Fit the face</button>
+      </div>
+      <p class="note">Measured to the front of ${esc(f.name)}. Dragging this in the case moves
+      the plinth &mdash; they are glued together and travel as one &mdash; so where it sits on
+      the face is typed here. <b>Fit the face</b> sizes it to the whole front with
+      ${FACE_MARGIN} cm showing all round.</p>`;
+}
+
 /* the same four clearances for a shelf or a plinth, which have no
    orientation to complicate them */
 function structPosition(o) {
@@ -886,7 +930,19 @@ function structPosition(o) {
 function fld(lab, id, value, { step = 0.5, min = null } = {}) {
   return `<label class="f"><span>${lab}</span><input type="number" id="${id}" value="${value}" step="${step}"${min !== null ? ` min="${min}"` : ''}></label>`;
 }
-const shownLean = o => o.leanFrom === 'flat' ? 90 - (o.lean || 0) : (o.lean || 0);
+/* The angle stated the way the view states it: from upright in the
+   elevation, from flat looking down. So a 10° lean reads as 80° in
+   plan. The drawing in front of you is the datum, which is why the
+   old "15° from flat" wording has gone — beside a plan it was telling
+   you something you could already see, and beside an elevation it
+   depended on a setting buried three fields away.
+
+   `lean` is still stored as degrees from upright everywhere, and
+   `leanFrom` is still carried on the object so older files open
+   unchanged; it simply no longer decides how anything reads. */
+const shownLean = o => S.view === 'plan' ? 90 - (o.lean || 0) : (o.lean || 0);
+const storedLean = v => S.view === 'plan' ? 90 - v : v;
+const leanDatum = () => S.view === 'plan' ? 'flat' : 'upright';
 
 const LOCKBAR = `<section class="sect lockbar">
   <div class="row">
@@ -959,6 +1015,17 @@ function renderInspector() {
           <label class="f"><span>Fill</span><input type="color" id="iColour" value="${o.colour || '#ffffff'}"></label>
         </div>
         <button class="btn sm" id="iFitText">Set the type as large as it will go</button>
+        ${faceOf(o)
+        ? `<button class="btn sm" id="iGrowFace">Grow the panel to fit the text</button>
+           <p class="note">Takes the plinth's width, less ${FACE_MARGIN} cm each side, and finds the
+           height the wording needs at ${rnd(textSizeOf(o), 2)} cm type. Capped by the plinth's own height.</p>`
+        : `<div class="row">
+             <button class="btn sm" id="iGrowProp" style="flex:1">Grow to fit &mdash; keep proportions</button>
+             <button class="btn sm" id="iGrowTall" style="flex:1">Grow taller only</button>
+           </div>
+           <p class="note">The reverse of the button above: the type stays at ${rnd(textSizeOf(o), 2)} cm and the
+           board grows to suit it. Keeping proportions gives the smallest enlargement of the same shape,
+           which may be taller than strictly needed; growing taller keeps the width you chose.</p>`}
         ${panelFits(o) ? '' : '<p class="warnbox">The text runs past the bottom of the panel. Make the panel taller, or the type smaller.</p>'}
         <button class="btn sm ghost" id="iToShape">Turn it into a shape&hellip;</button>` : ''}
       ${isShape(o) ? `<div class="row">
@@ -970,7 +1037,7 @@ function renderInspector() {
       <div class="readout">
         <span>occupies <b>${rnd(b.x1 - b.x0)} &times; ${rnd(b.y1 - b.y0)}</b> cm</span>
         <span>base <b>${rnd(b.y0)}</b> · top <b>${rnd(b.y1)}</b></span>
-        <span>on the deck <b>${rnd(footprint(o).d)}</b> cm${(o.lean || 0) > 0.5 ? ` <i style="font-style:normal;color:var(--ink-3)">(${rnd(o.depth, 2)} cm thick, ${leanText(o)})</i>` : ''}</span>
+        <span>on the deck <b>${rnd(footprint(o).d)}</b> cm${(o.lean || 0) > 0.5 ? ` <i style="font-style:normal;color:var(--ink-3)">(${rnd(o.depth, 2)} cm thick, ${leanLabel(o)})</i>` : ''}</span>
       </div>
       ${warn.length ? `<p class="warnbox">Sticks out: ${warn.join('; ')}.</p>` : ''}
       <div class="fields">
@@ -1012,14 +1079,13 @@ function renderInspector() {
       <label class="f full"><span>Rests on</span><select id="iSupport">
         ${supportList().map(s => `<option value="${s.id}"${s.id === o.support ? ' selected' : ''}>${esc(s.name)} &mdash; top at ${rnd(s.top)} cm</option>`).join('')}
       </select></label>
-      <div class="row">
-        <label class="f" style="flex:1"><span>Lean measured from</span><select id="iLeanFrom">
-          <option value="upright"${o.leanFrom !== 'flat' ? ' selected' : ''}>Upright</option>
-          <option value="flat"${o.leanFrom === 'flat' ? ' selected' : ''}>Flat</option>
-        </select></label>
-        <label class="f" style="width:70px"><span>Angle</span><input type="number" id="iLeanNum" min="0" max="90" step="1" value="${rnd(shownLean(o))}"></label>
-      </div>
+      <label class="f full"><span>Angle from ${leanDatum()}</span><input type="number" id="iLeanNum" min="0" max="90" step="1" value="${rnd(shownLean(o))}"></label>
       <input type="range" id="iLean" min="0" max="90" value="${rnd(shownLean(o))}">
+      <p class="note">Stated the way this view states it &mdash; ${S.view === 'plan'
+        ? 'looking down, so <b>0&deg;</b> is flat on the deck and <b>90&deg;</b> is standing upright'
+        : 'in elevation, so <b>0&deg;</b> is upright and <b>90&deg;</b> is flat on the deck'}.
+      Switch views and the number changes but the object does not: an object leaning 10&deg; off
+      upright shows 10 here and 80 in ${S.view === 'plan' ? 'the elevation' : 'plan'}.</p>
       <div class="readout"><span>base <b>${rnd(supportOf(o).top + standLift(o))}</b> cm</span><span>seen height <b>${rnd(L.h)}</b></span><span>deck used <b>${rnd(f.d)}</b> cm</span></div>`;
     } else if (o.mount === 'wall') {
       const f = faceOf(o);
@@ -1093,15 +1159,21 @@ function renderInspector() {
       <div class="readout"><span>drawn as <b>${planMode(o)}</b></span></div>
     </section>
 
+    ${faceOf(o) ? `<section class="sect">
+      <h2>On the face of ${esc(faceOf(o).name)}</h2>
+      ${faceFields(o)}
+    </section>` : ''}
+
     <section class="sect">
-      <h2>Position</h2>
+      <h2>Position${faceOf(o) ? ' in the case' : ''}</h2>
       ${positionFields(o)}
       <div class="row">
         <button class="btn" id="iCentre" style="flex:1">Centre it</button>
       </div>
       <p class="note">Every edge is measured to the case, and setting any one of them
       moves the object &mdash; they are six ways of saying the same thing.${
-        o.mount === 'placed' ? ' Its height is set by what it rests on, so top and bottom are shown but not typed.' : ''}</p>
+        o.mount === 'placed' ? ' Its height is set by what it rests on, so top and bottom are shown but not typed.' : ''}${
+        faceOf(o) ? ' Moving it from here takes the plinth with it.' : ''}</p>
     </section>
 
     <section class="sect">
@@ -1218,6 +1290,24 @@ function bindInspector(o) {
     toast(`Set to ${rnd(o.textSize, 2)} cm — about ${ptOf(o.textSize)} pt`);
     commit();
   });
+  /* The reverse of iFitText: the type stays as set and the board grows
+     to suit it. An honest failure matters here — if the wording will not
+     fit even at the cap it grows as far as it can and says what it would
+     have needed, rather than stopping at the cap without a word. */
+  const grow = mode => () => {
+    if (!o.text || !o.text.trim()) { toast('Write something on the panel first'); return; }
+    const g = panelGrow(o, mode);
+    if (!g.need) { toast('That wording will not fit at this type size however large the panel — shorten it, or set the type smaller.'); return; }
+    const was = `${rnd(o.w, 2)} × ${rnd(o.h, 2)}`;
+    o.w = g.w; o.h = g.h;
+    commit();
+    if (g.ok) toast(`Panel ${was} → ${rnd(g.w, 2)} × ${rnd(g.h, 2)} cm at ${rnd(textSizeOf(o), 2)} cm type`);
+    else toast(`Grown to ${rnd(g.w, 2)} × ${rnd(g.h, 2)} cm, as far as there is room. The wording needs ${g.need.w} × ${g.need.h} cm at ${rnd(textSizeOf(o), 2)} cm type — make the type smaller, or shorten it.`);
+  };
+  on('iGrowProp', 'click', grow('prop'));
+  on('iGrowTall', 'click', grow('tall'));
+  on('iGrowFace', 'click', grow('face'));
+
   on('iBold', 'click', () => toggleTitleLine(o));
   on('iColour', 'input', e => { o.colour = e.target.value; draw(); });
   on('iColour', 'change', () => commit());
@@ -1258,7 +1348,17 @@ function bindInspector(o) {
     setNum('iFromFr', v => moveWithKids('z')(rnd(S.cs.d - v - o.d, 2)));
   }
   if (o.type === 'object') {
-    const shiftX = (d) => { o.x = rnd(o.x + d, 2); };
+    /* Glued to a plinth face, its position in the case *is* the
+       plinth's, so sliding it sideways from here slides the plinth and
+       everything else riding on it — the same thing dragging it does.
+       Where it sits on the face is set by the four fields above. */
+    const facePl = faceOf(o) ? byId(faceOf(o).id) : null;
+    const shiftX = (d) => {
+      if (facePl) {
+        facePl.x = rnd(facePl.x + d, 2);
+        for (const k of childrenOf(facePl.id)) k.x = rnd(k.x + d, 2);
+      } else o.x = rnd(o.x + d, 2);
+    };
     const shiftZ = (d) => { o.z = rnd(o.z + d, 2); };
     const shiftY = (d) => {
       if (o.mount === 'hanging') o.hangY = rnd((o.hangY || 0) + d, 2);
@@ -1270,6 +1370,32 @@ function bindInspector(o) {
     setNum('iFromFr', v => { const f = footprint(o); shiftZ((S.cs.d - v) - (f.z + f.d)); });
     setNum('iFromB', v => shiftY(v - bbox(o).y0));
     setNum('iFromT', v => shiftY((S.cs.h - v) - bbox(o).y1));
+
+    /* the same four, measured to the plinth face instead of the case */
+    if (facePl) {
+      const F = () => faceOf(o);
+      const onFaceX = (d) => { o.x = rnd(o.x + d, 2); };
+      setNum('iFaceL', v => { const f = F(); onFaceX(f.x + v - bbox(o).x0); });
+      setNum('iFaceR', v => { const f = F(); onFaceX((f.x + f.w - v) - bbox(o).x1); });
+      setNum('iFaceB', v => shiftY(v - bbox(o).y0));
+      setNum('iFaceT', v => { const f = F(); shiftY((f.top - v) - bbox(o).y1); });
+      on('iFaceCentre', 'click', () => {
+        const f = F(), b = bbox(o);
+        onFaceX(f.x + (f.w - (b.x1 - b.x0)) / 2 - b.x0);
+        shiftY((f.top - (b.y1 - b.y0)) / 2 - bbox(o).y0);
+        commit();
+        toast(`Centred on the front of ${f.name}`);
+      });
+      on('iFaceFit', 'click', () => {
+        const fit = faceFit(o); if (!fit) return;
+        o.w = fit.w; o.h = fit.h;
+        const f = F();
+        onFaceX(f.x + FACE_MARGIN - bbox(o).x0);
+        shiftY(FACE_MARGIN - bbox(o).y0);
+        commit();
+        toast(`Sized to the front of ${f.name} — ${fit.w} × ${fit.h} cm, ${FACE_MARGIN} cm showing all round`);
+      });
+    }
   }
 
   if (o.type === 'object') {
@@ -1300,10 +1426,9 @@ function bindInspector(o) {
     });
     on('iThumb', 'click', () => openWizard({ edit: o.id, step: 1 }));
 
-    const applyLean = shown => {
-      const s = clamp(shown, 0, 90);
-      o.lean = o.leanFrom === 'flat' ? 90 - s : s;
-    };
+    /* what you type means what the view says it means, and comes back
+       out as degrees from upright, which is how it is always stored */
+    const applyLean = shown => { o.lean = rnd(storedLean(clamp(shown, 0, 90)), 2); };
     on('iLean', 'input', e => {
       applyLean(num(e.target.value));
       const n = $('#iLeanNum'); if (n) n.value = rnd(num(e.target.value));
@@ -1311,7 +1436,6 @@ function bindInspector(o) {
     });
     on('iLean', 'change', () => commit());
     on('iLeanNum', 'change', e => { applyLean(num(e.target.value)); commit(); });
-    on('iLeanFrom', 'change', e => { o.leanFrom = e.target.value; commit(); });
 
     on('iStandKind', 'change', e => {
       const kind = e.target.value;
@@ -1350,16 +1474,28 @@ function bindInspector(o) {
       const b = e.target.closest('[data-mount]'); if (!b) return;
       setMount(o, b.dataset.mount); commit();
     });
-    /* centre on whatever it belongs to — its plinth face, the shelf it
-       stands on — falling back to the case */
+    /* Centre on whatever it belongs to — its plinth face, the shelf it
+       stands on — falling back to the case.
+
+       Both axes, in both views. It used to centre x only unless you
+       happened to be looking down, so pressing it in elevation left the
+       object off-centre front to back on the plinth top and the button
+       quietly meant two different things depending on the view. Which
+       axes are free is a property of the mount, not of where you happen
+       to be standing. */
     on('iCentre', 'click', () => {
       const host = faceOf(o) || (o.mount === 'placed' ? supportOf(o) : null);
       const b = bbox(o), w = b.x1 - b.x0;
       const lo = host ? host.x : 0, span = host ? host.w : S.cs.w;
-      o.x = rnd(o.x + (lo + (span - w) / 2 - b.x0), 1);
-      if (S.view === 'plan' && o.mount === 'placed' && host) {
+      /* two decimals: rounding to one left up to half a millimetre of
+         error, which is enough to keep the overhang warning lit */
+      o.x = rnd(o.x + (lo + (span - w) / 2 - b.x0), 2);
+      /* A fixed panel takes its z from the face it is stuck to, so there
+         is nothing to centre; everything else is free front to back. */
+      if (o.mount !== 'wall') {
         const f = footprint(o);
-        o.z = rnd(clamp(host.z + (host.d - f.d) / 2, host.z, Math.max(host.z, host.z + host.d - f.d)), 1);
+        const zlo = host ? host.z : 0, zspan = host ? host.d : S.cs.d;
+        o.z = rnd(clamp(zlo + (zspan - f.d) / 2, zlo, Math.max(zlo, zlo + zspan - f.d)), 2);
       }
       commit();
       toast(host ? `Centred on ${host.name}` : 'Centred in the case');

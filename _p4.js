@@ -225,17 +225,16 @@ $('#lineCm').addEventListener('input', e => { W.lineCm = num(e.target.value); re
 $('#objD').addEventListener('input', e => { W.depthCm = Math.max(0.1, num(e.target.value)); });
 $('#objName').addEventListener('input', e => { W.name = e.target.value; });
 
+/* the wizard states its datum in words rather than taking it from a
+   view it does not have — always degrees from upright, as stored */
 $('#lean').addEventListener('input', e => {
-  const shown = +e.target.value;
-  W.lean = W.leanFrom === 'flat' ? 90 - shown : shown;
-  $('#leanNum').value = shown;
+  W.lean = clamp(+e.target.value, 0, 90);
+  $('#leanNum').value = W.lean;
 });
 $('#leanNum').addEventListener('change', e => {
-  const shown = clamp(num(e.target.value), 0, 90);
-  W.lean = W.leanFrom === 'flat' ? 90 - shown : shown;
+  W.lean = clamp(num(e.target.value), 0, 90);
   syncLeanFields();
 });
-$('#leanFrom').addEventListener('change', e => { W.leanFrom = e.target.value; syncLeanFields(); });
 $('#wallYNum').addEventListener('change', e => { W.wallY = num(e.target.value); });
 $('#faceSel').addEventListener('change', e => { W.face = e.target.value; });
 $('#supportSel').addEventListener('change', e => { W.support = e.target.value; });
@@ -426,7 +425,13 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if
    Boot
    ============================================================ */
 
-(async function boot() {
+/* Kept rather than discarded so anything that needs to know the opening
+   read of storage has finished can wait for it. Nothing in the app does
+   — boot is the last thing to run — but the test suite replaces `store`
+   with an in-memory stub partway through, and without something to wait
+   on, a slow storage answer could arrive afterwards and load a case over
+   the one under test. */
+const BOOTED = (async function boot() {
   syncCaseFields();
   updateZoomLabel();
   setView('front');

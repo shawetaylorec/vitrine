@@ -39,6 +39,11 @@ let BGIMG = null;           // back-wall image
 let PREVIEW = false;        // full-screen, no drafting furniture
 let HOVER = null;           // what the pointer is over, for a soft outline
 let EXPORTING = false;      // true while painting offscreen for a file
+/* What the export multiplies the canvas by. VW/VH stay in CSS pixels
+   while the transform does the scaling, so T.sc is not the whole story
+   about how big anything comes out in the file. Anything judging
+   legibility rather than placing ink has to multiply by this. */
+let EXPORT_SC = 1;
 /* Preview strips the surround and the drafting furniture together. An
    export of just the case wants the surround gone but may still want
    the grid and the rulers, so they are separate questions. */
@@ -266,12 +271,31 @@ function outOfCase(o) {
   if (o.mount === 'placed') {
     const s = supportOf(o);
     const c = contactPatch(o);
-    if (c.x < s.x - 0.05 || c.x + c.w > s.x + s.w + 0.05) msgs.push('overhanging ' + s.name);
-    if (c.z < s.z - 0.05 || c.z + c.d > s.z + s.d + 0.05) msgs.push('deeper than ' + s.name);
+    /* Standing off-centre and being too big to fit at all are different
+       complaints, and saying only "overhanging" for both sends you
+       hunting for a position that does not exist. Centre it cannot cure
+       a foot wider than the plinth, and used to get the blame for it. */
+    const tooWide = c.w > s.w + 0.05, tooDeep = c.d > s.d + 0.05;
+    if (c.x < s.x - 0.05 || c.x + c.w > s.x + s.w + 0.05) {
+      msgs.push(tooWide
+        ? `overhanging ${s.name} — its foot is ${rnd(c.w)} cm across and ${s.name} only ${rnd(s.w)}, so moving it will not help`
+        : 'overhanging ' + s.name);
+    }
+    if (c.z < s.z - 0.05 || c.z + c.d > s.z + s.d + 0.05) {
+      msgs.push(tooDeep
+        ? `deeper than ${s.name} — its foot takes ${rnd(c.d)} cm and ${s.name} is only ${rnd(s.d)} deep`
+        : 'off the front or back of ' + s.name);
+    }
   }
   const f = faceOf(o);
   if (f) {
-    if (b.x0 < f.x - 0.05 || b.x1 > f.x + f.w + 0.05) msgs.push('wider than the front of ' + f.name);
+    /* same distinction as for a plinth top: too big to fit is not the
+       same complaint as sitting off to one side */
+    if (b.x0 < f.x - 0.05 || b.x1 > f.x + f.w + 0.05) {
+      msgs.push((b.x1 - b.x0) > f.w + 0.05
+        ? `wider than the front of ${f.name} — the board is ${rnd(b.x1 - b.x0)} cm and the face only ${rnd(f.w)}`
+        : `off the edge of ${f.name}'s front`);
+    }
     if (b.y1 > f.top + 0.05) msgs.push('above the top of ' + f.name);
   }
   return msgs;
@@ -801,9 +825,11 @@ function leanRake(x, y, w, h, col, alpha) {
   ctx.restore();
 }
 
-/* worded the way it was typed in, so it matches the inspector */
-function leanText(o) {
-  return `${rnd(shownLean(o))}° from ${o.leanFrom === 'flat' ? 'flat' : 'upright'}`;
+/* The angle, stated by the view it is drawn in — see shownLean. The
+   number alone: what it is measured from is the picture you are looking
+   at, and writing "from flat" beside a plan only says it twice. */
+function leanLabel(o) {
+  return `${rnd(shownLean(o))}°`;
 }
 
 function hatch(x, y, w, h) {
@@ -916,6 +942,16 @@ const ptOf = cm => Math.round(cm * 28.35);
 const FIT_SC = 20;                        // px per cm, for fit maths only
 const LINE_H = 1.32;
 
+/* Whether type of this many drawing pixels is too small to set as
+   words, and should be greeked as grey rules instead.
+
+   The judgement is about what will be legible in the finished picture,
+   so it has to be made in the pixels that actually get written. An
+   export scales the canvas by EXPORT_SC and leaves VW/VH in CSS pixels,
+   so measuring against the on-screen scale alone greeked type in a ×4
+   file that would have come out perfectly readable. */
+const greeked = sizePx => sizePx * (EXPORTING ? EXPORT_SC : 1) < 4;
+
 function panelLines(o, wpx, sizePx) {
   const padPx = PANEL_PAD * (T ? T.sc : 1);
   return layoutText(o.text || '', Math.abs(wpx) - padPx * 2, sizePx);
@@ -939,6 +975,88 @@ function panelFitsAt(o, cm) {
 function panelFits(o) {
   if (o.render !== 'panel' || !o.text) return true;
   return panelFitsAt(o, textSizeOf(o));
+}
+
+/* How much plinth is left showing round a panel fitted to its face.
+   Roughly a centimetre all round — enough that the board reads as a
+   board applied to the plinth rather than as the plinth's own front. */
+const FACE_MARGIN = 1;
+
+/* The board a panel fitted to its plinth face wants: the whole face,
+   less the margin, on all four sides. */
+function faceFit(o) {
+  const f = faceOf(o);
+  if (!f) return null;
+  return {
+    w: rnd(Math.max(1, f.w - FACE_MARGIN * 2), 2),
+    h: rnd(Math.max(1, f.top - FACE_MARGIN * 2), 2)
+  };
+}
+
+/* The reverse of bestTextSize: hold the type at the size you set, and
+   solve for the board it needs.
+
+   With the width fixed the wrap cannot change, so the line count is
+   already settled and the height follows in closed form — bisecting
+   would be a slower route to the same number. Growing both together is
+   the lumpy case, because widening the board reflows the text and can
+   pull a word up to save a whole line, so that one bisects on a scale
+   factor rather than stepping.
+
+   Either way the answer is rounded **up** and then verified, which is
+   the opposite of bestTextSize. There, down was the safe direction
+   because smaller type always fits; here a bigger board always fits, so
+   up is the safe one.
+
+   It never returns a board smaller than the one you have — this is a
+   grow, not a tidy-up — and when the wording will not fit even at the
+   cap it says so and reports the size it would actually need. Stopping
+   silently at the cap is precisely the trap auto-fit fell into. */
+function panelGrow(o, mode) {
+  const cm = textSizeOf(o);
+  const f = faceOf(o);
+  /* on a face the plinth is the cap; on the back wall, the case */
+  const cap = f
+    ? faceFit(o)
+    : { w: rnd(S.cs.w, 2), h: rnd(S.cs.h, 2) };
+  const ceil2 = v => Math.ceil(v * 100) / 100;
+  const fits = (w, h) => panelFitsAt({ ...o, w, h }, cm);
+  const sizePx = Math.max(1, cm * FIT_SC);
+  const padPx = PANEL_PAD * FIT_SC;
+  /* the height a board of this width needs, exactly */
+  const needH = w => {
+    const n = layoutText(o.text || '', w * FIT_SC - padPx * 2, sizePx).length;
+    return ceil2((n * sizePx * LINE_H + padPx * 2) / FIT_SC);
+  };
+
+  if (mode === 'prop') {
+    let hi = 1;
+    while (hi < 512 && !fits(o.w * hi, o.h * hi)) hi *= 2;
+    if (!fits(o.w * hi, o.h * hi)) return { mode, cap, ok: false, need: null, w: cap.w, h: cap.h };
+    let lo = hi / 2;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(o.w * mid, o.h * mid)) hi = mid; else lo = mid;
+    }
+    let k = Math.max(1, ceil2(hi));
+    /* verify, and creep up if the rounding landed a hair short */
+    for (let i = 0; i < 200 && !fits(o.w * k, o.h * k); i++) k = rnd(k + 0.01, 2);
+    const need = { w: ceil2(o.w * k), h: ceil2(o.h * k) };
+    const kCap = Math.min(cap.w / o.w, cap.h / o.h);
+    const ok = need.w <= cap.w + 0.005 && need.h <= cap.h + 0.005;
+    /* over the cap it still grows as far as it can — the shortfall is
+       reported, not swallowed, and a bigger board is still progress */
+    const use = ok ? k : Math.max(1, rnd(kCap, 2));
+    return { mode, cap, ok, need, w: rnd(o.w * use, 2), h: rnd(o.h * use, 2) };
+  }
+
+  /* width stays as it is, or becomes the plinth's less its margin, and
+     only the height grows */
+  const w = Math.min(mode === 'face' ? cap.w : rnd(o.w, 2), cap.w);
+  let need = Math.max(rnd(o.h, 2), needH(w));
+  for (let i = 0; i < 200 && !fits(w, need); i++) need = rnd(need + 0.01, 2);
+  const ok = need <= cap.h + 0.005;
+  return { mode, cap, ok, need: { w, h: need }, w, h: ok ? need : cap.h };
 }
 
 /* The largest size the wording still fits at. Bisecting beats stepping
@@ -1019,7 +1137,7 @@ function paintBody(o, dx, dy, wpx, hpx, forPlan) {
   ctx.save();
   ctx.beginPath(); ctx.rect(dx, dy, wpx, hpx); ctx.clip();
 
-  if (sizePx < 4) {
+  if (greeked(sizePx)) {
     /* too small to read at this zoom — greek it, so a full panel still
        looks full and you can see how much of it the wording uses */
     ctx.fillStyle = C.ink; ctx.globalAlpha = .45;
@@ -1051,15 +1169,19 @@ function drawObjectFront(o) {
   const sel = !PREVIEW && o.id === S.sel;
 
   if (o.mount === 'hanging') {
+    /* A wire is a wire whether or not the thing is selected. Drawing it
+       in the accent turned it the same colour as the dimension lines, so
+       a selected object appeared to have two measurements hanging off
+       it. Weight alone carries the selection; the colour stays grey. */
     ctx.save();
-    ctx.strokeStyle = sel ? C.accent : C.ink3;
+    ctx.strokeStyle = C.ink3;
     ctx.lineWidth = sel ? 1.6 : 1.1;
     for (const wr of (o.wires || [])) {
       const att = attachWorld(o, wr);
       const a = w2s(att.x, o.rail ?? S.rail);   /* plumb, so straight above */
       const b = w2s(att.x, att.y);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      ctx.fillStyle = sel ? C.accent : C.ink3;
+      ctx.fillStyle = C.ink3;
       ctx.beginPath(); ctx.arc(a.x, a.y, 2.6, 0, 7); ctx.fill();
       if (sel) { ctx.beginPath(); ctx.arc(b.x, b.y, 2.6, 0, 7); ctx.fill(); }
     }
@@ -1098,10 +1220,6 @@ function drawObjectFront(o) {
   }
 }
 
-function leanLabel(o) {
-  const shown = o.leanFrom === 'flat' ? 90 - o.lean : o.lean;
-  return `${rnd(shown)}° ${o.leanFrom === 'flat' ? 'from flat' : ''}`.trim();
-}
 
 function attachWorld(o, wr) {
   const L = layout(o);
@@ -1237,7 +1355,7 @@ function drawPlan() {
       ctx.beginPath(); ctx.moveTo(lx, ly + lh - 1); ctx.lineTo(lx + lw, ly + lh - 1); ctx.stroke();
       ctx.restore();
       if (h > 9 && w > 30) {
-        label(leanText(o), a.x + w / 2, w2s(f.x, f.z + f.d).y - 8,
+        label(leanLabel(o), a.x + w / 2, w2s(f.x, f.z + f.d).y - 8,
           { size: 9, font: MONO, fill: tint, box: true, bg: caseGround() });
       }
     }

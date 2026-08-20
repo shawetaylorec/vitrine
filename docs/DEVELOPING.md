@@ -36,15 +36,36 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 201 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 267 assertions covering the
 cut-out crop, dragging the measurement box, support heights, stand footprints, derived
-wire lengths, lean maths in both reference frames, yaw, rotation, plan-shape selection,
-panels fixed to plinth faces, panel auto-fit and title lines, depth ordering, overhang
-detection, the shape picker, support stickiness while dragging, alignment snapping,
-plan pick order, cascade placement, base footprints and what they excuse, the six
-clearance fields, duplication keeping its picture, the lock, the export crop, undo and
+wire lengths, lean maths in both reference frames and the datum following the view,
+yaw, rotation, plan-shape selection, panels fixed to plinth faces, panel auto-fit and
+title lines, growing a board to fit the type both ways and its honest failure, depth
+ordering, overhang detection and telling too-big from off-centre, the shape picker,
+support stickiness while dragging, alignment snapping, Snap governing the drag step,
+dragging a face panel by its plinth, plan pick order, cascade placement, base footprints
+and what they excuse, the six clearance fields and the four face clearances, centring in
+both views, a selected object's wires staying grey, duplication keeping its picture, the
+lock, the export crop and the export scale reaching the greeking threshold, undo and
 redo, the case library, the save/open round trip, opening a file written by an older
 build, and PNG and JPEG export.
+
+The suite is run several times before anything is committed — a real race was found that
+way, and two long-standing flakes were tracked down the same way. Both were the test's
+own fault rather than the app's:
+
+- **PNG export reporting zero bytes**, about one run in four. Under
+  `--virtual-time-budget` the clock runs far faster than the encoder does, so a wait of
+  "six seconds" expired before `toBlob` had finished. The wait now counts event-loop
+  turns rather than milliseconds — every turn is another chance for the blob to arrive,
+  whatever the clock is doing.
+- **"renaming the open case renames it live"**, about three runs in eight. `boot()`
+  reads storage asynchronously; if that read landed *after* the case-library test
+  swapped in its in-memory stub, boot found a non-empty index, saw an empty undo history
+  and opened a case straight over the one under test. `boot()`'s promise is now kept as
+  `BOOTED` and the test waits on it before taking storage away.
+
+Ten consecutive clean runs since.
 
 Append a hash to the URL to screenshot a different state:
 
@@ -55,7 +76,9 @@ Append a hash to the URL to screenshot a different state:
 | `#dark` | dark theme |
 | `#wiz` | the cut-out step, erase brush selected |
 | `#wiz2` | the size step, with the measurement box and its grips |
-| `#wiz3` | the mounting step — also asserts the cursor is visible there |
+| `#wiz3` | the mounting step, on wires — also asserts the cursor is visible there |
+| `#wiz3p` | the mounting step, placed — where the lean field is |
+| `#face` | a panel fixed to a plinth face, with its own clearances |
 | `#export` | the export dialogue |
 | `#sched` | the schedule |
 | `#shapes` | the shape picker |
@@ -96,8 +119,23 @@ rotated by `rot`. Three cases:
 Everything else derives from `layout`: `corners`, `bbox`, `footprint`, `envelope`, hit
 testing and the dimension lines.
 
-**Lean is always stored as degrees from upright.** `leanFrom` only changes how it is
-typed and displayed — `shownLean()` does the conversion.
+**Lean is always stored as degrees from upright**, and **the view decides how it is
+stated**: from upright in elevation, from flat in plan, so a 10° lean reads as 80°
+looking down. `shownLean()` converts out and `storedLean()` converts back; `leanDatum()`
+gives the word for a label. Both the display and the input flip, because a field that
+disagreed with the tag drawn beside it would be worse than either.
+
+The datum used to be a property, `leanFrom`, and the labels said "15° from flat". Two
+things were wrong with that. Beside a plan the wording repeated what the picture already
+showed; beside an elevation it depended on a selector three fields away, so the same
+number meant different things in two objects with no visible reason. The property is
+still carried on every object and still read by `upgrade()`, so older files open
+unchanged — it simply no longer decides anything.
+
+Two places have no view to take a datum from, and both name one instead: the wizard's
+mounting step says **lean from upright** on the field and spells out both ends in its
+help, and the schedule's column is headed `Lean from upright`, because a document that
+leaves the app cannot rely on which way somebody was looking.
 
 `leanParts(o)` projects a slab `h` tall and `depth` thick tipped back by `lean`. The
 elevation gets `h·cos` — the foreshortened face and nothing more, because drawing the
@@ -129,6 +167,17 @@ otherwise the whole footprint. The overhang warnings and `landOn` test that patc
 not the widest part, so a bowl on a stem or a plate on a small easel is not accused of
 overhanging a plinth its foot sits well inside. The case tests still use the full
 extent — a top that projects past the glass is a real problem however narrow the foot.
+
+**Standing off-centre and being too big to fit are different complaints.** `outOfCase()`
+separates them: if the patch is wider than the surface it names both measurements and
+says moving it will not help; otherwise it is the plain overhang message. The same
+distinction is made for the *z* axis and for anything stuck to a plinth face.
+
+This came out of a report that *Centre it* "slightly misaligns it" — an object still
+calling itself overhanging after being centred. A probe over 540 configurations of yaw,
+spin, lean, stands and feet found no case where centring left a patch that would have
+fitted, so the geometry was innocent both times it was accused: the *x* complaint was
+true and unhelpful, and the *z* one was the real bug, described below.
 
 ## Mounting
 
@@ -214,6 +263,17 @@ for a hung object, and nothing for a placed object, whose base is decided by its
 support. It runs after the drag quantiser, so an aligned position is exact rather than
 rounded to the nudge grid.
 
+**`S.opt.snap` is the only option that changes how anything moves**, and it governs the
+drag step as well as the guides: on, a drag quantises to 1 cm; off, to 0.01, which is
+free movement in any practical sense. `Shift` is a temporary 0.1 either way.
+
+It used to quantise to 1 cm unconditionally, consulting neither option, so nothing in
+the interface restored free movement. **Grid** was the reasonable place to look for it
+and the wrong place to put it: the grid draws 10 cm squares and sits beside Dimensions
+and Rulers, which are purely visual, and its squares have nothing to do with a 1 cm
+step. Snap is where the behaviour belongs, so the label says **Snap to 1 cm** and the
+rail carries a line saying which of the four toggles moves things and which only draw.
+
 ## Position
 
 `positionFields(o)` renders all six clearances round an object, each measured to the
@@ -225,6 +285,24 @@ The ones that are a consequence rather than a setting are shown but disabled: th
 height of something standing on a plinth, the depth of a panel stuck to a face. Letting
 you type those would only mean watching the number spring back.
 
+`faceFields(o)` is the same idea in the plinth's frame rather than the case's: four
+clearances to the front of the plinth a panel is stuck to, plus *Centre on the face* and
+*Fit the face*. It exists because dragging a face panel now moves the plinth, so typing
+is the only way left to place it on the face — see **What travels with a plinth**.
+
+For a face panel the *case* clearances move the plinth too, carrying everything on it.
+Two frames, and each is internally consistent: the case fields say where the assembly
+is, the face fields say where the panel sits on it. Sliding the panel alone from the
+case fields would have made typing and dragging mean different things.
+
+**`iCentre` centres on both axes, in both views.** It used to centre *x* always and *z*
+only if you happened to be in plan, so pressing it in elevation left an object
+off-centre front to back on a plinth top and the button quietly meant two different
+things depending on where you were standing. Which axes are free is a property of the
+mount — a fixed panel takes its *z* from its face and has none — and never of the view.
+It rounds to two decimals: one left up to half a millimetre of error, which is enough to
+keep the overhang warning lit on an object that had just been centred.
+
 ## Panel text
 
 Panel type is sized in centimetres (`textSize`), converted to pixels at draw time by
@@ -234,6 +312,13 @@ on screen. `layoutText` wraps to a width while keeping authored line breaks;
 `panelFits` runs the same wrap and compares against the panel height. Below about four
 pixels the text is greeked as grey rules rather than skipped, so a full panel still
 reads as full.
+
+**Greeking is judged in the pixels that actually get written**, which is what `greeked()`
+is for. `renderSheet` scales the canvas by the export factor while leaving `VW`/`VH` in
+CSS pixels, so `T.sc` is not the whole story about how big anything comes out in a file:
+measuring against it alone greeked type in a ×4 export that would have been perfectly
+legible. `EXPORT_SC` carries the factor, and `greeked()` multiplies by it while
+`EXPORTING`.
 
 A line wrapped in `**` is a title and is set bold. Whole lines rather than words:
 what wants weight on a panel is the heading, and this way you can see at a glance
@@ -254,6 +339,30 @@ thirty times, then **rounds down and verifies**. Rounding to nearest was a real 
 bisection converges onto the boundary from below, so rounding up crossed it about half
 the time and the button produced a size that immediately reported itself as
 overflowing.
+
+**`panelGrow(o, mode)` runs the same question backwards**: hold the type, solve for the
+board. It rounds **up** and verifies, the opposite of `bestTextSize`, because the safe
+direction has reversed — there, smaller type always fits; here, a bigger board always
+does.
+
+The two modes are not the same shape of problem:
+
+- **Width fixed** (`tall`, and `face`, which takes the plinth's width less
+  `FACE_MARGIN` each side). The wrap is settled by the width alone, so the line count is
+  already decided and the height follows in closed form. Bisecting would be a slower
+  route to the same number.
+- **Both together** (`prop`, keeping the panel's proportions). This one *is* lumpy, in
+  exactly the way auto-fit is: widening the board reflows the text and can pull a word up
+  to save a whole line. So it bisects on a scale factor rather than stepping.
+
+It never returns a board smaller than the one you drew — it is a grow, not a tidy-up —
+and it gives an **honest failure**. When the wording will not fit even at the cap it
+still grows as far as there is room, and reports `need`, the size it would actually have
+taken, so the caller can say so. Stopping silently at the cap is precisely the trap
+auto-fit fell into before it learned to verify.
+
+`FACE_MARGIN` is one constant shared by `faceFit()` and `panelGrow`'s `face` mode, so
+*Fit the face* and *Grow the panel* cannot disagree about how much plinth shows.
 
 ## Choosing a support
 
@@ -435,6 +544,13 @@ soft outline costs nothing while the mouse is still. `frame()` draws both it and
 selection: a hairline box with corner ticks rather than a dashed marquee, which sits
 still over artwork instead of crawling.
 
+**The accent is the dimension colour, and nothing else on the drawing may borrow it.**
+Selecting a hung object used to turn its wires accent orange, which made them read as
+measurements — a selected picture appeared to have two more dimensions hanging off it.
+The wires stay `C.ink3` whatever is selected and the line weight alone carries the
+selection. The wire's *dimension*, in `drawDimsFor`, does stay accent: it genuinely is
+one.
+
 ## Not landing on top of each other
 
 Every `add*` helper used to place its item at one fixed default, so a second plinth or
@@ -468,3 +584,20 @@ face, but the two behave differently when the support is dragged.
 
 The drag snapshot marks each child with `stuck: k.mount === 'wall'` to tell them apart.
 Only `x` needs carrying — a face-mounted item derives its `z` from the plinth front.
+
+**And it travels the other way too: dragging a face panel drags its plinth.** A panel
+sized to the whole front covers the plinth completely, so the plinth could not be
+grabbed at all — the panel took every click, and there was no way to move the thing it
+was stuck to. Since the panel is glued on, the honest answer is that the pair are one
+object under the pointer.
+
+`pointerdown` does it by redirecting: `faceOf(hit)` resolves to the plinth and the drag
+is armed on *that*, with `pick()` and `childrenOf()` taken from it, while `select()`
+keeps the panel so the inspector still shows what was clicked. Everything downstream —
+the plan rule above, alignment, the quantiser — is untouched, because by the time the
+drag handler sees it there is nothing unusual about it: it is an ordinary plinth drag.
+
+That leaves the panel with no way to be positioned on its face by dragging, which is why
+`faceFields()` exists. It was the owner's own suggestion and it is the better half of
+the trade: a clearance from the plinth's edge is what a drawing for a fabricator wants
+anyway, and it is not something a drag was ever good at expressing.
