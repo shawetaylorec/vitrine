@@ -968,7 +968,10 @@ const store = {
 };
 
 function snapshot() {
-  return JSON.parse(JSON.stringify({ v: 3, name: S.name, cs: S.cs, rail: S.rail, bg: S.bg, opt: S.opt, items: S.items }));
+  return JSON.parse(JSON.stringify({
+    v: 3, name: S.name, cs: S.cs, rail: S.rail, bg: S.bg, opt: S.opt,
+    items: S.items, measures: S.measures
+  }));
 }
 
 /* ---------------- undo ----------------
@@ -996,6 +999,7 @@ let lastState = null;
 function undoState() {
   return JSON.stringify({
     name: S.name, cs: S.cs, rail: S.rail, level: S.level, sel: S.sel,
+    measures: S.measures,
     bg: { ...S.bg, img: putAsset(S.bg.img) },
     items: S.items.map(i => ({ ...i, png: putAsset(i.png), raw: putAsset(i.raw), topPng: putAsset(i.topPng) }))
   });
@@ -1019,6 +1023,7 @@ async function syncBitmaps() {
 async function applyState(str) {
   const d = JSON.parse(str);
   S.name = d.name; S.cs = d.cs; S.rail = d.rail; S.level = d.level ?? 'all';
+  S.measures = d.measures || [];
   S.bg = { ...d.bg, img: getAsset(d.bg.img) };
   /* If a key ever fails to resolve, keep the picture the item already
      has rather than blanking it. A silent grey rectangle where a
@@ -1134,7 +1139,7 @@ async function newCase() {
   S.cs = { w: 140, h: 160, d: 40 };
   S.rail = 156;
   S.bg = { colour: '', img: null, fade: 100 };
-  S.items = []; S.sel = null; S.level = 'all';
+  S.items = []; S.measures = []; S.sel = null; S.level = 'all';
   BMP.clear(); TOP.clear(); BMPSRC.clear(); TOPSRC.clear(); BGIMG = null;
   syncCaseFields(); renderLists(); renderInspector(); fitView(); draw();
   resetUndo();
@@ -1255,6 +1260,8 @@ async function restore(data) {
   S.bg = Object.assign({ colour: '', img: null, fade: 100 }, data.bg || {});
   S.opt = Object.assign({ grid: true, dims: true, snap: true, rulers: true, lock: false }, data.opt || {});
   S.items = data.items.map(upgrade);
+  /* a file from before the measuring tool simply has none */
+  S.measures = (data.measures || []).filter(m => m && m.view && isFinite(m.ax));
   S.sel = null;
   BMP.clear(); TOP.clear(); BMPSRC.clear(); TOPSRC.clear(); BGIMG = null;
   await syncBitmaps();

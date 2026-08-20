@@ -493,14 +493,53 @@
       'the grid being on does not round a drag — Grid is drawn, Snap is what moves things');
     S.opt.snap = wasSnap;
 
-    /* placing it on the face is typed, in the plinth's own frame */
+    /* Placing it on the face is typed, in the plinth's own frame, and
+       the four are margins rather than a position: each moves its own
+       edge and leaves the other three alone. */
+    const marg = () => {
+      const f = faceOf(panel), b = bbox(panel);
+      return {
+        L: b.x0 - f.x, R: (f.x + f.w) - b.x1,
+        B: bbox(panel).y0, T: f.top - b.y1
+      };
+    };
     renderInspector();
     ok(type('iFaceL', 3), 'the face clearances are typeable');
-    ok(Math.abs((bbox(panel).x0 - plinth.x) - 3) < 0.05,
-      `3 cm from the plinth's left puts it there (${rnd(bbox(panel).x0 - plinth.x, 2)} cm)`);
+    ok(Math.abs(marg().L - 3) < 0.05,
+      `3 cm from the plinth's left puts it there (${rnd(marg().L, 2)} cm)`);
     renderInspector(); type('iFaceT', 2);
-    ok(Math.abs((plinth.h - bbox(panel).y1) - 2) < 0.05,
-      `and 2 cm from its top likewise (${rnd(plinth.h - bbox(panel).y1, 2)} cm)`);
+    ok(Math.abs(marg().T - 2) < 0.05,
+      `and 2 cm from its top likewise (${rnd(marg().T, 2)} cm)`);
+
+    /* the fault this replaced: with the board filling the face, setting
+       one margin shoved the opposite one negative, because left, width
+       and right cannot all be free at a fixed size. Moving the edge
+       instead makes them genuinely independent. */
+    renderInspector(); press('iFaceFit');
+    const wide = rnd(panel.w, 2);
+    renderInspector(); type('iFaceR', 3);
+    ok(Math.abs(marg().R - 3) < 0.05, 'on a board fitted to the face, the right margin takes the value typed');
+    ok(Math.abs(marg().L - FACE_MARGIN) < 0.05,
+      `and the left margin stays where it was rather than going negative (${rnd(marg().L, 2)} cm)`);
+    ok(rnd(panel.w, 2) < wide, `the board narrowed to suit (${wide} → ${rnd(panel.w, 2)} cm) rather than sliding`);
+
+    /* all four at once, each holding the number it was given */
+    for (const [id, want] of [['iFaceL', 2], ['iFaceR', 3], ['iFaceB', 6], ['iFaceT', 4]]) {
+      renderInspector(); type(id, want);
+    }
+    const m4 = marg();
+    ok(Math.abs(m4.L - 2) < 0.05 && Math.abs(m4.R - 3) < 0.05 &&
+      Math.abs(m4.B - 6) < 0.05 && Math.abs(m4.T - 4) < 0.05,
+      `all four margins hold what was typed (${rnd(m4.L, 2)}, ${rnd(m4.R, 2)}, ${rnd(m4.B, 2)}, ${rnd(m4.T, 2)})`);
+    ok(Math.abs(panel.w - (plinth.w - 2 - 3)) < 0.05 && Math.abs(panel.h - (plinth.h - 6 - 4)) < 0.05,
+      `and the board is exactly what they leave (${rnd(panel.w, 2)} × ${rnd(panel.h, 2)} cm)`);
+
+    /* a margin too big to fit leaves a sliver rather than a negative */
+    renderInspector(); type('iFaceR', plinth.w + 10);
+    ok(panel.w >= 0.5 - 0.001 && panel.w < 1,
+      `an impossible margin shrinks the board to its minimum (${rnd(panel.w, 2)} cm), never past zero`);
+    renderInspector(); press('iFaceFit');
+
     renderInspector(); press('iFaceCentre');
     ok(Math.abs(((bbox(panel).x0 + bbox(panel).x1) / 2) - (plinth.x + plinth.w / 2)) < 0.05,
       'centre-on-the-face centres it across the front');
@@ -1123,6 +1162,120 @@
     }
   }
 
+  /* --- 7t. measuring lines --- */
+  {
+    S.view = 'front'; S.pan = { x: 0, y: 0 }; S.zoom = 1; S.level = 'all';
+    VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
+    S.measures = [];
+    select(null);
+    cvs.setPointerCapture = () => { };
+    const rect = cvs.getBoundingClientRect();
+    const send = (type, px, py, opt) => cvs.dispatchEvent(new PointerEvent(type, {
+      clientX: rect.left + px, clientY: rect.top + py,
+      bubbles: true, pointerId: 1, button: 0, ...opt
+    }));
+    /* one press, an arming move, the real move, and let go */
+    const drawLine = (from, to, opt) => {
+      send('pointerdown', from.x, from.y, opt);
+      send('pointermove', from.x + DRAG_SLOP + 2, from.y, opt);
+      send('pointermove', to.x, to.y, opt);
+      send('pointerup', to.x, to.y, opt);
+      return S.measures[S.measures.length - 1];
+    };
+
+    setMeasuring(true);
+    ok(MEASURING, 'the measuring mode goes on');
+    ok($('#btnMeasure').getAttribute('aria-pressed') === 'true', 'and the button says so');
+
+    const astro = S.items.find(i => i.name === 'Astrolabe');
+    const ab = bbox(astro);
+    const cx = (ab.x0 + ab.x1) / 2, cy = (ab.y0 + ab.y1) / 2;
+
+    /* the case the owner asked for: middle of an object to the top,
+       drawn deliberately off the vertical to prove it is caught */
+    const start = w2s(cx, cy);
+    const wonky = w2s(cx + 0.4, S.cs.h - 0.6);
+    const m = drawLine(start, wonky);
+    ok(m && S.measures.length === 1, 'dragging in the case leaves a measuring line');
+    ok(Math.abs(m.ax - cx) < 0.05 && Math.abs(m.ay - cy) < 0.05,
+      `it starts on the middle of the object it was begun from (${rnd(m.ax, 2)}, ${rnd(m.ay, 2)})`);
+    ok(Math.abs(m.bx - m.ax) < 0.001,
+      'and holds the vertical rather than the few tenths the pointer wandered');
+    ok(Math.abs(m.by - S.cs.h) < 0.05,
+      `the far end landing on the top of the case (${rnd(m.by, 2)} of ${S.cs.h})`);
+    ok(Math.abs(measureLen(m) - (S.cs.h - cy)) < 0.05,
+      `so it reads ${rnd(measureLen(m), 1)} cm, which is the height above the object's middle`);
+    ok(m.view === 'front', 'and belongs to the view it was drawn in');
+
+    /* the horizontal is caught the same way */
+    const across = drawLine(w2s(cx, cy), w2s(S.cs.w - 0.5, cy + 0.4));
+    ok(Math.abs(across.by - across.ay) < 0.001, 'a near-horizontal drag holds the horizontal');
+    ok(Math.abs(across.bx - S.cs.w) < 0.05, 'and lands on the side of the case');
+
+    /* an edge of something real, rather than the case */
+    const plinth = S.items.find(i => i.type === 'plinth');
+    const toEdge = drawLine(w2s(cx, cy), w2s(plinth.x + 0.3, cy + 0.3));
+    ok(Math.abs(toEdge.bx - plinth.x) < 0.05,
+      `the free end lands on a plinth edge when it is near one (${rnd(toEdge.bx, 2)} of ${plinth.x})`);
+
+    /* Shift is the override, here as everywhere else */
+    const freeM = drawLine(w2s(cx, cy), w2s(cx + 0.4, S.cs.h - 0.6), { shiftKey: true });
+    ok(Math.abs(freeM.bx - freeM.ax) > 0.2 && Math.abs(freeM.by - (S.cs.h - 0.6)) < 0.05,
+      'holding Shift puts both ends exactly where the pointer was');
+    S.measures = S.measures.filter(x => x !== freeM);
+    commit();                    /* or the undo below steps back past this */
+
+    /* they are per view */
+    ok(S.measures.every(x => x.view === 'front'), 'all of them are elevation lines');
+    setView('plan');
+    ok($('#mCount').textContent === '0', 'the plan counts none of them');
+    setView('front');
+    ok(+$('#mCount').textContent === S.measures.length, 'and the elevation counts them all');
+
+    /* a click, rather than a drag, on a line removes it */
+    const doomed = S.measures[S.measures.length - 1];
+    const mid = measureEnds(doomed);
+    const n0 = S.measures.length;
+    send('pointerdown', (mid.a.x + mid.b.x) / 2, (mid.a.y + mid.b.y) / 2);
+    send('pointerup', (mid.a.x + mid.b.x) / 2, (mid.a.y + mid.b.y) / 2);
+    ok(S.measures.length === n0 - 1 && !S.measures.includes(doomed),
+      'clicking a line without dragging removes it');
+    await undo();
+    ok(S.measures.length === n0, 'and undo puts it back — they are ordinary state');
+
+    /* they survive being written out and read back */
+    const snapM = JSON.stringify(snapshot());
+    const keptM = S.measures.length;
+    await restore(JSON.parse(snapM));
+    ok(S.measures.length === keptM, `all ${keptM} measurements survive the save/open round trip`);
+    ok(S.measures.every(x => isFinite(x.ax) && isFinite(x.by) && x.view),
+      'with both ends and their view intact');
+
+    /* and a file from before the tool existed simply has none */
+    await restore({ v: 1, name: 'Old', cs: { w: 100, h: 100, d: 30 }, rail: 90, items: [] });
+    ok(Array.isArray(S.measures) && S.measures.length === 0,
+      'a file written before the tool opens with no measurements, not undefined');
+    await restore(JSON.parse(snapM));
+
+    /* preview strips them; an ordinary export keeps them */
+    ok(!PREVIEW, 'preview is off to begin with');
+    const withM = renderSheet('front', 2, { rulers: false, grid: false, dims: false });
+    S.measures = [];
+    const withoutM = renderSheet('front', 2, { rulers: false, grid: false, dims: false });
+    ok(withM.width === withoutM.width && withM.height === withoutM.height,
+      'measurements do not change the crop — the picture is still the case');
+    await restore(JSON.parse(snapM));
+
+    clearMeasures();
+    ok(S.measures.length === 0, 'clear all empties them');
+    await undo();
+    ok(S.measures.length === keptM, 'and that is undoable too');
+    S.measures = [];
+    setMeasuring(false);
+    ok(!MEASURING, 'and the mode goes off again');
+    commit();
+  }
+
   /* --- 7m. objects, panels and casework are listed apart --- */
   renderLists();
   const inObjects = $$('#listObj .item').length;
@@ -1279,6 +1432,23 @@
     pan.textSize = 0.5; pan.w = 24; pan.h = 12; pan.wallY = 20;
     pan.x = rnd(pl.x + (pl.w - pan.w) / 2, 2);
     select(pan.id); renderInspector();
+  }
+  /* the measuring tool, with a few lines already drawn */
+  if (/^#measure/.test(location.hash)) {
+    const plan = /plan$/.test(location.hash);
+    setView(plan ? 'plan' : 'front');
+    select(null);
+    const a = S.items.find(i => i.name === 'Astrolabe');
+    const pl = S.items.find(i => i.type === 'plinth');
+    const b = bbox(a), f = footprint(a);
+    S.measures = plan
+      ? [{ id: 'q1', view: 'plan', ax: f.x + f.w / 2, ay: f.z + f.d / 2, bx: f.x + f.w / 2, by: S.cs.d },
+      { id: 'q2', view: 'plan', ax: pl.x, ay: pl.z, bx: pl.x + pl.w, by: pl.z }]
+      : [{ id: 'q1', view: 'front', ax: (b.x0 + b.x1) / 2, ay: (b.y0 + b.y1) / 2, bx: (b.x0 + b.x1) / 2, by: S.cs.h },
+      { id: 'q2', view: 'front', ax: b.x1, ay: b.y0, bx: S.cs.w, by: b.y0 },
+      { id: 'q3', view: 'front', ax: pl.x, ay: pl.h, bx: b.x0, by: b.y1 }];
+    setMeasuring(true);
+    renderLists();
   }
   if (location.hash === '#sched') { buildSchedule(); $('#schedBack').hidden = false; }
   if (location.hash === '#cases') {

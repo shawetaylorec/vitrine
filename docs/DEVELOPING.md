@@ -36,7 +36,7 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 267 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 298 assertions covering the
 cut-out crop, dragging the measurement box, support heights, stand footprints, derived
 wire lengths, lean maths in both reference frames and the datum following the view,
 yaw, rotation, plan-shape selection, panels fixed to plinth faces, panel auto-fit and
@@ -44,11 +44,12 @@ title lines, growing a board to fit the type both ways and its honest failure, d
 ordering, overhang detection and telling too-big from off-centre, the shape picker,
 support stickiness while dragging, alignment snapping, Snap governing the drag step,
 dragging a face panel by its plinth, plan pick order, cascade placement, base footprints
-and what they excuse, the six clearance fields and the four face clearances, centring in
-both views, a selected object's wires staying grey, duplication keeping its picture, the
-lock, the export crop and the export scale reaching the greeking threshold, undo and
-redo, the case library, the save/open round trip, opening a file written by an older
-build, and PNG and JPEG export.
+and what they excuse, the six clearance fields and the four face margins moving one
+edge each, centring in both views, a selected object's wires staying grey, measuring
+lines and both of their snaps, duplication keeping its picture, the lock, the export crop
+and the export scale reaching the greeking threshold, undo and redo, the case library,
+the save/open round trip, opening a file written by an older build, and PNG and JPEG
+export.
 
 The suite is run several times before anything is committed — a real race was found that
 way, and two long-standing flakes were tracked down the same way. Both were the test's
@@ -79,6 +80,7 @@ Append a hash to the URL to screenshot a different state:
 | `#wiz3` | the mounting step, on wires — also asserts the cursor is visible there |
 | `#wiz3p` | the mounting step, placed — where the lean field is |
 | `#face` | a panel fixed to a plinth face, with its own clearances |
+| `#measure` / `#measureplan` | the measuring tool, with lines already drawn |
 | `#export` | the export dialogue |
 | `#sched` | the schedule |
 | `#shapes` | the shape picker |
@@ -274,6 +276,51 @@ and Rulers, which are purely visual, and its squares have nothing to do with a 1
 step. Snap is where the behaviour belongs, so the label says **Snap to 1 cm** and the
 rail carries a line saying which of the four toggles moves things and which only draw.
 
+## Measuring lines
+
+A dimension you drew yourself, between any two points. It **is** a dimension, so it is
+drawn like one and in the dimension colour; what marks it out is that it stays where you
+put it and belongs to no object.
+
+They live in `S.measures` as `{id, view, ax, ay, bx, by}` and are **stored per view**,
+because the second coordinate is height in the elevation and depth in the plan. A line
+drawn in one has no meaning in the other and is simply not drawn there — which is also
+why the rail's count follows the view.
+
+Being ordinary state buys everything else for nothing: `commit()` files them, so undo
+and redo work; `snapshot()` carries them into the case file and into the library; and
+`restore()` defaults them to `[]`, so a file written before the tool existed opens with
+none rather than with `undefined`.
+
+**Two kinds of snap, answering different questions.** `snapMeasure()` does both:
+
+- **Square** holds the line to the horizontal or the vertical when it comes within
+  `SQUARE_PX`. This is the one that makes the tool worth having: "from the middle of
+  this to the top of the case" is a measurement only if the line is genuinely vertical.
+- **Lines** pull an end onto something real — every edge and centre of every visible
+  item, the case's sides and middle, and the hanging rail in elevation. Both edges *and*
+  centres, because measuring from the middle of something is most of the point.
+
+Square wins where they disagree, and only one axis can lock, so a line can never
+collapse to a point. Snapping per axis gives point snapping for free: when both axes
+land on lines that happen to cross at a corner, you are on the corner. `GUIDES` is
+reused to draw what was caught, so the reason for the jump is visible.
+
+`Shift` suspends both, the same override it is everywhere else in the app.
+
+**Drawing one is its own small mode.** `MEASURING` gates a branch in `pointerdown` that
+sits *before* the lock is consulted, deliberately: reading a drawing without disturbing
+it is exactly what the lock is for, and a measurement disturbs nothing. It uses the same
+`DRAG_SLOP` as everything else, which is what lets a click and a drag mean different
+things in the same place — drag to draw a new line, click to remove the one under the
+pointer.
+
+They do **not** answer to the Dimensions tick. That governs the automatic dimensions,
+which are drafting furniture that comes and goes with the selection; a measurement you
+drew is closer to being the reason the drawing exists. `PREVIEW` still strips them along
+with everything else that is annotation rather than case, which also keeps them out of
+thumbnails and out of a "just the case" export.
+
 ## Position
 
 `positionFields(o)` renders all six clearances round an object, each measured to the
@@ -285,10 +332,27 @@ The ones that are a consequence rather than a setting are shown but disabled: th
 height of something standing on a plinth, the depth of a panel stuck to a face. Letting
 you type those would only mean watching the number spring back.
 
-`faceFields(o)` is the same idea in the plinth's frame rather than the case's: four
-clearances to the front of the plinth a panel is stuck to, plus *Centre on the face* and
-*Fit the face*. It exists because dragging a face panel now moves the plinth, so typing
-is the only way left to place it on the face — see **What travels with a plinth**.
+`faceFields(o)` is in the plinth's frame rather than the case's: four margins to the
+front of the plinth a panel is stuck to, plus *Centre on the face* and *Fit the face*.
+It exists because dragging a face panel now moves the plinth, so typing is the only way
+left to place it on the face — see **What travels with a plinth**.
+
+**They are margins, and each moves its own edge.** That is the one place where the face
+fields part company with the case fields above, and it is deliberate. The case
+clearances are six ways of saying one position, and they can be, because the case is
+much bigger than what is in it. A plinth face is not: left + width + right *is* the
+face, so three of those cannot be free at a fixed board size. Sliding the board — which
+is what these did at first — meant setting one margin shoved the opposite one, and on a
+board fitted to the face there was nothing to shove into, so typing 3 into the right
+margin put −1 in the left.
+
+Moving the edge instead makes all four genuinely independent, and the board is whatever
+they leave. That is also the honest direction for this object: four margins are how you
+would specify a board applied to a plinth to whoever is making it, and `iW`/`iH` already
+hold `x` and move the far edge, so the size fields and the margins agree rather than
+fight. `moveEdgeX`/`moveEdgeY` scale the stored `w`/`h` by the ratio of the bbox spans
+rather than assuming `w` is the width you see, so a spun panel still behaves; a margin
+too large to fit leaves `MIN_BOARD` rather than a negative.
 
 For a face panel the *case* clearances move the plinth too, carrying everything on it.
 Two frames, and each is internally consistent: the case fields say where the assembly

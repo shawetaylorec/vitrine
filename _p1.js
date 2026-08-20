@@ -20,6 +20,8 @@ const S = {
   rail: 156,
   bg: { colour: '', img: null, fade: 100 },
   items: [],
+  /* hand-drawn dimensions, kept per view — see "Measuring lines" */
+  measures: [],
   sel: null,
   view: 'front',
   zoom: 1,
@@ -38,6 +40,8 @@ const TOPSRC = new Map();
 let BGIMG = null;           // back-wall image
 let PREVIEW = false;        // full-screen, no drafting furniture
 let HOVER = null;           // what the pointer is over, for a soft outline
+let MEASURING = false;      // the measuring tool is armed
+let MDRAG = null;           // the measuring line being drawn right now
 let EXPORTING = false;      // true while painting offscreen for a file
 /* What the export multiplies the canvas by. VW/VH stay in CSS pixels
    while the transform does the scaling, so T.sc is not the whole story
@@ -629,6 +633,11 @@ function paint() {
   drawGuides(tl, br);
   if (S.opt.dims) drawCaseDims(tl, br);
   drawSelectionDims();
+  /* Measurements you drew are not drafting furniture — they are the
+     reason the drawing exists — so they do not answer to the Dimensions
+     tick the way the automatic ones do. Preview still strips them,
+     along with everything else that is annotation rather than case. */
+  drawMeasures();
   drawSpinHandle();
   if (S.opt.rulers !== false) drawRulers();
   drawLockButton();
@@ -714,6 +723,64 @@ function drawGuides(tl, br) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/* ---------------- measuring lines ----------------
+   A dimension you drew yourself, between any two points you like. It
+   *is* a dimension, so it is drawn like one and in the dimension
+   colour; what marks it out is that it stays where you put it and
+   belongs to no object.
+
+   Stored per view. "Up" means height in the elevation and depth in the
+   plan, so a line drawn in one has no meaning in the other and is
+   simply not drawn there. `ax/ay` and `bx/by` are the two ends in that
+   view's own frame — y is height in elevation, z in plan. */
+
+const measureLen = m => Math.hypot(m.bx - m.ax, m.by - m.ay);
+const measureEnds = m => ({ a: w2s(m.ax, m.ay), b: w2s(m.bx, m.by) });
+
+function drawMeasures() {
+  if (PREVIEW) return;
+  for (const m of S.measures || []) {
+    if (m.view === S.view) drawOneMeasure(m, false);
+  }
+  if (MDRAG && MDRAG.view === S.view) drawOneMeasure(MDRAG, true);
+}
+
+function drawOneMeasure(m, live) {
+  const { a, b } = measureEnds(m);
+  const len = measureLen(m);
+  if (len < 0.01) return;
+  const hot = !live && !EXPORTING && HOVER === 'm:' + m.id;
+
+  ctx.save();
+  /* End ticks square to the line. An arrowhead points at a place; a
+     tick marks it, which is what you want when the whole question is
+     "from exactly here to exactly there". */
+  const perp = Math.atan2(b.y - a.y, b.x - a.x) + Math.PI / 2;
+  const tx = Math.cos(perp) * 5.5, ty = Math.sin(perp) * 5.5;
+  ctx.strokeStyle = C.accent;
+  ctx.lineWidth = hot ? 2.4 : 1.4;
+  for (const p of [a, b]) {
+    ctx.beginPath();
+    ctx.moveTo(p.x + tx, p.y + ty); ctx.lineTo(p.x - tx, p.y - ty);
+    ctx.stroke();
+  }
+  if (hot) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  ctx.restore();
+
+  arrowDim(a.x, a.y, b.x, b.y, `${rnd(len, 1)}`, C.accent);
+
+  /* On the square it is one number and the direction is obvious. On the
+     diagonal the two components are usually what the drawing is really
+     asking for, so they are given as words rather than as a bare pair. */
+  const dx = Math.abs(m.bx - m.ax), dy = Math.abs(m.by - m.ay);
+  if (dx > 0.05 && dy > 0.05) {
+    const along = S.view === 'plan' ? 'back' : 'up';
+    label(`${rnd(dx, 1)} across · ${rnd(dy, 1)} ${along}`,
+      (a.x + b.x) / 2, (a.y + b.y) / 2 + 15,
+      { size: 9, fill: C.ink3, box: true });
+  }
 }
 
 function drawGrid(tl, br) {
@@ -978,9 +1045,10 @@ function panelFits(o) {
 }
 
 /* How much plinth is left showing round a panel fitted to its face.
-   Roughly a centimetre all round — enough that the board reads as a
-   board applied to the plinth rather than as the plinth's own front. */
-const FACE_MARGIN = 1;
+   Half a centimetre all round — enough that the board reads as a board
+   applied to the plinth rather than as the plinth's own front, without
+   wasting face on a margin nobody asked for. */
+const FACE_MARGIN = 0.5;
 
 /* The board a panel fitted to its plinth face wants: the whole face,
    less the margin, on all four sides. */

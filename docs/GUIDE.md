@@ -247,6 +247,37 @@ back. Put it on a taller plinth, or add a block stand. Hung and fixed objects ca
 by any of the six. Shelves and plinths get the four horizontal ones, and carry their
 contents when you use them.
 
+### Measuring anything to anything
+
+Those four clearances answer "where is this in the case". For everything else — the gap
+between two objects, the light above a plinth, how far a label sits below the thing it
+describes — draw the dimension yourself.
+
+Press <kbd>M</kbd> or **Measuring line** in the left rail, then drag from one point to
+another. Two things make it a measurement rather than a sketch:
+
+- **It holds to the square.** Come within a few pixels of the vertical or the horizontal
+  and it locks there exactly. So a line from the middle of an object to the top of the
+  case is genuinely vertical, and the number is genuinely the height above it.
+- **Both ends land on something real.** Every edge and every centre line of every visible
+  item, the four sides and the middle of the case, and the hanging rail. Dashed guides
+  show what it caught, the same as when you drag an object.
+
+Hold <kbd>Shift</kbd> to switch both off and put an end exactly where the pointer is.
+
+On the square you get one number. On the diagonal you get the length and, underneath,
+the two components — *7 across · 26.5 up* in the elevation, *across* and *back* in the
+plan — which is usually what a fabricator actually needs.
+
+Measurements belong to the view they were drawn in, because "up" is height in the
+elevation and depth in the plan. They stay where you put them, save with the case, undo
+and redo like anything else, and appear in an exported picture. **Click a line to remove
+it**; **Remove last** and **Clear all** are in the rail, and preview strips them along
+with the rest of the drafting marks.
+
+They also work with the case **locked** — reading a drawing without disturbing it is
+what the lock is for, and a measurement disturbs nothing.
+
 ### Lining things up
 
 Drag anything and it looks for a line to settle on: the centre or either edge of any
@@ -329,11 +360,19 @@ everything else riding on it, in both views — which is what stops a panel size
 whole front from swallowing every click and leaving the plinth underneath ungrabbable.
 
 So its place on the face is *typed*, not dragged. An **On the face of…** section appears
-in the inspector with four clearances measured to the plinth's own front — from its
-left, right, top and bottom — and two buttons:
+in the inspector with four margins to the plinth's own front — from its left, right, top
+and bottom.
+
+**Each moves its own edge and nothing else.** Type 3 into the right margin and the right
+edge goes 3 cm in; the left, top and bottom stay exactly where they were and the board
+narrows to suit. Set all four and the panel is completely specified — which is how you
+would describe a board applied to a plinth to whoever is making it. The Width and Height
+fields above follow from the margins rather than fighting them.
+
+Two buttons work on the whole board:
 
 - **Centre on the face** puts it in the middle of the front, both ways.
-- **Fit the face** sizes it to the whole front with a centimetre of plinth showing all
+- **Fit the face** takes the whole front with half a centimetre of plinth showing all
   round.
 
 The Position fields below still measure to the case, and setting one of those moves the
@@ -364,9 +403,9 @@ chose and finds the board that suits it.
 - On the **back wall** you get two: *keep proportions*, which is the smallest
   enlargement of the same shape that fits and may come out taller than strictly needed,
   and *grow taller only*, which keeps the width you drew.
-- On a **plinth face** there is one, and it takes the plinth's width less a centimetre
-  each side — the same measurement **Fit the face** uses — so only the height is free,
-  capped by the plinth's own height.
+- On a **plinth face** there is one, and it takes the plinth's width less half a
+  centimetre each side — the measurement **Fit the face** uses — so only the height is
+  free, capped by the plinth's own height.
 
 It never shrinks a board you drew. And if the wording will not fit even at the largest
 the case or the plinth allows, it grows as far as there is room and then tells you the

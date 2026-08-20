@@ -32,6 +32,11 @@ $('#optSnap').addEventListener('change', e => { S.opt.snap = e.target.checked; }
 $('#optRulers').addEventListener('change', e => { S.opt.rulers = e.target.checked; draw(); });
 $('#levelFilter').addEventListener('change', e => { S.level = e.target.value; draw(); });
 
+/* measuring */
+$('#btnMeasure').addEventListener('click', () => setMeasuring());
+$('#btnMeasureUndo').addEventListener('click', () => dropLastMeasure());
+$('#btnMeasureClear').addEventListener('click', () => clearMeasures());
+
 /* back wall */
 $('#bgColour').addEventListener('input', e => { S.bg.colour = e.target.value; draw(); });
 $('#bgColour').addEventListener('change', () => commit());

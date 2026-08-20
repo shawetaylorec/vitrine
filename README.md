@@ -97,6 +97,13 @@ left and the floor off one corner, to the right and the top off the other — ea
 its measurement. The Position fields give the same six clearances as numbers, measured
 to the object as it actually stands, turned or leaning; set any one and it moves there.
 
+**And you can draw your own.** Press <kbd>M</kbd> and drag between any two things to
+dimension the gap. The line **holds to the vertical or the horizontal** as it comes near
+one, and both ends land on edges, centre lines, the case and the hanging rail — so
+"middle of the object to the top of the case" is a single drag rather than an
+approximation. On the diagonal it gives the two components as well. Measurements stay
+where you put them, save with the case, and go into an exported picture.
+
 **A padlock on the drawing freezes the case.** Click round it reading dimensions with
 no risk of nudging anything — which is the state you want a design in before you send
 it to somebody else. It saves with the case, so it arrives locked.
@@ -126,7 +133,7 @@ plinth before adding one and it goes on that plinth's front face.
 **The board and the type can each be solved for the other.** One button sets the type
 as large as it will go and still fit. The reverse button holds the type at the size you
 chose and grows the board to suit it &mdash; keeping the panel's proportions, or growing
-it taller only, or on a plinth face taking the plinth's own width less a centimetre each
+it taller only, or on a plinth face taking the plinth's own width less half a centimetre each
 side. If the wording will not fit even at the largest the case or the plinth allows, it
 says so and gives the size it would have needed, rather than stopping at the limit
 without a word.
@@ -134,8 +141,9 @@ without a word.
 **A panel fixed to a plinth is glued to it.** Dragging the panel drags the plinth and
 everything riding on it, so a panel sized to the whole face can no longer swallow every
 click and strand the plinth underneath. Where it sits on the face is typed instead:
-four clearances measured to the plinth's own front, with buttons to centre it there or
-size it to the whole face with an even margin all round.
+**four margins to the plinth's own front**, each moving its own edge and leaving the
+other three alone, so the board is whatever they leave. Buttons to centre it on the face
+or take the whole front with half a centimetre showing all round.
 
 **Preview mode** goes full screen and strips every drafting mark — grid, rulers,
 dimensions, labels, handles — leaving the case as it would be seen, lit against a dark
@@ -193,6 +201,7 @@ that survives a cleared browser.
 | <kbd>Enter</kbd> | reopen the mounting page |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Del</kbd> | duplicate / remove |
 | <kbd>Ctrl</kbd>+<kbd>V</kbd> | paste a picture, or text into a selected panel |
+| <kbd>M</kbd> | draw a measuring line (<kbd>Esc</kbd> to stop) |
 | <kbd>L</kbd> | lock everything in place |
 | double-click | reopen an object's cut-out, size and mounting pages |
 

@@ -80,6 +80,117 @@ function itemExtent(it, axis) {
   return [0, it.h];
 }
 
+/* ---------------- measuring ----------------
+   Drawing a measurement is its own small mode: nothing selects, nothing
+   moves, and it works even with the case locked, because reading a
+   drawing is exactly what the lock is for.
+
+   Two kinds of snap, and they answer different questions. **Square**
+   holds the line to the horizontal or the vertical, which is what makes
+   "from the middle of this to the top of the case" a measurement rather
+   than an approximation. **Lines** pull the free end onto something
+   real — an edge, a centre, the case, the hanging rail. Square wins
+   where they disagree: a measurement that is exactly vertical is worth
+   more than one that clips an edge on the way past. */
+
+const SQUARE_PX = 9;        // how near the square before it locks on
+
+/* Candidate values to land on, along one axis of the current view.
+   `u` is across in both views; `v` is height in elevation, depth in
+   plan. Each item offers both its edges and its middle, which is what
+   makes measuring from the centre of something possible at all. */
+function measureLines(axis) {
+  const ax = axis === 'u' ? 'x' : (S.view === 'plan' ? 'z' : 'y');
+  const span = axis === 'u' ? S.cs.w : (S.view === 'plan' ? S.cs.d : S.cs.h);
+  const out = [0, span / 2, span];
+  for (const it of S.items) {
+    if (!visible(it)) continue;
+    const [lo, hi] = itemExtent(it, ax);
+    out.push(lo, (lo + hi) / 2, hi);
+  }
+  /* the rail is a real line in the elevation and worth measuring to */
+  if (axis === 'v' && S.view === 'front') out.push(S.rail);
+  return out;
+}
+
+/* Snap one end of a measuring line. `from` is the other end, or null
+   for the first one — with nothing to be square to, only the line snap
+   applies. Pushes what it found into GUIDES so the reason for the jump
+   is visible on the drawing. */
+function snapMeasure(pt, from, free) {
+  /* Shift is the override everywhere else in the app, so it is the
+     override here: hold it and the line goes exactly where you put it. */
+  if (free) return { u: rnd(pt.a, 2), v: rnd(pt.b, 2), squareU: false, squareV: false };
+  const tol = SNAP_PX / T.sc;
+  let u = pt.a, v = pt.b;
+  let squareU = false, squareV = false;
+
+  if (from) {
+    if (Math.abs(u - from.u) * T.sc < SQUARE_PX) { u = from.u; squareU = true; }
+    else if (Math.abs(v - from.v) * T.sc < SQUARE_PX) { v = from.v; squareV = true; }
+  }
+
+  const near = (val, axis) => {
+    let best = null, bd = tol;
+    for (const c of measureLines(axis)) {
+      const d = Math.abs(c - val);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best;
+  };
+
+  if (!squareU) { const s = near(u, 'u'); if (s !== null) u = s; }
+  if (!squareV) { const s = near(v, 'v'); if (s !== null) v = s; }
+  /* a guide for each end that landed on something, square or not */
+  if (squareU || u !== pt.a) GUIDES.push({ axis: 'x', v: u });
+  if (squareV || v !== pt.b) GUIDES.push({ axis: 'v', v });
+  return { u: rnd(u, 2), v: rnd(v, 2), squareU, squareV };
+}
+
+/* how far a point is from a line segment, in screen pixels */
+function distToSeg(px, py, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const l2 = dx * dx + dy * dy;
+  if (!l2) return Math.hypot(px - a.x, py - a.y);
+  const t = clamp(((px - a.x) * dx + (py - a.y) * dy) / l2, 0, 1);
+  return Math.hypot(px - (a.x + t * dx), py - (a.y + t * dy));
+}
+
+/* the measuring line under the pointer, latest first */
+function measureAt(px, py) {
+  for (let i = (S.measures || []).length - 1; i >= 0; i--) {
+    const m = S.measures[i];
+    if (m.view !== S.view) continue;
+    const { a, b } = measureEnds(m);
+    if (distToSeg(px, py, a, b) < 7) return m;
+  }
+  return null;
+}
+
+function setMeasuring(on) {
+  MEASURING = on === undefined ? !MEASURING : !!on;
+  MDRAG = null;
+  if (MEASURING) select(null);
+  syncMeasureUI();
+  draw();
+}
+
+function clearMeasures() {
+  if (!(S.measures || []).length) return;
+  const n = S.measures.length;
+  S.measures = [];
+  commit();
+  toast(`${n} measurement${n > 1 ? 's' : ''} cleared — Ctrl+Z to put them back`);
+}
+
+function dropLastMeasure() {
+  const mine = (S.measures || []).filter(m => m.view === S.view);
+  if (!mine.length) { toast('No measurements in this view'); return; }
+  const last = mine[mine.length - 1];
+  S.measures = S.measures.filter(m => m !== last);
+  commit();
+}
+
 /* what an object is standing on or fixed to, for snapping purposes */
 function hostOf(it) {
   if (it.type !== 'object') return null;
@@ -258,6 +369,22 @@ cvs.addEventListener('pointerdown', e => {
   /* the padlock takes precedence over everything on the sheet */
   if (overLockButton(px, py)) { toggleLock(); return; }
 
+  /* Measuring comes next, and deliberately before the lock is
+     consulted: reading a drawing without disturbing it is the whole
+     point of the lock, and a measurement disturbs nothing. */
+  if (MEASURING && e.button !== 1) {
+    GUIDES = [];
+    const s = snapMeasure(s2w(px, py), null, e.shiftKey);
+    const on = measureAt(px, py);
+    drag = {
+      measure: true, sx: px, sy: py,
+      au: s.u, av: s.v, hit: on ? on.id : null,
+      armed: false, moved: false
+    };
+    draw();
+    return;
+  }
+
   /* the rotation handle sits on top of everything */
   const h = locked() ? null : spinHandlePos();
   if (h && Math.hypot(px - h.x, py - h.y) < 11) {
@@ -325,6 +452,13 @@ cvs.addEventListener('pointermove', e => {
       if (HOVER !== 'lock') { HOVER = 'lock'; draw(); }
       return;
     }
+    if (MEASURING) {
+      const on = measureAt(px, py);
+      cvs.style.cursor = on ? 'pointer' : 'crosshair';
+      const nh = on ? 'm:' + on.id : null;
+      if (nh !== HOVER) { HOVER = nh; draw(); }
+      return;
+    }
     const h = locked() ? null : spinHandlePos();
     const over = hitTest(px, py);
     const onHandle = h && Math.hypot(px - h.x, py - h.y) < 11;
@@ -333,6 +467,28 @@ cvs.addEventListener('pointermove', e => {
     if (nh !== HOVER) { HOVER = nh; draw(); }
     return;
   }
+  if (drag.measure) {
+    /* Same slop as everything else: below it the press is a click, and
+       a click on an existing line removes it rather than starting a new
+       one on top of it. */
+    if (!drag.armed) {
+      if (Math.hypot(px - drag.sx, py - drag.sy) < DRAG_SLOP) return;
+      drag.armed = true;
+      /* re-read the first end, so the line does not begin at the slop */
+      GUIDES = [];
+      const s0 = snapMeasure(s2w(drag.sx, drag.sy), null, e.shiftKey);
+      drag.au = s0.u; drag.av = s0.v;
+    }
+    if (HOVER) HOVER = null;
+    GUIDES = [];
+    const s = snapMeasure(pt, { u: drag.au, v: drag.av }, e.shiftKey);
+    MDRAG = { id: 'live', view: S.view, ax: drag.au, ay: drag.av, bx: s.u, by: s.v };
+    drag.moved = true;
+    cvs.style.cursor = 'crosshair';
+    draw();
+    return;
+  }
+
   if (HOVER) { HOVER = null; draw(); }
 
   if (drag.pan) {
@@ -419,7 +575,30 @@ cvs.addEventListener('pointermove', e => {
   draw();
 });
 
+/* the shortest line worth keeping, in cm — below this it was a click */
+const MIN_MEASURE = 0.5;
+
 function endDrag() {
+  if (drag && drag.measure) {
+    const live = MDRAG;
+    const wasHit = drag.hit, armed = drag.armed;
+    drag = null; MDRAG = null; GUIDES = [];
+    if (armed && live && measureLen(live) >= MIN_MEASURE) {
+      S.measures.push({
+        id: uid(), view: live.view,
+        ax: live.ax, ay: live.ay, bx: live.bx, by: live.by
+      });
+      commit();
+      toast(`${rnd(measureLen(live), 1)} cm — click the line to remove it`);
+    } else if (!armed && wasHit) {
+      S.measures = S.measures.filter(m => m.id !== wasHit);
+      commit();
+      toast('Measurement removed — Ctrl+Z to put it back');
+    }
+    cvs.style.cursor = MEASURING ? 'crosshair' : 'default';
+    draw();
+    return;
+  }
   if (drag && !drag.pan && drag.moved) commit();
   drag = null;
   GUIDES = [];
@@ -477,11 +656,16 @@ document.addEventListener('keydown', e => {
   const o = byId(S.sel);
   const step = e.shiftKey ? 0.1 : (e.ctrlKey || e.metaKey) ? 5 : 1;
 
+  if (e.key.toLowerCase() === 'm') { setMeasuring(); return; }
+  /* in the measuring mode Escape is the way out of it, before it is
+     anything else — there is no selection to clear in there anyway */
+  if (e.key === 'Escape' && MEASURING) { setMeasuring(false); return; }
   if (e.key === 'Escape') { select(null); return; }
   if (e.key === '1') { setView('front'); return; }
   if (e.key === '2') { setView('plan'); return; }
   if (e.key.toLowerCase() === 'f') { fitView(); return; }
   if (e.key.toLowerCase() === 'l') { toggleLock(); return; }
+  if (MEASURING && (e.key === 'Delete' || e.key === 'Backspace')) { dropLastMeasure(); return; }
   if (!o) return;
   /* locked: look all you like, change nothing */
   if (locked() && (e.key === 'Delete' || e.key === 'Backspace' || e.key.startsWith('Arrow') || e.key.toLowerCase() === 'r')) {
@@ -714,6 +898,8 @@ function syncLockChrome() {
 
 function setView(v) {
   S.view = v; S.pan = { x: 0, y: 0 };
+  MDRAG = null;                 /* a half-drawn line belongs to the view it was begun in */
+  syncMeasureUI();
   $$('#viewSeg button, #pvSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
   $('#viewNote').textContent = v === 'front' ? 'looking at the back wall' : 'looking down from above';
   syncChrome();
@@ -792,8 +978,22 @@ function syncChrome() {
   if (chip) chip.textContent = S.name || 'Untitled case';
 }
 
+/* the measuring section follows both the mode and the view, since a
+   line drawn in the elevation is not in the plan's count */
+function syncMeasureUI() {
+  const b = $('#btnMeasure');
+  if (b) {
+    b.setAttribute('aria-pressed', String(!!MEASURING));
+    b.firstChild.nodeValue = MEASURING ? 'Measuring — Esc to stop' : 'Measuring line';
+  }
+  const n = $('#mCount');
+  if (n) n.textContent = (S.measures || []).filter(m => m.view === S.view).length;
+  document.body.classList.toggle('measuring', !!MEASURING);
+}
+
 function renderLists() {
   syncChrome();
+  syncMeasureUI();
   /* an object is a real thing in the case — a photograph or a stand-in
      shape. Panels are captions, and casework is casework: each gets its
      own list rather than being lumped together. */
@@ -907,10 +1107,11 @@ function faceFields(o) {
         <button class="btn sm" id="iFaceCentre" style="flex:1">Centre on the face</button>
         <button class="btn sm" id="iFaceFit" style="flex:1">Fit the face</button>
       </div>
-      <p class="note">Measured to the front of ${esc(f.name)}. Dragging this in the case moves
-      the plinth &mdash; they are glued together and travel as one &mdash; so where it sits on
-      the face is typed here. <b>Fit the face</b> sizes it to the whole front with
-      ${FACE_MARGIN} cm showing all round.</p>`;
+      <p class="note">Four margins to the front of ${esc(f.name)}. Each moves <b>its own edge
+      only</b>, so the board grows or shrinks to suit and the other three stay where you put
+      them &mdash; set all four and the panel is fully specified. Dragging it in the case moves
+      the plinth instead: they are glued together and travel as one. <b>Fit the face</b> takes
+      the whole front with ${FACE_MARGIN} cm showing all round.</p>`;
 }
 
 /* the same four clearances for a shelf or a plinth, which have no
@@ -1371,18 +1572,51 @@ function bindInspector(o) {
     setNum('iFromB', v => shiftY(v - bbox(o).y0));
     setNum('iFromT', v => shiftY((S.cs.h - v) - bbox(o).y1));
 
-    /* the same four, measured to the plinth face instead of the case */
+    /* The same four measured to the plinth face — but they are margins,
+       not a position, and each one moves its own edge and nothing else.
+
+       They used to slide the whole board, which made them two ways of
+       saying one thing: left + width + right is the face, so setting
+       one shoved the opposite one. On a panel fitted to the face there
+       is nothing to shove into, and typing 3 into the right margin put
+       −1 in the left. Moving an edge instead makes all four
+       independent, and four margins are how you would specify a board
+       applied to a plinth anyway. The size follows from them, which is
+       the honest direction: the board is whatever the margins leave. */
     if (facePl) {
       const F = () => faceOf(o);
-      const onFaceX = (d) => { o.x = rnd(o.x + d, 2); };
-      setNum('iFaceL', v => { const f = F(); onFaceX(f.x + v - bbox(o).x0); });
-      setNum('iFaceR', v => { const f = F(); onFaceX((f.x + f.w - v) - bbox(o).x1); });
-      setNum('iFaceB', v => shiftY(v - bbox(o).y0));
-      setNum('iFaceT', v => { const f = F(); shiftY((f.top - v) - bbox(o).y1); });
+      const MIN_BOARD = 0.5;
+      /* Work in edges and scale the stored size by the ratio, so a
+         panel that happens to be spun keeps behaving sensibly rather
+         than assuming w is the width you see. */
+      const moveEdgeX = (which, target) => {
+        const b = bbox(o);
+        let lo = b.x0, hi = b.x1;
+        if (which === 'lo') lo = Math.min(target, hi - MIN_BOARD);
+        else hi = Math.max(target, lo + MIN_BOARD);
+        const cur = b.x1 - b.x0;
+        if (cur > 0.001) o.w = rnd(Math.max(MIN_BOARD, o.w * (hi - lo) / cur), 2);
+        o.x = rnd(o.x + (lo - bbox(o).x0), 2);
+      };
+      const moveEdgeY = (which, target) => {
+        const b = bbox(o);
+        let lo = b.y0, hi = b.y1;
+        if (which === 'lo') lo = Math.min(target, hi - MIN_BOARD);
+        else hi = Math.max(target, lo + MIN_BOARD);
+        const cur = b.y1 - b.y0;
+        if (cur > 0.001) o.h = rnd(Math.max(MIN_BOARD, o.h * (hi - lo) / cur), 2);
+        o.wallY = rnd((o.wallY || 0) + (lo - bbox(o).y0), 2);
+      };
+      setNum('iFaceL', v => { const f = F(); moveEdgeX('lo', f.x + v); });
+      setNum('iFaceR', v => { const f = F(); moveEdgeX('hi', f.x + f.w - v); });
+      setNum('iFaceB', v => moveEdgeY('lo', v));
+      setNum('iFaceT', v => { const f = F(); moveEdgeY('hi', f.top - v); });
+      /* the two buttons still work on the whole board, since that is
+         the point of them */
       on('iFaceCentre', 'click', () => {
         const f = F(), b = bbox(o);
-        onFaceX(f.x + (f.w - (b.x1 - b.x0)) / 2 - b.x0);
-        shiftY((f.top - (b.y1 - b.y0)) / 2 - bbox(o).y0);
+        o.x = rnd(o.x + (f.x + (f.w - (b.x1 - b.x0)) / 2 - b.x0), 2);
+        o.wallY = rnd((o.wallY || 0) + ((f.top - (b.y1 - b.y0)) / 2 - bbox(o).y0), 2);
         commit();
         toast(`Centred on the front of ${f.name}`);
       });
@@ -1390,8 +1624,8 @@ function bindInspector(o) {
         const fit = faceFit(o); if (!fit) return;
         o.w = fit.w; o.h = fit.h;
         const f = F();
-        onFaceX(f.x + FACE_MARGIN - bbox(o).x0);
-        shiftY(FACE_MARGIN - bbox(o).y0);
+        o.x = rnd(o.x + (f.x + FACE_MARGIN - bbox(o).x0), 2);
+        o.wallY = rnd((o.wallY || 0) + (FACE_MARGIN - bbox(o).y0), 2);
         commit();
         toast(`Sized to the front of ${f.name} — ${fit.w} × ${fit.h} cm, ${FACE_MARGIN} cm showing all round`);
       });

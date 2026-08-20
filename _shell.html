@@ -108,6 +108,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .btn.wide{width:100%;text-align:left;display:flex;align-items:center;gap:8px}
 .btn.sm{padding:3px 8px;font-size:12px}
 .btn .k{font-size:11px;color:var(--ink-3);margin-left:auto;font-family:"IBM Plex Mono",monospace}
+.btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn[aria-pressed="true"] .k{color:var(--accent-ink);opacity:.75}
+.btn[aria-pressed="true"]:hover{background:var(--accent);border-color:var(--accent)}
 :where(button,input,select,textarea,[tabindex]):focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .spacer{flex:1}
 
@@ -333,6 +336,22 @@ body.preview .previewbar{display:flex}
       <p class="note">Grid, Dimensions and Rulers only change what is drawn. <b>Snap</b> is the
       one that changes how things move: on, a drag steps in whole centimetres and lines up
       with its neighbours; off, it moves freely. Hold <kbd>Shift</kbd> for tenths either way.</p>
+    </section>
+
+    <section class="sect">
+      <h2>Measure</h2>
+      <button class="btn wide" id="btnMeasure" aria-pressed="false">Measuring line<span class="k">M</span></button>
+      <div class="row">
+        <button class="btn sm ghost" id="btnMeasureUndo" style="flex:1">Remove last</button>
+        <button class="btn sm ghost" id="btnMeasureClear" style="flex:1">Clear all</button>
+      </div>
+      <div class="readout"><span>in this view <b id="mCount">0</b></span></div>
+      <p class="note">Drag between any two things to dimension the gap. It holds to the
+      <b>vertical or the horizontal</b> as it comes near one, and both ends land on edges,
+      centre lines, the case and the hanging rail &mdash; so the middle of an object to the
+      top of the case is one drag. <kbd>Shift</kbd> puts an end exactly where you want it
+      instead. Click a line to remove it. They stay on the drawing and go into an exported
+      picture; preview strips them.</p>
     </section>
 
     <section class="sect">
