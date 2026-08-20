@@ -29,6 +29,8 @@ wand, erase and restore brushes and zoom for fine work. Two passes are
 offered: *from edges* for solid objects, and *everywhere*, which keys a colour out of
 the whole picture and is what openwork like an astrolabe rete needs.
 
+![Cutting an object out of its photograph](docs/images/wiz.png)
+
 **Scale comes from one measurement.** Type the real width or the real height and the
 other follows from the picture. Or drag a line across something you know the length
 of and give that. Depth you type, because a flat photograph cannot tell you.
