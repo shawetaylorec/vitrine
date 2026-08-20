@@ -99,9 +99,13 @@ const SQUARE_PX = 9;        // how near the square before it locks on
    `u` is across in both views; `v` is height in elevation, depth in
    plan. Each item offers both its edges and its middle, which is what
    makes measuring from the centre of something possible at all. */
+/* how far the case runs along one axis of the current view */
+const measureSpan = axis => axis === 'u' ? S.cs.w
+  : (S.view === 'plan' ? S.cs.d : S.cs.h);
+
 function measureLines(axis) {
   const ax = axis === 'u' ? 'x' : (S.view === 'plan' ? 'z' : 'y');
-  const span = axis === 'u' ? S.cs.w : (S.view === 'plan' ? S.cs.d : S.cs.h);
+  const span = measureSpan(axis);
   const out = [0, span / 2, span];
   for (const it of S.items) {
     if (!visible(it)) continue;
@@ -118,9 +122,20 @@ function measureLines(axis) {
    applies. Pushes what it found into GUIDES so the reason for the jump
    is visible on the drawing. */
 function snapMeasure(pt, from, free) {
+  /* A measurement is of the case, so it stops at the case. Running an
+     end out over the drafting plane would give a number measured partly
+     against nothing, which is worse than useless on a drawing somebody
+     else is going to build from. The clamp is applied last, and to the
+     Shift override as well, because that overrides the snapping rather
+     than the boundary. */
+  const hold = s => ({
+    u: clamp(rnd(s.u, 2), 0, measureSpan('u')),
+    v: clamp(rnd(s.v, 2), 0, measureSpan('v')),
+    squareU: s.squareU, squareV: s.squareV
+  });
   /* Shift is the override everywhere else in the app, so it is the
      override here: hold it and the line goes exactly where you put it. */
-  if (free) return { u: rnd(pt.a, 2), v: rnd(pt.b, 2), squareU: false, squareV: false };
+  if (free) return hold({ u: pt.a, v: pt.b, squareU: false, squareV: false });
   const tol = SNAP_PX / T.sc;
   let u = pt.a, v = pt.b;
   let squareU = false, squareV = false;
@@ -144,7 +159,7 @@ function snapMeasure(pt, from, free) {
   /* a guide for each end that landed on something, square or not */
   if (squareU || u !== pt.a) GUIDES.push({ axis: 'x', v: u });
   if (squareV || v !== pt.b) GUIDES.push({ axis: 'v', v });
-  return { u: rnd(u, 2), v: rnd(v, 2), squareU, squareV };
+  return hold({ u, v, squareU, squareV });
 }
 
 /* how far a point is from a line segment, in screen pixels */

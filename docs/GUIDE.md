@@ -270,6 +270,18 @@ another. Two things make it a measurement rather than a sketch:
 
 Hold <kbd>Shift</kbd> to switch both off and put an end exactly where the pointer is.
 
+**A line stops at the walls of the case.** Drag past one and the end stays on it. A
+measurement that ran out over the drafting plane would be measured partly against
+nothing, which is worse than useless on a drawing somebody else is going to build from.
+<kbd>Shift</kbd> overrides the snapping, not the walls.
+
+**When an end does reach a wall, the length is said again outside it** — larger, in
+green, out on the plane past the edge it reached. A line run to a wall is measuring the
+clearance to it, and that is usually the number the whole drawing is being made to
+settle, so it is put somewhere you can read it at a glance. It is a working aid and does
+not go into an exported picture: the export crops the plane it sits on, and the
+dimension on the line itself carries the number into the file.
+
 On the square you get one number. On the diagonal you get the length and, underneath,
 the two components — *7 across · 26.5 up* in the elevation, *across* and *back* in the
 plan — which is usually what a fabricator actually needs.

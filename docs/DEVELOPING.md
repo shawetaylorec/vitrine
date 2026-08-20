@@ -36,7 +36,7 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 301 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 306 assertions covering the
 cut-out crop, dragging the measurement box, support heights, stand footprints, derived
 wire lengths, lean maths in both reference frames and the datum following the view,
 yaw, rotation, plan-shape selection, panels fixed to plinth faces, panel auto-fit and
@@ -46,11 +46,11 @@ support stickiness while dragging, alignment snapping, Snap governing the drag s
 dragging a face panel by its plinth, plan pick order, cascade placement, base footprints
 and what they excuse, the six clearance fields and the four face margins moving one
 edge each, centring in both views, a selected object's wires staying grey, a selected
-plinth carrying its height, measuring lines and both of their snaps, duplication keeping
-its picture, the lock, the export crop
-and the export scale reaching the greeking threshold, undo and redo, the case library,
-the save/open round trip, opening a file written by an older build, and PNG and JPEG
-export.
+plinth carrying its height, measuring lines with both of their snaps, the case stopping
+them and the readout when they reach it, duplication keeping its picture, the lock, the
+export crop and the export scale reaching the greeking threshold, undo and redo, the case
+library, the save/open round trip, opening a file written by an older build, and PNG and
+JPEG export.
 
 The suite is run several times before anything is committed — a real race was found that
 way, and two long-standing flakes were tracked down the same way. Both were the test's
@@ -314,6 +314,19 @@ land on lines that happen to cross at a corner, you are on the corner. `GUIDES` 
 reused to draw what was caught, so the reason for the jump is visible.
 
 `Shift` suspends both, the same override it is everywhere else in the app.
+
+**The case is a boundary, not a snap.** `snapMeasure` clamps both ends to it last of
+all, and clamps the `Shift` path too — `Shift` overrides the snapping, which is a
+convenience, and not the walls, which are the thing being measured. An end running out
+over the drafting plane would give a number measured partly against nothing.
+
+**An end that reaches a wall restates its length outside it**, larger and in `C.plan`,
+which is `edgeReadout()`. A line drawn to a wall is measuring the clearance to it, and
+that is usually the number the drawing is being made to settle. The colour is
+deliberately *not* the accent: inside the case the accent means "this is a dimension",
+and this is the same dimension said twice rather than a second one. It is skipped while
+`EXPORTING`, because it sits on the drafting plane and `exportCrop` crops the drafting
+plane away — the dimension on the line itself is what carries the number into the file.
 
 **Drawing one is its own small mode.** `MEASURING` gates a branch in `pointerdown` that
 sits *before* the lock is consulted, deliberately: reading a drawing without disturbing

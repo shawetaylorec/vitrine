@@ -781,6 +781,41 @@ function drawOneMeasure(m, live) {
       (a.x + b.x) / 2, (a.y + b.y) / 2 + 15,
       { size: 9, fill: C.ink3, box: true });
   }
+
+  edgeReadout(m, a, b, len);
+}
+
+/* A line that runs all the way to a wall of the case is measuring the
+   clearance to it, and that is usually the number the whole drawing is
+   being made to settle. So it is said again, larger, out on the drafting
+   plane past the edge it reached, where there is nothing to crowd it.
+
+   In `C.plan` rather than the accent: everything inside the case that is
+   a measurement is accent, and this is deliberately not one of them —
+   it is the same measurement, restated somewhere it can be read at a
+   glance. Skipped while EXPORTING, because it sits on the drafting
+   plane and the export crops the drafting plane away; the dimension on
+   the line itself carries the number into the file. */
+const EDGE_READOUT_PAD = 11;
+function edgeReadout(m, a, b, len) {
+  if (EXPORTING || PREVIEW) return;
+  const isPlan = S.view === 'plan';
+  const c0 = w2s(0, isPlan ? 0 : S.cs.h);          // top left on screen
+  const c1 = w2s(S.cs.w, isPlan ? S.cs.d : 0);     // bottom right on screen
+  const near = (p, q) => Math.abs(p - q) < 1.2;
+
+  /* the end you dragged to is the one that reached something, so it is
+     asked first; a line drawn edge to edge only says it once */
+  for (const p of [b, a]) {
+    const L = near(p.x, c0.x), R = near(p.x, c1.x);
+    const T2 = near(p.y, c0.y), B = near(p.y, c1.y);
+    if (!(L || R || T2 || B)) continue;
+    label(`${rnd(len, 1)} cm`,
+      L ? c0.x - EDGE_READOUT_PAD : R ? c1.x + EDGE_READOUT_PAD : p.x,
+      T2 ? c0.y - EDGE_READOUT_PAD : B ? c1.y + EDGE_READOUT_PAD : p.y,
+      { size: 14, fill: C.plan, align: L ? 'right' : R ? 'left' : 'center', box: true, pad: 5 });
+    return;
+  }
 }
 
 function drawGrid(tl, br) {

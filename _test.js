@@ -1251,10 +1251,26 @@
     ok(Math.abs(toEdge.bx - plinth.x) < 0.05,
       `the free end lands on a plinth edge when it is near one (${rnd(toEdge.bx, 2)} of ${plinth.x})`);
 
+    /* a measurement is of the case, so it stops at the case */
+    const past = drawLine(w2s(cx, cy), w2s(S.cs.w + 40, S.cs.h + 30));
+    ok(past.bx <= S.cs.w + 0.001 && past.by <= S.cs.h + 0.001,
+      `dragging well past the corner stops at it (${rnd(past.bx, 2)}, ${rnd(past.by, 2)} of ${S.cs.w}, ${S.cs.h})`);
+    const under = drawLine(w2s(cx, cy), w2s(-30, -20));
+    ok(under.bx >= -0.001 && under.by >= -0.001,
+      `and the same going the other way (${rnd(under.bx, 2)}, ${rnd(under.by, 2)})`);
+    S.measures = S.measures.filter(x => x !== past && x !== under);
+    commit();
+
     /* Shift is the override, here as everywhere else */
     const freeM = drawLine(w2s(cx, cy), w2s(cx + 0.4, S.cs.h - 0.6), { shiftKey: true });
     ok(Math.abs(freeM.bx - freeM.ax) > 0.2 && Math.abs(freeM.by - (S.cs.h - 0.6)) < 0.05,
       'holding Shift puts both ends exactly where the pointer was');
+    /* but it overrides the snapping, not the walls of the case */
+    const freePast = drawLine(w2s(cx, cy), w2s(S.cs.w + 25, cy), { shiftKey: true });
+    ok(freePast.bx <= S.cs.w + 0.001,
+      `Shift frees it from the snapping, not from the case (${rnd(freePast.bx, 2)})`);
+    S.measures = S.measures.filter(x => x !== freePast);
+    commit();
     S.measures = S.measures.filter(x => x !== freeM);
     commit();                    /* or the undo below steps back past this */
 
@@ -1289,6 +1305,33 @@
     ok(Array.isArray(S.measures) && S.measures.length === 0,
       'a file written before the tool opens with no measurements, not undefined');
     await restore(JSON.parse(snapM));
+
+    /* a line that reaches a wall restates its number outside the case,
+       out on the drafting plane where nothing crowds it */
+    {
+      S.measures = []; commit();
+      /* just outside the right wall, level with where the line ends */
+      const e = w2s(S.cs.w, cy);
+      const patch = () => mainCtx.getImageData(Math.round(e.x) + 4, Math.round(e.y) - 13, 76, 26).data;
+      /* how green it is: the readout is C.plan, the ground is not */
+      const greenest = d => {
+        let m = -999;
+        for (let i = 0; i < d.length; i += 4) m = Math.max(m, d[i + 1] - d[i]);
+        return m;
+      };
+      render();
+      const bare = greenest(patch());
+      drawLine(w2s(cx, cy), w2s(S.cs.w - 0.4, cy + 0.3));
+      render();
+      const reached = greenest(patch());
+      ok(reached > bare + 12,
+        `a line run to the case wall says its length again outside it (green ${reached} against ${bare} bare)`);
+      /* and it is not carried into a file, where the drafting plane is
+         cropped away and the line's own dimension already has it */
+      ok(/EXPORTING \|\| PREVIEW/.test(String(edgeReadout)),
+        'but not into an export, which crops the plane it sits on');
+      S.measures = []; commit();
+    }
 
     /* preview strips them; an ordinary export keeps them */
     ok(!PREVIEW, 'preview is off to begin with');

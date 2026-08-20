@@ -106,8 +106,11 @@ from-the-floor clearance is always nothing.
 dimension the gap. The line **holds to the vertical or the horizontal** as it comes near
 one, and both ends land on edges, centre lines, the case and the hanging rail — so
 "middle of the object to the top of the case" is a single drag rather than an
-approximation. On the diagonal it gives the two components as well. Measurements stay
-where you put them, save with the case, and go into an exported picture.
+approximation. It stops at the walls of the case, because a measurement that ran out
+over the drafting plane would be measured partly against nothing; and when it does reach
+a wall it says its length again, larger and in green, just outside that wall where
+nothing crowds it. On the diagonal it gives the two components as well. Measurements
+stay where you put them, save with the case, and go into an exported picture.
 
 **A padlock on the drawing freezes the case.** Click round it reading dimensions with
 no risk of nudging anything — which is the state you want a design in before you send

@@ -1502,6 +1502,41 @@ function drawOneMeasure(m, live) {
       (a.x + b.x) / 2, (a.y + b.y) / 2 + 15,
       { size: 9, fill: C.ink3, box: true });
   }
+
+  edgeReadout(m, a, b, len);
+}
+
+/* A line that runs all the way to a wall of the case is measuring the
+   clearance to it, and that is usually the number the whole drawing is
+   being made to settle. So it is said again, larger, out on the drafting
+   plane past the edge it reached, where there is nothing to crowd it.
+
+   In `C.plan` rather than the accent: everything inside the case that is
+   a measurement is accent, and this is deliberately not one of them —
+   it is the same measurement, restated somewhere it can be read at a
+   glance. Skipped while EXPORTING, because it sits on the drafting
+   plane and the export crops the drafting plane away; the dimension on
+   the line itself carries the number into the file. */
+const EDGE_READOUT_PAD = 11;
+function edgeReadout(m, a, b, len) {
+  if (EXPORTING || PREVIEW) return;
+  const isPlan = S.view === 'plan';
+  const c0 = w2s(0, isPlan ? 0 : S.cs.h);          // top left on screen
+  const c1 = w2s(S.cs.w, isPlan ? S.cs.d : 0);     // bottom right on screen
+  const near = (p, q) => Math.abs(p - q) < 1.2;
+
+  /* the end you dragged to is the one that reached something, so it is
+     asked first; a line drawn edge to edge only says it once */
+  for (const p of [b, a]) {
+    const L = near(p.x, c0.x), R = near(p.x, c1.x);
+    const T2 = near(p.y, c0.y), B = near(p.y, c1.y);
+    if (!(L || R || T2 || B)) continue;
+    label(`${rnd(len, 1)} cm`,
+      L ? c0.x - EDGE_READOUT_PAD : R ? c1.x + EDGE_READOUT_PAD : p.x,
+      T2 ? c0.y - EDGE_READOUT_PAD : B ? c1.y + EDGE_READOUT_PAD : p.y,
+      { size: 14, fill: C.plan, align: L ? 'right' : R ? 'left' : 'center', box: true, pad: 5 });
+    return;
+  }
 }
 
 function drawGrid(tl, br) {
@@ -2408,9 +2443,13 @@ const SQUARE_PX = 9;        // how near the square before it locks on
    `u` is across in both views; `v` is height in elevation, depth in
    plan. Each item offers both its edges and its middle, which is what
    makes measuring from the centre of something possible at all. */
+/* how far the case runs along one axis of the current view */
+const measureSpan = axis => axis === 'u' ? S.cs.w
+  : (S.view === 'plan' ? S.cs.d : S.cs.h);
+
 function measureLines(axis) {
   const ax = axis === 'u' ? 'x' : (S.view === 'plan' ? 'z' : 'y');
-  const span = axis === 'u' ? S.cs.w : (S.view === 'plan' ? S.cs.d : S.cs.h);
+  const span = measureSpan(axis);
   const out = [0, span / 2, span];
   for (const it of S.items) {
     if (!visible(it)) continue;
@@ -2427,9 +2466,20 @@ function measureLines(axis) {
    applies. Pushes what it found into GUIDES so the reason for the jump
    is visible on the drawing. */
 function snapMeasure(pt, from, free) {
+  /* A measurement is of the case, so it stops at the case. Running an
+     end out over the drafting plane would give a number measured partly
+     against nothing, which is worse than useless on a drawing somebody
+     else is going to build from. The clamp is applied last, and to the
+     Shift override as well, because that overrides the snapping rather
+     than the boundary. */
+  const hold = s => ({
+    u: clamp(rnd(s.u, 2), 0, measureSpan('u')),
+    v: clamp(rnd(s.v, 2), 0, measureSpan('v')),
+    squareU: s.squareU, squareV: s.squareV
+  });
   /* Shift is the override everywhere else in the app, so it is the
      override here: hold it and the line goes exactly where you put it. */
-  if (free) return { u: rnd(pt.a, 2), v: rnd(pt.b, 2), squareU: false, squareV: false };
+  if (free) return hold({ u: pt.a, v: pt.b, squareU: false, squareV: false });
   const tol = SNAP_PX / T.sc;
   let u = pt.a, v = pt.b;
   let squareU = false, squareV = false;
@@ -2453,7 +2503,7 @@ function snapMeasure(pt, from, free) {
   /* a guide for each end that landed on something, square or not */
   if (squareU || u !== pt.a) GUIDES.push({ axis: 'x', v: u });
   if (squareV || v !== pt.b) GUIDES.push({ axis: 'v', v });
-  return { u: rnd(u, 2), v: rnd(v, 2), squareU, squareV };
+  return hold({ u, v, squareU, squareV });
 }
 
 /* how far a point is from a line segment, in screen pixels */
