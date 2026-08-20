@@ -36,7 +36,7 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 193 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 201 assertions covering the
 cut-out crop, dragging the measurement box, support heights, stand footprints, derived
 wire lengths, lean maths in both reference frames, yaw, rotation, plan-shape selection,
 panels fixed to plinth faces, panel auto-fit and title lines, depth ordering, overhang

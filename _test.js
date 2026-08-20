@@ -143,6 +143,43 @@
       'with nothing set, the whole footprint counts — the safe assumption');
   }
 
+  /* --- 3c. the foot can be given on the mounting page too --- */
+  {
+    stage(photo(400, 700, { kind: 'rect', col: '#7a6a4a' }), 'Ewer');
+    W.widthCm = 20; W.depthCm = 20;
+    W.mount = 'placed'; W.support = plinth.id;
+    W.stand = { kind: 'none', w: 0, d: 0, h: 0 };
+    W.baseW = 7; W.baseD = 7;
+    setStep(3);
+    ok($('#wizBaseW').value === '7', 'the foot fields show on the mounting page, with the support');
+    finishWizard();
+    const ewer = S.items.find(i => i.name === 'Ewer');
+    ok(ewer.baseW === 7 && ewer.baseD === 7, 'and what you typed there reaches the object');
+    ok(basePatch(ewer) && basePatch(ewer).w === 7, 'so it is the foot that counts');
+    /* and it comes back when you reopen the object */
+    W.baseW = 0; W.baseD = 0;
+    await openWizard({ edit: ewer.id, step: 3 });
+    ok(W.baseW === 7, 'reopening the object brings the foot back with it');
+    W.open = false; W.live = false; W.editId = null;
+    $('#wizBack').hidden = true;
+    removeItem(ewer.id);
+  }
+
+  /* --- 3d. panning while a brush is in hand --- */
+  {
+    stage(photo(400, 400, { kind: 'rect', col: '#555' }), 'Probe');
+    W.step = 1; W.tool = 'erase'; W.open = true;
+    setWizCursor();
+    ok(wizCv.style.cursor === 'none', 'the erase brush hides the pointer, as it should');
+    setPanKey(true);
+    ok(wizCv.style.cursor === 'grab',
+      'but holding Shift or space turns it to a hand, so the pan is findable');
+    setPanKey(false);
+    ok(wizCv.style.cursor === 'none', 'and letting go gives the brush back');
+    ok(/Shift/.test(TOOLHELP.erase), 'and the hint says so in words');
+    W.open = false;
+  }
+
   /* --- 4. moving a plinth carries its objects --- */
   const before = astro.x;
   plinth.x += 10;
@@ -454,6 +491,13 @@
 
   /* --- 7i. the case library --- */
   {
+    /* Kill any autosave still pending from the sections above. It is
+       debounced by 600 ms, and if one lands in here it calls
+       persistCurrent(), which mints a projectId when there is none —
+       and then renameCase no longer matches the case under test. A slow
+       flake that depends only on how long the earlier sections took. */
+    clearTimeout(saveT);
+
     /* a private in-memory store, so the test never touches real storage */
     const mem = new Map();
     const realGet = store.get, realSet = store.set, realDel = store.del;

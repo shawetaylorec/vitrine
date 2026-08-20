@@ -261,6 +261,9 @@ $('#standKind').addEventListener('change', e => {
 $('#standW').addEventListener('change', e => { W.stand.w = Math.max(0.5, num(e.target.value)); });
 $('#standD').addEventListener('change', e => { W.stand.d = Math.max(0.5, num(e.target.value)); });
 $('#standH').addEventListener('change', e => { W.stand.h = Math.max(0, num(e.target.value)); });
+/* blank or zero means "the whole footprint", which is the safe default */
+$('#wizBaseW').addEventListener('change', e => { W.baseW = Math.max(0, num(e.target.value)); });
+$('#wizBaseD').addEventListener('change', e => { W.baseD = Math.max(0, num(e.target.value)); });
 
 $('#mountTools').addEventListener('click', e => {
   const b = e.target.closest('[data-mount]'); if (!b) return;

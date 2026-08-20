@@ -78,7 +78,8 @@ right:
   the backdrop is dark.
 - **Wand** — click a patch of background to clear just that patch.
 - **Erase** / **Restore** — paint by hand. Scroll to zoom right in; the brushes work at
-  any magnification.
+  any magnification. **Hold Shift or the space bar to drag the picture about** without
+  putting the brush down &mdash; the pointer turns to a hand while you hold it.
 - **Orientation** — rotate 90° either way, flip either axis. This turns the picture
   itself, so the width and height swap with it. Use it when a photograph is on its
   side or upside down, or to choose which way up a circular object hangs.
@@ -157,8 +158,12 @@ a ewer with a spreading lip. Left alone, Vitrine assumes the whole footprint res
 the plinth and warns you when the widest part hangs over the edge — which is not what
 is happening at all.
 
-**Base W** and **Base D** in the inspector let you say what actually touches down. Give
-the foot's dimensions and the overhang warnings measure that instead; the rest may
+**Base W** and **Base D** let you say what actually touches down. They are on the
+mounting page under the lean slider when you add or re-edit an object, and in the
+inspector afterwards &mdash; in both places only for a **placed** object, since a foot means
+nothing when nothing is underneath.
+
+Give the foot's dimensions and the overhang warnings measure that instead; the rest may
 project over the edge without complaint, which is exactly what it does in the case. In
 plan the foot is drawn as a small dotted rectangle inside the footprint, so you can see
 what is really carrying the weight.

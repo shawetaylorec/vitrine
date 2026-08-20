@@ -16,6 +16,7 @@ const W = {
   scaleMode: 'width', keepAspect: true, widthCm: 20, heightCm: 15, lineCm: 10, calib: null,
   depthCm: 3, name: '',
   mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright', wallY: 100, face: 'back',
+  baseW: 0, baseD: 0,
   stand: { kind: 'none', w: 0, d: 0, h: 0 },
   planShape: 'auto',
   points: [],     // wire attachment points, in work-canvas pixels
@@ -410,8 +411,9 @@ wizCv.addEventListener('pointerdown', e => {
   if (!W.work) return;
   wizCv.setPointerCapture(e.pointerId);
   const p = wizPt(e);
-  if (e.button === 1 || W.tool === 'pan' || e.shiftKey) {
+  if (e.button === 1 || W.tool === 'pan' || e.shiftKey || wizPanKey) {
     W.panning = { sx: e.clientX, sy: e.clientY, px: W.pan.x, py: W.pan.y };
+    setWizCursor();
     return;
   }
   if (W.step === 2) {
@@ -482,6 +484,7 @@ const wizStop = () => {
   if (W.painting && W.step === 1) refreshScale();
   if (W.bbDrag) { W.bbDrag = null; refreshScale(); }
   W.painting = false; W.panning = false;
+  setWizCursor();
 };
 wizCv.addEventListener('pointerup', wizStop);
 wizCv.addEventListener('pointercancel', wizStop);
@@ -502,8 +505,8 @@ wizCv.addEventListener('wheel', e => {
 
 const TOOLHELP = {
   wand: 'Click a patch of background to clear it. With “Everywhere” on, one click keys that colour out of the whole picture — which is how you get the gaps inside a rete.',
-  erase: 'Paint away anything the passes left behind. Scroll to zoom right in for fine work.',
-  restore: 'Paint back anything that was removed by mistake.',
+  erase: 'Paint away anything the passes left behind. Scroll to zoom right in for fine work, and hold Shift or the space bar to drag the picture about without putting the brush down.',
+  restore: 'Paint back anything that was removed by mistake. Hold Shift or the space bar to move the picture about.',
   pick: 'Click the actual background in the picture. The passes then work from that colour rather than guessing from the border.',
   pan: 'Drag to move the picture around. Scroll zooms at any time.'
 };
@@ -537,13 +540,34 @@ function updateHint() {
       : 'Set the support, any stand or cradle, and the lean on the right.';
 }
 
+/* Shift or the space bar pans whatever tool is in hand. That was always
+   true, but nothing acknowledged the key — with the erase brush the
+   cursor is hidden entirely — so it may as well not have existed. Now
+   the pointer turns to a hand the moment you hold either. */
+let wizPanKey = false;
+function setPanKey(on) {
+  if (wizPanKey === on) return;
+  wizPanKey = on;
+  setWizCursor();
+}
+document.addEventListener('keydown', e => {
+  if (!W.open) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key === 'Shift') setPanKey(true);
+  else if (e.key === ' ') { e.preventDefault(); setPanKey(true); }
+});
+document.addEventListener('keyup', e => { if (e.key === 'Shift' || e.key === ' ') setPanKey(false); });
+window.addEventListener('blur', () => setPanKey(false));
+
 /* the cursor is owned by the step, not by whichever brush was last used */
 function setWizCursor(part) {
   const hideForBrush = W.step === 1 && (W.tool === 'erase' || W.tool === 'restore');
   const grip = part && (part === 'move' ? 'move' : GRIP_CURSOR[part]);
-  wizCv.style.cursor = W.panning || W.tool === 'pan' ? 'grab'
-    : grip ? grip
-      : hideForBrush ? 'none' : 'crosshair';
+  wizCv.style.cursor = W.panning ? 'grabbing'
+    : (wizPanKey || W.tool === 'pan') ? 'grab'
+      : grip ? grip
+        : hideForBrush ? 'none' : 'crosshair';
 }
 
 const calibLen = () => W.calib ? Math.hypot(W.calib.x2 - W.calib.x1, W.calib.y2 - W.calib.y1) : 0;
@@ -596,6 +620,10 @@ function renderSupportSel() {
       .map(p => '<option value="' + p.id + '">Front of ' + esc(p.name) + '</option>'))
     .join('');
   fs.value = W.face || 'back';
+  /* the foot belongs to the Support panel, so it is filled in whenever
+     that panel is built — on reaching step 3, and on changing mount */
+  $('#wizBaseW').value = W.baseW ? rnd(W.baseW, 2) : '';
+  $('#wizBaseD').value = W.baseD ? rnd(W.baseD, 2) : '';
   syncLeanFields();
 }
 function syncLeanFields() {
@@ -655,6 +683,8 @@ function syncWizFields() {
     ? 'Keys that colour out of the entire picture, inside the object as well as around it. Right for openwork on a plain backdrop; it will bite into the object if the object shares the colour.'
     : 'Works inwards from the four edges, so anything enclosed by the object survives. Right for solid objects.';
   $('#standKind').value = W.stand.kind;
+  $('#wizBaseW').value = W.baseW ? rnd(W.baseW, 2) : '';
+  $('#wizBaseD').value = W.baseD ? rnd(W.baseD, 2) : '';
 }
 
 /* ---- open, minimise, close ---- */
@@ -693,6 +723,7 @@ async function nextFromQueue() {
     W.mount = 'placed'; W.support = 'floor'; W.lean = 0; W.leanFrom = 'upright';
     W.wallY = rnd(S.cs.h * 0.55); W.planShape = 'auto'; W.face = 'back';
     W.stand = { kind: 'none', w: 0, d: 0, h: 0 };
+    W.baseW = 0; W.baseD = 0;
     if (W.preset) Object.assign(W, W.preset);
     showWizard(W.mount === 'wall' ? 'Add a graphic to the wall' : 'Add object');
     runAuto();
@@ -719,6 +750,7 @@ async function openWizard({ edit, step = 1 }) {
   W.wallY = o.wallY || rnd(S.cs.h * 0.55); W.face = o.face || 'back';
   W.planShape = o.planShape || 'auto';
   W.stand = o.stand ? { ...o.stand } : { kind: 'none', w: 0, d: 0, h: 0 };
+  W.baseW = o.baseW || 0; W.baseD = o.baseD || 0;
   const ebb = theBB();
   W.points = (o.wires || []).map(wr => ({ x: ebb.x + wr.ax * ebb.w, y: ebb.y + wr.ay * ebb.h }));
   showWizard('Edit ' + o.name);
@@ -821,6 +853,7 @@ function finishWizard() {
       name: W.name || 'Object', render: 'image', png, w, h, depth: W.depthCm,
       mount: W.mount, support: W.support, lean: W.lean, leanFrom: W.leanFrom,
       wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect, face: W.face,
+      baseW: W.baseW || 0, baseD: W.baseD || 0,
       stand: { ...W.stand }, rail: S.rail, wires, z: 2
     });
     if (W.raw) { const rc = copyCanvas(W.raw); o.raw = rc.toDataURL('image/jpeg', 0.82); }
@@ -830,6 +863,7 @@ function finishWizard() {
       name: W.name || o.name, png, w, h, depth: W.depthCm,
       mount: W.mount, support: W.support, lean: W.lean, leanFrom: W.leanFrom,
       wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect, face: W.face,
+      baseW: W.baseW || 0, baseD: W.baseD || 0,
       stand: { ...W.stand }
     });
     /* marking the wires never moves the object: the lengths are derived */
