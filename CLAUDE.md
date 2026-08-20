@@ -44,7 +44,7 @@ change. Run it more than once if a result looks marginal — a real race was fou
 that way. Delete `_t.html` afterwards; it is git-ignored.
 
 Append a hash to the URL to screenshot a state: `#plan`, `#dark`, `#wiz`, `#wiz2`,
-`#wiz3`, `#wiz3p`, `#face`, `#measure`, `#export`, `#sched`, `#shapes`, `#cases`, `#preview`,
+`#wiz3`, `#wiz3p`, `#face`, `#plinth`, `#measure`, `#export`, `#sched`, `#shapes`, `#cases`, `#preview`,
 `#shot` / `#shotplan` / `#shotpreview`. Pass `--screenshot=` a path **outside the
 repo** — writing into the project fails with "Access is denied" and no file, which
 looks exactly like a screenshot that rendered nothing.

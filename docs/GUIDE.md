@@ -232,6 +232,11 @@ case and from its base to the floor, hung off the bottom-left corner; from its r
 edge and its top to the other two sides, hung off the top-right. Each carries its
 measurement. In plan the same four give you left, back, right and front.
 
+Two things get a fifth line, because for them the four miss the point. A **hung object**
+gets its wire length, drawn down from the rail. A **plinth** gets its height, drawn up
+its left-hand side — a plinth stands on the floor, so its from-the-floor clearance is
+always nothing, and the height is the number you were actually after.
+
 The **Position** section gives the same six clearances as numbers, each measured to the
 case: from the left, right, back, front, floor and top. Type into any one of them and
 the object moves so that edge sits where you said. They are six ways of saying the same

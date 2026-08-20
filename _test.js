@@ -1071,7 +1071,7 @@
      Accent orange is the dimension colour, so wires drawn in it read as
      measurements. The selection shows in the line weight instead. */
   {
-    S.view = 'front'; S.pan = { x: 0, y: 0 }; S.zoom = 1;
+    S.view = 'front'; S.pan = { x: 0, y: 0 }; S.zoom = 1; S.level = 'all';
     VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
     const r = S.items.find(i => i.name === 'Rete');
     const wr = r.wires[0];
@@ -1087,7 +1087,7 @@
     };
     const wasDims = S.opt.dims;
     S.opt.dims = false;
-    select(r.id); draw();
+    select(r.id); render();
     const onWire = at(0), offWire = at(30);
     ok(warmest(onWire) < 55,
       `a selected object's wire is grey, not accent orange (r−b ${warmest(onWire)}, where the accent runs past 100)`);
@@ -1097,7 +1097,40 @@
     ok(/arrowDim\(.*wireLen.*C\.accent/.test(String(drawDimsFor)),
       'while the wire dimension stays accent — it genuinely is a dimension');
     S.opt.dims = wasDims;
-    select(null); draw();
+    select(null); render();
+  }
+
+  /* --- 7q2. a selected plinth is dimensioned by its height ---
+     Its "from the floor" clearance is zero, because it stands on the
+     floor, so without this its most useful number is nowhere. */
+  {
+    S.view = 'front'; S.pan = { x: 0, y: 0 }; S.zoom = 1; S.level = 'all';
+    VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
+    const pl = S.items.find(i => i.type === 'plinth');
+    const wasDims = S.opt.dims;
+    S.opt.dims = true;
+    /* three-quarters up the plinth and a little to its left, where the
+       height dimension runs and nothing else does */
+    const at = w2s(pl.x, pl.h * 0.75);
+    const patch = () => mainCtx.getImageData(Math.round(at.x) - 16, Math.round(at.y) - 2, 5, 5).data;
+    const warmest = d => {
+      let m = -999;
+      for (let i = 0; i < d.length; i += 4) m = Math.max(m, d[i] - d[i + 2]);
+      return m;
+    };
+    select(null); render();
+    const bare = warmest(patch());
+    select(pl.id); render();
+    const dimmed = warmest(patch());
+    ok(dimmed > bare + 40,
+      `selecting a plinth draws its height beside it in the dimension colour (r−b ${dimmed} against ${bare} bare)`);
+    /* and the wire dimension it was modelled on is still there */
+    ok(/o\.type === 'plinth'/.test(String(drawDimsFor)) && /wireLen/.test(String(drawDimsFor)),
+      'alongside the wire length, not instead of it');
+    S.opt.dims = false; render();
+    ok(warmest(patch()) <= bare + 40, 'and it answers to the Dimensions tick, like every automatic dimension');
+    S.opt.dims = wasDims;
+    select(null); render();
   }
 
   /* --- 7r. Centre it means the same thing in both views --- */
@@ -1421,6 +1454,11 @@
     stage(photo(620, 800, { kind: 'ellipse', col: '#6b4a2f' }), 'Manuscript');
     W.mount = 'placed'; W.lean = 72; W.stand = { kind: 'cradle', w: 30, d: 26, h: 6 };
     showWizard('Add object'); setStep(3);
+  }
+  /* a selected plinth, showing its height dimension */
+  if (location.hash === '#plinth') {
+    setView('front');
+    select(S.items.find(i => i.type === 'plinth').id);
   }
   /* a panel fixed to a plinth face, with its own clearances */
   if (location.hash === '#face') {

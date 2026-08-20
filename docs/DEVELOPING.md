@@ -36,7 +36,7 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 298 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 301 assertions covering the
 cut-out crop, dragging the measurement box, support heights, stand footprints, derived
 wire lengths, lean maths in both reference frames and the datum following the view,
 yaw, rotation, plan-shape selection, panels fixed to plinth faces, panel auto-fit and
@@ -45,8 +45,9 @@ ordering, overhang detection and telling too-big from off-centre, the shape pick
 support stickiness while dragging, alignment snapping, Snap governing the drag step,
 dragging a face panel by its plinth, plan pick order, cascade placement, base footprints
 and what they excuse, the six clearance fields and the four face margins moving one
-edge each, centring in both views, a selected object's wires staying grey, measuring
-lines and both of their snaps, duplication keeping its picture, the lock, the export crop
+edge each, centring in both views, a selected object's wires staying grey, a selected
+plinth carrying its height, measuring lines and both of their snaps, duplication keeping
+its picture, the lock, the export crop
 and the export scale reaching the greeking threshold, undo and redo, the case library,
 the save/open round trip, opening a file written by an older build, and PNG and JPEG
 export.
@@ -68,6 +69,11 @@ own fault rather than the app's:
 
 Ten consecutive clean runs since.
 
+**A test that reads pixels must call `render()`, never `draw()`.** `draw()` only queues a
+`requestAnimationFrame`, so `getImageData` straight afterwards reads the *previous*
+frame — and a pixel assertion against a stale frame can pass for the wrong reason, which
+is worse than failing. `render()` paints synchronously.
+
 Append a hash to the URL to screenshot a different state:
 
 | Hash | State |
@@ -80,6 +86,7 @@ Append a hash to the URL to screenshot a different state:
 | `#wiz3` | the mounting step, on wires — also asserts the cursor is visible there |
 | `#wiz3p` | the mounting step, placed — where the lean field is |
 | `#face` | a panel fixed to a plinth face, with its own clearances |
+| `#plinth` | a selected plinth, showing its height dimension |
 | `#measure` / `#measureplan` | the measuring tool, with lines already drawn |
 | `#export` | the export dialogue |
 | `#sched` | the schedule |
@@ -607,6 +614,16 @@ on every selection change, so fold state would not survive.
 soft outline costs nothing while the mouse is still. `frame()` draws both it and the
 selection: a hairline box with corner ticks rather than a dashed marquee, which sits
 still over artwork instead of crawling.
+
+**A plinth carries its own height.** `drawDimsFor` hangs four clearances off whatever is
+selected, and for a plinth one of them — from the floor — is always zero, because a
+plinth stands on the floor. So the number a plinth is most often being asked for was the
+one number not on the drawing. It now gets an arrowed line to its left with witness
+lines out to it, on exactly the pattern of the wire length beside a hung object, which
+is the other case where the four clearances do not say the thing you want to know.
+
+A shelf needs no equivalent: its from-the-floor clearance runs to its underside and is
+already the height anyone would ask for.
 
 **The accent is the dimension colour, and nothing else on the drawing may borrow it.**
 Selecting a hung object used to turn its wires accent orange, which made them read as

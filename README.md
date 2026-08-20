@@ -96,6 +96,9 @@ stuck to.
 left and the floor off one corner, to the right and the top off the other — each with
 its measurement. The Position fields give the same six clearances as numbers, measured
 to the object as it actually stands, turned or leaning; set any one and it moves there.
+Where those four miss the point, a fifth is added: a hung object gets its wire length,
+and a plinth gets its height beside it, since a plinth stands on the floor and its
+from-the-floor clearance is always nothing.
 
 **And you can draw your own.** Press <kbd>M</kbd> and drag between any two things to
 dimension the gap. The line **holds to the vertical or the horizontal** as it comes near

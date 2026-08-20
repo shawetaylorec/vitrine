@@ -1485,6 +1485,24 @@ function drawDimsFor(o) {
       const a = w2s(att.x, o.rail ?? S.rail), b2 = w2s(att.x, att.y);
       arrowDim(a.x - 14, a.y, a.x - 14, b2.y, `${rnd(wireLen(o, wr))}`, C.accent);
     }
+
+    /* A plinth stands on the floor, so its "from the floor" clearance is
+       zero and disappears — which left its most useful number, the
+       height, nowhere on the drawing at all. Same treatment as a wire
+       length: an arrowed line to the side, clear of the four
+       clearances, with witness lines out to it so there is no doubt
+       which extents are being measured. */
+    if (o.type === 'plinth') {
+      const OFF = 14;
+      const top = w2s(x0, y1), foot = w2s(x0, y0);
+      ctx.save();
+      ctx.setLineDash([2, 3]); ctx.strokeStyle = C.accent; ctx.lineWidth = 1; ctx.globalAlpha = .8;
+      for (const p of [top, foot]) {
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - OFF - 5, p.y); ctx.stroke();
+      }
+      ctx.restore();
+      arrowDim(top.x - OFF, top.y, foot.x - OFF, foot.y, `${rnd(o.h)}`, C.accent);
+    }
   } else {
     const f = o.type === 'object' ? envelope(o) : { x: o.x, w: o.w, z: o.z, d: o.d };
     const x1 = f.x + f.w, z1 = f.z + f.d;
