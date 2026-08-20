@@ -691,13 +691,9 @@ function toggleLock(on) {
   draw();
   scheduleSave();
 }
+/* the padlock lives on the sheet, so there is nothing in the chrome to
+   keep in step — only the body class, for anything CSS wants to know */
 function syncLockChrome() {
-  const b = $('#btnLock');
-  if (b) {
-    b.setAttribute('aria-pressed', String(!!S.opt.lock));
-    b.innerHTML = S.opt.lock ? '&#128274; Locked' : '&#128275; Lock';
-    b.title = S.opt.lock ? 'Everything is frozen (L)' : 'Freeze everything so nothing moves (L)';
-  }
   document.body.classList.toggle('locked', !!S.opt.lock);
 }
 

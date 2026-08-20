@@ -196,7 +196,7 @@ this?" leaves everything where it was.
 The **padlock** at the top left of the drawing freezes the case. Nothing can be dragged,
 turned, nudged or deleted, and the placement and size fields grey out — but you can still
 click anything to read its dimensions, rename it, rewrite a panel, zoom, preview and
-export. <kbd>L</kbd> does the same, as does the button in the toolbar.
+export. <kbd>L</kbd> does the same.
 
 This is mostly for handing a design to somebody else. They will want to click round the
 case reading measurements, and locking it first means they cannot nudge your layout
@@ -399,26 +399,22 @@ matters, and for moving a case to another machine or sending it to a colleague.
 **Export image** opens a dialogue:
 
 - **File** — **PNG** keeps every line crisp and is the one to print or draw over.
-  **JPEG** is smaller, right for pasting into an email or a report. **Document** writes
-  a `.doc` that opens in Word: the drawing, then a table of every object with its size,
-  mount, support and position.
-- **Look** — **Drawing** is the sheet as you see it, with whatever furniture you tick.
-  **Just the case** is the Preview look: the case alone against a dark surround, no
-  grid, rulers or labels.
+  **JPEG** is smaller, right for pasting into an email or a report.
+- **Look** — **Drawing** is the sheet as you see it. **Just the case** is the Preview
+  look: the case alone against a dark surround, with none of the labels.
 - **View** — elevation, plan, or both as two files.
 - **Size** — ×1 to ×4 of the drawing on screen. The dialogue tells you the pixel size
   you will actually get.
-- **Measurements** — **Position of every object** marks the drawing up with the same
-  four dimension lines you see when you select something, for every object, panel and
-  plinth at once, so it can be installed from.
+- **Drafting furniture** — the grid and the rulers, ticked independently of the look, so
+  you can have a plain dark picture that is still to scale and readable.
 
 The picture is cropped to the case, plus the ruler marks when the rulers are on. You do
 not get the grey drafting plane from round the outside.
 
 Other ways out:
-- **Schedule** — every object with its size, mount, support, stand, position, base and
-  top heights, deck used, lean and wire lengths. **Copy as TSV** pastes straight into
-  a spreadsheet.
+- **Export TSV** — every object with its size, mount, support, stand, position, base and
+  top heights, deck used, lean and wire lengths. **Copy as TSV** puts it on the
+  clipboard, tab separated, which pastes straight into Excel or Sheets as columns.
 - **Save file** — a `.vitrine.json` holding the entire case including the cut-outs.
   The library keeps your cases in the browser; this is the copy that leaves the machine.
 

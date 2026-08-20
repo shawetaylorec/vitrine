@@ -161,7 +161,6 @@ label.chk input{accent-color:var(--accent)}
 /* ---------- inspector ---------- */
 .lockbar{background:var(--accent-soft);border-bottom:1px solid var(--line);font-size:13px}
 .lockbar .row{align-items:center}
-body.locked #btnLock{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 
 .thumb{width:100%;height:100px;border:1px solid var(--line);border-radius:4px;background-color:var(--sunk);
   background-image:linear-gradient(45deg,var(--panel-2) 25%,transparent 25%),linear-gradient(-45deg,var(--panel-2) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--panel-2) 75%),linear-gradient(-45deg,transparent 75%,var(--panel-2) 75%);
@@ -304,9 +303,8 @@ body.preview .previewbar{display:flex}
     </div>
     <button class="btn primary" id="btnAddImg">Add object&hellip;</button>
     <div class="tgroup">
-      <button class="btn ghost" id="btnLock" aria-pressed="false" title="Freeze everything so nothing moves (L)">&#128275; Lock</button>
       <button class="btn ghost" id="btnPreview" title="Full-screen preview (P)">Preview</button>
-      <button class="btn ghost" id="btnSchedule">Schedule</button>
+      <button class="btn ghost" id="btnSchedule" title="Every object with its size and position, to paste into a spreadsheet">Export TSV&hellip;</button>
       <button class="btn ghost" id="btnExportPng" title="A PNG or JPEG picture of the case">Export image&hellip;</button>
       <button class="btn ghost" id="btnSave" title="Save the whole case as a file you can reopen">Save file</button>
     </div>
@@ -644,7 +642,6 @@ body.preview .previewbar{display:flex}
         <div class="tools" id="expFormat">
           <button data-fmt="png" aria-pressed="true">PNG</button>
           <button data-fmt="jpeg" aria-pressed="false">JPEG</button>
-          <button data-fmt="doc" aria-pressed="false">Document</button>
         </div>
         <p class="help" id="expFmtHelp"></p>
       </section>
@@ -655,14 +652,6 @@ body.preview .previewbar{display:flex}
           <button data-st="plain" aria-pressed="false">Just the case</button>
         </div>
         <p class="help" id="expStyleHelp"></p>
-      </section>
-      <section class="sect">
-        <h2>Measurements</h2>
-        <div class="tools" id="expMarks">
-          <button data-mk="none" aria-pressed="true">None</button>
-          <button data-mk="all" aria-pressed="false">Position of every object</button>
-        </div>
-        <p class="help" id="expMarksHelp"></p>
       </section>
       <section class="sect">
         <h2>View</h2>
@@ -682,11 +671,10 @@ body.preview .previewbar{display:flex}
         </div>
         <div class="readout" id="expDims"></div>
       </section>
-      <section class="sect" id="expDrawing">
+      <section class="sect">
         <h2>Drafting furniture</h2>
         <label class="chk"><input type="checkbox" id="expRulers">Rulers down the edges</label>
         <label class="chk"><input type="checkbox" id="expGrid">Grid</label>
-        <label class="chk"><input type="checkbox" id="expCaption" checked>Caption along the bottom</label>
       </section>
     </div>
     <footer>
@@ -750,6 +738,10 @@ let BGIMG = null;           // back-wall image
 let PREVIEW = false;        // full-screen, no drafting furniture
 let HOVER = null;           // what the pointer is over, for a soft outline
 let EXPORTING = false;      // true while painting offscreen for a file
+/* Preview strips the surround and the drafting furniture together. An
+   export of just the case wants the surround gone but may still want
+   the grid and the rulers, so they are separate questions. */
+let SHOW_FURNITURE = false;
 
 function loadImage(src) {
   return new Promise((res, rej) => {
@@ -1000,7 +992,7 @@ function fitScale() {
 }
 function calcT() {
   if (ctx === mainCtx) { VW = cvs.clientWidth; VH = cvs.clientHeight; }
-  GUT = PREVIEW ? 0 : S.opt.rulers === false ? 8 : 26;
+  GUT = (PREVIEW && !SHOW_FURNITURE) ? 0 : S.opt.rulers === false ? 8 : 26;
   const W = S.cs.w, H = S.view === 'front' ? S.cs.h : S.cs.d;
   const sc = fitScale() * S.zoom;
   return {
@@ -1278,7 +1270,7 @@ function paint() {
 
   if (!isPlan && BGIMG) coverImage(BGIMG, tl.x, tl.y, cw2, ch2, (S.bg.fade ?? 100) / 100);
 
-  if (S.opt.grid && !PREVIEW) drawGrid(tl, br);
+  if (S.opt.grid && (!PREVIEW || SHOW_FURNITURE)) drawGrid(tl, br);
 
   ctx.save();
   ctx.beginPath(); ctx.rect(tl.x, tl.y, cw2, ch2); ctx.clip();
@@ -1305,6 +1297,7 @@ function paint() {
     ctx.beginPath(); ctx.rect(tl.x, tl.y, cw2, ch2); ctx.clip();
     ctx.fillStyle = g; ctx.fillRect(tl.x, tl.y, cw2, ch2);
     ctx.restore();
+    if (SHOW_FURNITURE && S.opt.rulers !== false) drawRulers();
     return;
   }
 
@@ -1967,18 +1960,8 @@ function drawPlan() {
    install from. One tag apiece rather than witness lines all round —
    a dozen sets of witness lines is an unreadable thicket, whereas a
    dozen tags is a schedule you can read off the picture. */
-/* Marking everything is not a different drawing — it is the witness
-   lines you already get on a selection, drawn for every item at once,
-   as though you had selected the lot. */
-let MARK_ALL = false;
-
-function drawAllDims() {
-  for (const it of S.items.filter(visible)) drawDimsFor(it);
-}
-
 function drawSelectionDims() {
   if (!S.opt.dims) return;
-  if (MARK_ALL) { drawAllDims(); return; }
   const o = byId(S.sel);
   if (o) drawDimsFor(o);
 }
@@ -2062,6 +2045,11 @@ function drawSpinHandle() {
 
 function drawRulers() {
   const cw = VW, ch = VH;
+  /* a ruler without its numbers is a row of ticks; label() suppresses
+     itself under PREVIEW, which is right for everything else on a
+     finished view but not for the scale itself */
+  const wasPreview = PREVIEW;
+  PREVIEW = false;
   ctx.save();
   ctx.fillStyle = C.panel; ctx.fillRect(0, 0, cw, GUT); ctx.fillRect(0, 0, GUT, ch);
   ctx.strokeStyle = C.line2; ctx.lineWidth = 1;
@@ -2091,6 +2079,7 @@ function drawRulers() {
   ctx.fillStyle = C.ink3; ctx.font = `9px ${UIFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('cm', GUT / 2, GUT / 2);
   ctx.restore();
+  PREVIEW = wasPreview;
 }
 /* ============================================================
    Interaction — hit testing, dragging, keyboard
@@ -2785,13 +2774,9 @@ function toggleLock(on) {
   draw();
   scheduleSave();
 }
+/* the padlock lives on the sheet, so there is nothing in the chrome to
+   keep in step — only the body class, for anything CSS wants to know */
 function syncLockChrome() {
-  const b = $('#btnLock');
-  if (b) {
-    b.setAttribute('aria-pressed', String(!!S.opt.lock));
-    b.innerHTML = S.opt.lock ? '&#128274; Locked' : '&#128275; Lock';
-    b.title = S.opt.lock ? 'Everything is frozen (L)' : 'Freeze everything so nothing moves (L)';
-  }
   document.body.classList.toggle('locked', !!S.opt.lock);
 }
 
@@ -4841,30 +4826,38 @@ async function download(blob, filename) {
 const EXP = {
   fmt: 'png', view: 'front', scale: 2,
   style: 'sheet',            // 'sheet' = as drawn, 'plain' = the preview look
-  marks: 'none',             // 'none' | 'selected' | 'all'
-  rulers: false, grid: false, caption: true
+  rulers: false, grid: false
 };
 
 const viewWord = v => v === 'front' ? 'elevation' : 'plan';
 
-const CAPTION_H = 22;            // strip left for the caption, in CSS px
+/* margin round the case: enough for the BACK WALL and GLASS FRONT
+   captions, which sit just outside it in plan */
+const EDGE_PAD = 22;
 
-/* What the picture should contain: the case, the dimensions hung off
-   it, and — when the rulers are on — the gutter carrying their marks.
-   Not the acre of drafting plane around the outside, which is screen
-   furniture and nothing to do with the drawing. */
-function exportCrop(view, opt, w, h, caption) {
+/* The view centres the case in the window, which would leave a band of
+   dead ground between the ruler gutter and the case for the crop to
+   take in. Slide it up against the gutter first so the picture can be
+   tight on all four sides. Assumes `T` is already the export one. */
+function slideToGutter(view) {
+  const tl = w2s(0, view === 'plan' ? 0 : S.cs.h);
+  S.pan = { x: S.pan.x - (tl.x - (GUT + EDGE_PAD)), y: S.pan.y - (tl.y - (GUT + EDGE_PAD)) };
+  T = calcT();
+}
+
+/* What the picture should contain: the case, and — when the rulers are
+   on — the gutter carrying their marks. Not the acre of drafting plane
+   around the outside, which is screen furniture and nothing to do with
+   the drawing. */
+function exportCrop(view, opt, w, h) {
   const isPlan = view === 'plan';
   const tl = w2s(0, isPlan ? 0 : S.cs.h);
   const br = w2s(S.cs.w, isPlan ? S.cs.d : 0);
-  /* room for the dimension arrows and the BACK WALL / GLASS FRONT
-     captions, which sit just outside the case */
-  const pad = 34;
-  const rulers = opt.rulers !== false && !PREVIEW;
-  const x0 = rulers ? 0 : Math.max(0, tl.x - pad);
-  const y0 = rulers ? 0 : Math.max(0, tl.y - pad);
-  const x1 = Math.min(w, br.x + pad);
-  const y1 = Math.min(h, br.y + pad + (caption ? CAPTION_H : 0));
+  const rulers = opt.rulers !== false;
+  const x0 = rulers ? 0 : Math.max(0, tl.x - EDGE_PAD);
+  const y0 = rulers ? 0 : Math.max(0, tl.y - EDGE_PAD);
+  const x1 = Math.min(w, br.x + EDGE_PAD);
+  const y1 = Math.min(h, br.y + EDGE_PAD);
   return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
 }
 
@@ -4872,28 +4865,34 @@ function exportCrop(view, opt, w, h, caption) {
    transform for the target view, so borrow one and put it back */
 function exportSize(view) {
   const w = cvs.clientWidth, h = cvs.clientHeight;
-  const keepView = S.view, keepPrev = PREVIEW, keepW = VW, keepH = VH;
-  S.view = view; VW = w; VH = h; PREVIEW = EXP.style === 'plain';
+  const keepView = S.view, keepPrev = PREVIEW, keepW = VW, keepH = VH, keepF = SHOW_FURNITURE;
+  const keepPan = S.pan, keepOpt = S.opt;
+  S.view = view; VW = w; VH = h;
+  S.opt = { ...S.opt, rulers: EXP.rulers, grid: EXP.grid };
+  PREVIEW = EXP.style === 'plain'; SHOW_FURNITURE = true;
   T = calcT();
-  const crop = exportCrop(view, { rulers: EXP.style === 'sheet' && EXP.rulers }, w, h,
-    EXP.style === 'sheet' && EXP.caption);
-  S.view = keepView; PREVIEW = keepPrev; VW = keepW; VH = keepH;
+  slideToGutter(view);
+  const crop = exportCrop(view, { rulers: EXP.rulers }, w, h);
+  S.view = keepView; PREVIEW = keepPrev; VW = keepW; VH = keepH; SHOW_FURNITURE = keepF;
+  S.pan = keepPan; S.opt = keepOpt;
   T = calcT();                    /* also puts GUT back */
   return { w: Math.round(crop.w * EXP.scale), h: Math.round(crop.h * EXP.scale) };
 }
 
-function renderSheet(view, scale, opt, caption) {
+function renderSheet(view, scale, opt) {
   const w = cvs.clientWidth, h = cvs.clientHeight;
   const full = newCanvas(Math.round(w * scale), Math.round(h * scale));
   const oc = full.getContext('2d');
   oc.setTransform(scale, 0, 0, scale, 0, 0);
   const keepCtx = ctx, keepW = VW, keepH = VH, keepView = S.view, keepOpt = S.opt, keepT = T;
-  const keepPrev = PREVIEW, keepMark = MARK_ALL, keepExp = EXPORTING;
+  const keepPrev = PREVIEW, keepExp = EXPORTING, keepF = SHOW_FURNITURE;
   ctx = oc; VW = w; VH = h; S.view = view; S.opt = { ...S.opt, ...opt };
   /* "Just the case" is the preview look, which the renderer already
-     knows how to draw — same flag, offscreen */
+     knows how to draw — same flag, offscreen. The grid and the rulers
+     are a separate question from the surround, so they still answer to
+     the tick boxes either way. */
   PREVIEW = EXP.style === 'plain';
-  MARK_ALL = EXP.marks === 'all';
+  SHOW_FURNITURE = true;
   EXPORTING = true;
   readPalette();
   const ground = PREVIEW ? C.previewBg : C.sheet;
@@ -4901,12 +4900,15 @@ function renderSheet(view, scale, opt, caption) {
      picture comes out on black */
   oc.fillStyle = ground; oc.fillRect(0, 0, w, h);
   T = calcT();
+  /* The view centres the case in the window, which leaves a gap between
+     the ruler gutter and the case that would be cropped in as dead
+     ground. Slide it up against the gutter first, so the crop can be
+     tight on all four sides. */
+  const keepPan = S.pan;
+  slideToGutter(view);
   paint();
-  /* preview stops before the annotation pass, so a marked-up plain
-     export has to ask for the dimensions itself */
-  if (PREVIEW && MARK_ALL) { PREVIEW = false; drawAllDims(); PREVIEW = true; }
 
-  const crop = exportCrop(view, opt, w, h, caption);
+  const crop = exportCrop(view, opt, w, h);
   const off = newCanvas(Math.round(crop.w * scale), Math.round(crop.h * scale));
   const cc = off.getContext('2d');
   cc.fillStyle = ground; cc.fillRect(0, 0, off.width, off.height);
@@ -4915,26 +4917,19 @@ function renderSheet(view, scale, opt, caption) {
     Math.round(crop.w * scale), Math.round(crop.h * scale),
     0, 0, Math.round(crop.w * scale), Math.round(crop.h * scale));
 
-  if (caption) {
-    cc.setTransform(scale, 0, 0, scale, 0, 0);
-    cc.fillStyle = ground;
-    cc.fillRect(0, crop.h - CAPTION_H, crop.w, CAPTION_H);
-    cc.fillStyle = C.ink3; cc.font = `11px ${MONO}`; cc.textAlign = 'left'; cc.textBaseline = 'alphabetic';
-    cc.fillText(`${S.name} — ${viewWord(view)} — case ${rnd(S.cs.w)}×${rnd(S.cs.h)}×${rnd(S.cs.d)} cm`, 4, crop.h - 7);
-  }
-
   ctx = keepCtx; VW = keepW; VH = keepH; S.view = keepView; S.opt = keepOpt; T = keepT;
-  PREVIEW = keepPrev; MARK_ALL = keepMark; EXPORTING = keepExp;
+  S.pan = keepPan;
+  PREVIEW = keepPrev; EXPORTING = keepExp; SHOW_FURNITURE = keepF;
   readPalette();
   return off;
 }
 
 function sheetFor(view) {
   return renderSheet(view, EXP.scale, {
-    rulers: EXP.style === 'sheet' && EXP.rulers,
-    grid: EXP.style === 'sheet' && EXP.grid,
-    dims: EXP.marks !== 'none'
-  }, EXP.style === 'sheet' && EXP.caption);
+    rulers: EXP.rulers,
+    grid: EXP.grid,
+    dims: false
+  });
 }
 
 function saveSheet(view) {
@@ -4945,42 +4940,7 @@ function saveSheet(view) {
   }, jpeg ? 'image/jpeg' : 'image/png', jpeg ? 0.92 : undefined);
 }
 
-/* A document is HTML with a .doc name — which Word, Pages and Google
-   Docs have all opened for twenty years — with the drawing embedded as
-   a data URI so the file stands on its own. Reuses the schedule, so the
-   table can never drift from what the schedule window shows. */
-function saveDoc() {
-  const views = EXP.view === 'both' ? ['front', 'plan'] : [EXP.view];
-  const pics = views.map(v => `<p><img src="${sheetFor(v).toDataURL('image/png')}" style="width:100%"></p>
-    <p style="font:italic 10pt Georgia,serif;color:#555">${esc(S.name)} — ${viewWord(v)}</p>`).join('');
-  const rows = scheduleRows();
-  const head = Object.keys(rows[0] || { Object: '' });
-  const table = `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;font:10pt Georgia,serif">
-    <tr>${head.map(h => `<th align="left" bgcolor="#eeeae2">${esc(h)}</th>`).join('')}</tr>
-    ${rows.map(r => `<tr>${head.map(h => `<td>${esc(r[h] ?? '')}</td>`).join('')}</tr>`).join('')}
-  </table>`;
-  const doc = `<html><head><meta charset="utf-8"><title>${esc(S.name)}</title></head>
-    <body style="font:11pt Georgia,serif">
-      <h1 style="font-size:18pt">${esc(S.name)}</h1>
-      <p>Case ${rnd(S.cs.w)} &times; ${rnd(S.cs.h)} &times; ${rnd(S.cs.d)} cm.
-         ${rows.length} object${rows.length === 1 ? '' : 's'}.
-         Drawn ${new Date().toLocaleDateString()}.</p>
-      ${pics}
-      <h2 style="font-size:14pt">Objects</h2>
-      ${table}
-    </body></html>`;
-  download(new Blob([doc], { type: 'application/msword' }),
-    `${S.name.replace(/[^\w -]+/g, '') || 'case'}.doc`);
-}
-
 function runExport() {
-  if (EXP.fmt === 'doc') {
-    saveDoc();
-    closeExport();
-    toast('Document written — it opens in Word');
-    draw();
-    return;
-  }
   const views = EXP.view === 'both' ? ['front', 'plan'] : [EXP.view];
   views.forEach((v, i) => setTimeout(() => saveSheet(v), i * 350));
   closeExport();
@@ -4993,22 +4953,14 @@ function syncExport() {
   $$('#expView button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ev === EXP.view)));
   $$('#expScale button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.sc === EXP.scale)));
   $$('#expStyle button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.st === EXP.style)));
-  $$('#expMarks button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mk === EXP.marks)));
   $('#expRulers').checked = EXP.rulers;
   $('#expGrid').checked = EXP.grid;
-  $('#expCaption').checked = EXP.caption;
-  $('#expDrawing').classList.toggle('hidden', EXP.style !== 'sheet');
-  $('#expFmtHelp').textContent = EXP.fmt === 'doc'
-    ? 'A document you can open in Word: the drawing, then a table of every object with its size and position.'
-    : EXP.fmt === 'jpeg'
-      ? 'Smaller file, no transparency, and fine detail softens a little. Right for pasting into a document.'
-      : 'Lossless, and every line stays crisp. Right for anything that will be printed or drawn over.';
+  $('#expFmtHelp').textContent = EXP.fmt === 'jpeg'
+    ? 'Smaller file, no transparency, and fine detail softens a little. Right for pasting into a document.'
+    : 'Lossless, and every line stays crisp. Right for anything that will be printed or drawn over.';
   $('#expStyleHelp').textContent = EXP.style === 'plain'
-    ? 'The case on its own against a dark surround, with no grid, rulers or labels — what you see in Preview.'
-    : 'The drawing as it stands on screen, on its sheet, with whatever furniture you tick below.';
-  $('#expMarksHelp').textContent = EXP.marks === 'all'
-    ? 'Every object, panel and plinth gets the four dimension lines you see when you select one, so the drawing can be installed from.'
-    : 'No dimensions at all.';
+    ? 'The case on its own against a dark surround, as it looks in Preview. The grid and the rulers are still yours to tick.'
+    : 'The drawing as it stands on screen, on its sheet.';
   const px = exportSize(EXP.view === 'both' ? 'front' : EXP.view);
   $('#expDims').innerHTML = `<span><b class="mono">${px.w} × ${px.h}</b> px</span><span>${EXP.view === 'both' ? 'two files' : 'one file'}</span>`;
   $('#expFoot').textContent = EXP.view === 'both'
@@ -5019,7 +4971,6 @@ function syncExport() {
 function openExport() {
   EXP.view = S.view;
   EXP.rulers = S.opt.rulers; EXP.grid = S.opt.grid;
-  if (EXP.marks === 'selected') EXP.marks = 'all';
   $('#expBack').hidden = false;
   syncExport();
 }
@@ -5365,11 +5316,7 @@ $('#expStyle').addEventListener('click', e => {
   const b = e.target.closest('[data-st]'); if (!b) return;
   EXP.style = b.dataset.st; syncExport();
 });
-$('#expMarks').addEventListener('click', e => {
-  const b = e.target.closest('[data-mk]'); if (!b) return;
-  EXP.marks = b.dataset.mk; syncExport();
-});
-for (const [id, key] of [['expRulers', 'rulers'], ['expGrid', 'grid'], ['expCaption', 'caption']]) {
+for (const [id, key] of [['expRulers', 'rulers'], ['expGrid', 'grid']]) {
   $('#' + id).addEventListener('change', e => { EXP[key] = e.target.checked; syncExport(); });
 }
 
@@ -5452,7 +5399,6 @@ $('#btnUndoStep').onclick = undo;
 $('#btnRedoStep').onclick = redo;
 
 /* preview */
-$('#btnLock').onclick = () => toggleLock();
 $('#btnPreview').onclick = enterPreview;
 $('#pvExit').onclick = exitPreview;
 $('#pvSeg').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });

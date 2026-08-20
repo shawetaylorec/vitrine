@@ -763,30 +763,22 @@
     S.view = 'front'; VW = cvs.clientWidth; VH = cvs.clientHeight; T = calcT();
     const full = Math.round(cvs.clientWidth * 2);
     EXP.fmt = 'png'; EXP.scale = 2; EXP.style = 'sheet';
-    EXP.marks = 'none'; EXP.rulers = true; EXP.grid = true; EXP.caption = true;
-    const sheet = renderSheet('front', 2, { rulers: true, grid: true, dims: false }, true);
+    EXP.rulers = true; EXP.grid = true;
+    const sheet = renderSheet('front', 2, { rulers: true, grid: true, dims: false });
     ok(sheet.width < full, `the drawing is trimmed to the case, not the window (${sheet.width} of ${full} px)`);
     ok(sheet.width > full * 0.5, 'but not so tight that the case itself is cut');
     ok(exportSize('front').w === sheet.width, 'and the dialogue reports the size it will actually write');
+    ok(!PREVIEW && !EXPORTING && !SHOW_FURNITURE, 'the flags it borrows are put back afterwards');
+
+    /* "just the case" still answers to the grid and ruler tick boxes,
+       because the surround and the drafting furniture are separate
+       questions — which is the whole point of the SHOW_FURNITURE flag */
     EXP.style = 'plain';
-    const plain = renderSheet('front', 2, { rulers: false, grid: false, dims: false }, false);
-    ok(plain.width <= sheet.width, 'with no rulers or caption, "just the case" is tighter still');
-    ok(!PREVIEW && !EXPORTING, 'and the flags it borrows are put back afterwards');
-    EXP.style = 'sheet'; EXP.marks = 'none';
-    /* the document carries the drawing and the schedule */
-    const realDl = download;
-    let doc = null;
-    download = (blob, name) => { doc = { blob, name }; };
-    EXP.fmt = 'doc';
-    saveDoc();
-    download = realDl;
-    ok(doc && /\.doc$/.test(doc.name), `a document is written as ${doc ? doc.name : 'nothing'}`);
-    const text = await doc.blob.text();
-    ok(/<table/.test(text) && /data:image\/png/.test(text),
-      'holding both the drawing and a table of the objects');
-    ok(text.includes(esc(S.items.find(i => i.type === 'object').name)),
-      'with the objects named in it');
-    EXP.fmt = 'png';
+    const bare = renderSheet('front', 2, { rulers: false, grid: false, dims: false });
+    const ruled = renderSheet('front', 2, { rulers: true, grid: false, dims: false });
+    ok(ruled.width > bare.width,
+      `just the case keeps its rulers when asked (${ruled.width} px with, ${bare.width} without)`);
+    EXP.style = 'sheet';
   }
 
   /* --- 7m. objects, panels and casework are listed apart --- */
@@ -839,7 +831,7 @@
     for (let i = 0; i < 120 && exported.length < n; i++) await new Promise(r => setTimeout(r, 50));
     return exported.length >= n;
   };
-  EXP.fmt = 'png'; EXP.scale = 2; EXP.view = 'front'; EXP.caption = true;
+  EXP.fmt = 'png'; EXP.scale = 2; EXP.view = 'front'; EXP.style = 'sheet';
   saveSheet('front');
   ok(await waitFiles(1) && exported[0].size > 20000, `PNG export produced ${exported[0] ? exported[0].size : 0} bytes`);
   ok(/\.png$/.test(exported[0].name), `and is named for what it is — ${exported[0].name}`);

@@ -306,11 +306,7 @@ $('#expStyle').addEventListener('click', e => {
   const b = e.target.closest('[data-st]'); if (!b) return;
   EXP.style = b.dataset.st; syncExport();
 });
-$('#expMarks').addEventListener('click', e => {
-  const b = e.target.closest('[data-mk]'); if (!b) return;
-  EXP.marks = b.dataset.mk; syncExport();
-});
-for (const [id, key] of [['expRulers', 'rulers'], ['expGrid', 'grid'], ['expCaption', 'caption']]) {
+for (const [id, key] of [['expRulers', 'rulers'], ['expGrid', 'grid']]) {
   $('#' + id).addEventListener('change', e => { EXP[key] = e.target.checked; syncExport(); });
 }
 
@@ -393,7 +389,6 @@ $('#btnUndoStep').onclick = undo;
 $('#btnRedoStep').onclick = redo;
 
 /* preview */
-$('#btnLock').onclick = () => toggleLock();
 $('#btnPreview').onclick = enterPreview;
 $('#pvExit').onclick = exitPreview;
 $('#pvSeg').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });

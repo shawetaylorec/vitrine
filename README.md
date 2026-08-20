@@ -99,8 +99,8 @@ no risk of nudging anything — which is the state you want a design in before y
 it to somebody else. It saves with the case, so it arrives locked.
 
 **It produces an install schedule** — every object's size, base height, top height,
-distance from the left and back, lean and wire lengths, copyable straight into a
-spreadsheet.
+distance from the left and back, lean and wire lengths, tab separated and copyable
+straight into a spreadsheet.
 
 **Stand-in shapes for anything not yet photographed.** A picker of twelve — box, disc,
 cylinder, sphere, cone, bowl, triangle, hexagon, arched tablet, book, ring, tapered
@@ -141,11 +141,10 @@ plan-level filter, a turn handle for rotating objects, toggles for grid, dimensi
 rulers, light and dark, and save/open to a `.vitrine.json` file that carries the
 cut-outs with it.
 
-**Export is a dialogue.** PNG, JPEG, or a Word document with the drawing and a table of
-every object. Either view or both. The sheet as drawn, or just the case against a dark
-surround. Up to four times screen size. And an option to mark the whole drawing up with
-the position of every object, so it can be installed from. The picture is cropped to the
-case — you do not get the grey drafting plane from round the outside.
+**Export is a dialogue.** PNG or JPEG, either view or both, at up to four times screen
+size. The sheet as drawn, or just the case against a dark surround — with the grid and
+the rulers ticked independently, so a plain picture can still be to scale. The image is
+cropped to the case: you do not get the grey drafting plane from round the outside.
 
 ## Running it
 

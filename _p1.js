@@ -39,6 +39,10 @@ let BGIMG = null;           // back-wall image
 let PREVIEW = false;        // full-screen, no drafting furniture
 let HOVER = null;           // what the pointer is over, for a soft outline
 let EXPORTING = false;      // true while painting offscreen for a file
+/* Preview strips the surround and the drafting furniture together. An
+   export of just the case wants the surround gone but may still want
+   the grid and the rulers, so they are separate questions. */
+let SHOW_FURNITURE = false;
 
 function loadImage(src) {
   return new Promise((res, rej) => {
@@ -289,7 +293,7 @@ function fitScale() {
 }
 function calcT() {
   if (ctx === mainCtx) { VW = cvs.clientWidth; VH = cvs.clientHeight; }
-  GUT = PREVIEW ? 0 : S.opt.rulers === false ? 8 : 26;
+  GUT = (PREVIEW && !SHOW_FURNITURE) ? 0 : S.opt.rulers === false ? 8 : 26;
   const W = S.cs.w, H = S.view === 'front' ? S.cs.h : S.cs.d;
   const sc = fitScale() * S.zoom;
   return {
@@ -567,7 +571,7 @@ function paint() {
 
   if (!isPlan && BGIMG) coverImage(BGIMG, tl.x, tl.y, cw2, ch2, (S.bg.fade ?? 100) / 100);
 
-  if (S.opt.grid && !PREVIEW) drawGrid(tl, br);
+  if (S.opt.grid && (!PREVIEW || SHOW_FURNITURE)) drawGrid(tl, br);
 
   ctx.save();
   ctx.beginPath(); ctx.rect(tl.x, tl.y, cw2, ch2); ctx.clip();
@@ -594,6 +598,7 @@ function paint() {
     ctx.beginPath(); ctx.rect(tl.x, tl.y, cw2, ch2); ctx.clip();
     ctx.fillStyle = g; ctx.fillRect(tl.x, tl.y, cw2, ch2);
     ctx.restore();
+    if (SHOW_FURNITURE && S.opt.rulers !== false) drawRulers();
     return;
   }
 
@@ -1256,18 +1261,8 @@ function drawPlan() {
    install from. One tag apiece rather than witness lines all round —
    a dozen sets of witness lines is an unreadable thicket, whereas a
    dozen tags is a schedule you can read off the picture. */
-/* Marking everything is not a different drawing — it is the witness
-   lines you already get on a selection, drawn for every item at once,
-   as though you had selected the lot. */
-let MARK_ALL = false;
-
-function drawAllDims() {
-  for (const it of S.items.filter(visible)) drawDimsFor(it);
-}
-
 function drawSelectionDims() {
   if (!S.opt.dims) return;
-  if (MARK_ALL) { drawAllDims(); return; }
   const o = byId(S.sel);
   if (o) drawDimsFor(o);
 }
@@ -1351,6 +1346,11 @@ function drawSpinHandle() {
 
 function drawRulers() {
   const cw = VW, ch = VH;
+  /* a ruler without its numbers is a row of ticks; label() suppresses
+     itself under PREVIEW, which is right for everything else on a
+     finished view but not for the scale itself */
+  const wasPreview = PREVIEW;
+  PREVIEW = false;
   ctx.save();
   ctx.fillStyle = C.panel; ctx.fillRect(0, 0, cw, GUT); ctx.fillRect(0, 0, GUT, ch);
   ctx.strokeStyle = C.line2; ctx.lineWidth = 1;
@@ -1380,4 +1380,5 @@ function drawRulers() {
   ctx.fillStyle = C.ink3; ctx.font = `9px ${UIFONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('cm', GUT / 2, GUT / 2);
   ctx.restore();
+  PREVIEW = wasPreview;
 }

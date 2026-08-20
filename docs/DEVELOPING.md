@@ -36,15 +36,15 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 196 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 193 assertions covering the
 cut-out crop, dragging the measurement box, support heights, stand footprints, derived
 wire lengths, lean maths in both reference frames, yaw, rotation, plan-shape selection,
 panels fixed to plinth faces, panel auto-fit and title lines, depth ordering, overhang
 detection, the shape picker, support stickiness while dragging, alignment snapping,
 plan pick order, cascade placement, base footprints and what they excuse, the six
-clearance fields, duplication keeping its picture, the lock, the export crop, the
-document, undo and redo, the case library, the save/open round trip, opening a file
-written by an older build, and PNG and JPEG export.
+clearance fields, duplication keeping its picture, the lock, the export crop, undo and
+redo, the case library, the save/open round trip, opening a file written by an older
+build, and PNG and JPEG export.
 
 Append a hash to the URL to screenshot a different state:
 
@@ -329,7 +329,7 @@ rewriting a panel, zooming, preview and export all carry on, because none of tho
 happen by accident the way a stray drag does. It rides in `S.opt`, so it saves with the
 case and comes back with it.
 
-**The control is drawn on the sheet, not in the toolbar.** `drawLockButton()` puts a
+**The control is drawn on the sheet, and nowhere else.** `drawLockButton()` puts a
 padlock at the top left of the drafting plane and records its rect in `LOCKBTN` for
 `overLockButton()` to hit-test; `pointerdown` checks it before anything else. The reason
 it is there rather than in the chrome is that the person who needs it most is whoever
@@ -343,34 +343,39 @@ arms, so the object does not jump by the slop.
 
 ## Exporting a picture
 
-`renderSheet(view, scale, opt, caption)` is the whole of it: point `ctx`, `VW` and `VH`
-at an offscreen canvas, override `S.view` and `S.opt` with what was asked for, run the
+`renderSheet(view, scale, opt)` is the whole of it: point `ctx`, `VW` and `VH` at an
+offscreen canvas, override `S.view` and `S.opt` with what was asked for, run the
 ordinary `paint()`, then put everything back. So the export is the same renderer, not a
 second one, and the options in the dialogue are the same options as on the left rail.
-*Just the case* is simply `PREVIEW` turned on offscreen.
+*Just the case* is `PREVIEW` turned on offscreen.
 
-**The picture is cropped to the case.** `exportCrop()` trims to the case plus enough
-margin for the dimension arrows and the plan's BACK WALL / GLASS FRONT captions, keeping
-the ruler gutter when the rulers are on and nothing else. The acre of drafting plane
-round the outside is screen furniture and has no business in a file. It is done by
-painting the full sheet and copying the region out, rather than by fighting the
-transform, and the caption is written onto the cropped canvas afterwards.
-`exportSize()` runs the same crop without painting, so the dialogue can report the size
-it will actually write.
+**The picture is cropped to the case.** `exportCrop()` trims to the case plus
+`EDGE_PAD` for the plan's BACK WALL / GLASS FRONT captions, keeping the ruler gutter
+when the rulers are on and nothing else. The acre of drafting plane round the outside
+is screen furniture and has no business in a file. It is done by painting the full
+sheet and copying the region out, rather than by fighting the transform.
+
+`slideToGutter()` runs first, because the view centres the case in the window and the
+crop would otherwise take in a band of dead ground between the gutter and the case.
+`exportSize()` repeats the same two steps without painting, so the dialogue can report
+the size it will actually write.
 
 The ground colour is painted in explicitly before anything else, because JPEG has no
 transparency and would otherwise come out on black. *Both* is two files rather than one
 composite, staggered by a third of a second so the browser does not swallow the second
 download.
 
-*Position of every object* sets `MARK_ALL`, which makes `drawSelectionDims` run
-`drawDimsFor` over every visible item instead of the selection. It is deliberately not a
-different drawing — it is the witness lines you already know, for everything at once.
+There was briefly an option to dimension every object at once, and a Word document
+carrying the drawing and the schedule. Both were asked for, both were built, and both
+were removed after use: the marked-up drawing is an unreadable thicket at anything past
+three or four objects, and the document added nothing the TSV and a PNG do not.
 
-A **document** is HTML under a `.doc` name, which Word, Pages and Google Docs have all
-opened for twenty years. The drawing goes in as a data URI so the file stands alone, and
-the table comes from `scheduleRows()` — the same rows the schedule window shows, so the
-two cannot drift apart.
+**Preview strips the surround and the drafting furniture together, but they are two
+questions.** An export of just the case wants the dark ground and none of the labels,
+and may still want the grid and the rulers. `SHOW_FURNITURE` separates them: it
+overrides the `!PREVIEW` guards on the grid, the gutter and the ruler pass, and nothing
+else. `drawRulers` also clears `PREVIEW` around its own labels, since a ruler without
+its numbers is a row of ticks.
 
 ## Preview
 
