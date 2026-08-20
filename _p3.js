@@ -13,7 +13,6 @@ const W = {
   work: null,     // canvas being edited
   undo: [],
   tol: 32, erode: 1, brush: 36, tool: 'wand', cutMode: 'edges', bgColour: null,
-  crop: null,
   scaleMode: 'width', keepAspect: true, widthCm: 20, heightCm: 15, lineCm: 10, calib: null,
   depthCm: 3, name: '',
   mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright', wallY: 100, face: 'back',
@@ -21,7 +20,7 @@ const W = {
   planShape: 'auto',
   points: [],     // wire attachment points, in work-canvas pixels
   zoom: 1, pan: { x: 0, y: 0 },
-  bb: null,
+  bb: null, bbManual: false, bbDrag: null,
   cursor: null, painting: false, panning: false
 };
 
@@ -41,6 +40,80 @@ function contentBBox(cv) {
   }
   if (x1 < 0) return { x: 0, y: 0, w: cv.width, h: cv.height };
   return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/* ---- the measurement box ----
+   contentBBox guesses it from the opaque pixels, which is right until a
+   speck you missed erasing drags an edge out and throws off the scale.
+   So the guess is only a starting point: drag an edge and W.bbManual
+   pins it, and nothing recomputes it behind your back until the picture
+   itself changes. */
+const GRIP = 9;                  // handle size in screen pixels
+const GRIP_TOL = 10;             // how near you must be to grab one
+
+function theBB() {
+  if (!W.bb) { W.bb = contentBBox(W.work); W.bbManual = false; }
+  return W.bb;
+}
+function autoBB() { W.bb = null; W.bbManual = false; }
+
+function gripPoints(a, b) {
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  return [[a.x, a.y], [mx, a.y], [b.x, a.y], [b.x, my], [b.x, b.y], [mx, b.y], [a.x, b.y], [a.x, my]];
+}
+const GRIP_EDGE = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+const GRIP_CURSOR = { nw: 'nwse-resize', n: 'ns-resize', ne: 'nesw-resize', e: 'ew-resize', se: 'nwse-resize', s: 'ns-resize', sw: 'nesw-resize', w: 'ew-resize' };
+
+/* which part of the box is under this work-canvas point, if any */
+function bbPart(p) {
+  if (W.step !== 2 || W.mode === 'top' || !W.work) return null;
+  const t = wizT();
+  const bb = theBB();
+  const a = { x: t.ox + bb.x * t.s, y: t.oy + bb.y * t.s };
+  const b = { x: t.ox + (bb.x + bb.w) * t.s, y: t.oy + (bb.y + bb.h) * t.s };
+  const q = { x: t.ox + p.x * t.s, y: t.oy + p.y * t.s };
+  const g = gripPoints(a, b);
+  for (let i = 0; i < g.length; i++) {
+    if (Math.abs(q.x - g[i][0]) <= GRIP_TOL && Math.abs(q.y - g[i][1]) <= GRIP_TOL) return GRIP_EDGE[i];
+  }
+  if (q.x > a.x && q.x < b.x && q.y > a.y && q.y < b.y) return 'move';
+  return null;
+}
+
+/* live edge dragging — edges move independently, so the box can be
+   pulled off a speck without disturbing the other three sides */
+function bbDragTo(p) {
+  const d = W.bbDrag;
+  const dx = p.x - d.px, dy = p.y - d.py;
+  const W0 = W.work.width, H0 = W.work.height;
+  let { x0, y0, x1, y1 } = d.box;
+  if (d.part === 'move') {
+    const w = x1 - x0, h = y1 - y0;
+    x0 = clamp(x0 + dx, 0, W0 - w); y0 = clamp(y0 + dy, 0, H0 - h);
+    x1 = x0 + w; y1 = y0 + h;
+  } else {
+    if (d.part.includes('w')) x0 = clamp(x0 + dx, 0, x1 - 4);
+    if (d.part.includes('e')) x1 = clamp(x1 + dx, x0 + 4, W0);
+    if (d.part.includes('n')) y0 = clamp(y0 + dy, 0, y1 - 4);
+    if (d.part.includes('s')) y1 = clamp(y1 + dy, y0 + 4, H0);
+  }
+  W.bb = { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
+  W.bbManual = true;
+}
+
+function refreshBBReadout() {
+  const el = $('#bbReadout');
+  if (!el || !W.work) return;
+  const bb = theBB();
+  el.innerHTML =
+    `<span>box <b>${Math.round(bb.w)} &times; ${Math.round(bb.h)}</b> px</span>` +
+    `<span>set by <b>${W.bbManual ? 'you' : 'the cut-out'}</b></span>`;
+}
+
+/* the box is the crop box too — what you measure is what you keep */
+function cropToBox() {
+  const bb = theBB();
+  cropWork(Math.round(bb.x), Math.round(bb.y), Math.round(bb.x + bb.w), Math.round(bb.y + bb.h));
 }
 
 /* ---- background removal ------------------------------------
@@ -155,7 +228,7 @@ function runAuto() {
   if (W.cutMode === 'all') colourKey(W.work, W.tol, col);
   else flood(W.work, borderSeeds(W.work), W.tol, col);
   erodeAlpha(W.work, W.erode);
-  W.bb = null; drawWiz(); refreshScale();
+  autoBB(); drawWiz(); refreshScale();
 }
 
 function pushUndo() {
@@ -166,7 +239,7 @@ function pushUndo() {
 function wizUndo() {
   const c = W.undo.pop();
   if (!c) { toast('Nothing to undo'); return; }
-  W.work = c; W.bb = null; drawWiz(); refreshScale();
+  W.work = c; autoBB(); drawWiz(); refreshScale();
 }
 
 /* ---- wizard canvas ---- */
@@ -219,11 +292,20 @@ function drawWiz() {
   const toS = (x, y) => ({ x: t.ox + x * t.s, y: t.oy + y * t.s });
 
   if (W.step >= 2 && W.mode !== 'top') {
-    const bb = W.bb || (W.bb = contentBBox(W.work));
+    const bb = theBB();
     const a = toS(bb.x, bb.y), b = toS(bb.x + bb.w, bb.y + bb.h);
     wizCtx.save();
     wizCtx.strokeStyle = P; wizCtx.lineWidth = 1.5; wizCtx.setLineDash([6, 4]);
     wizCtx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+    /* on the size step the box is yours to adjust, so give it grips */
+    if (W.step === 2) {
+      wizCtx.setLineDash([]);
+      wizCtx.fillStyle = P; wizCtx.strokeStyle = '#fff'; wizCtx.lineWidth = 1.4;
+      for (const [hx, hy] of gripPoints(a, b)) {
+        wizCtx.beginPath(); wizCtx.rect(hx - GRIP / 2, hy - GRIP / 2, GRIP, GRIP);
+        wizCtx.fill(); wizCtx.stroke();
+      }
+    }
     wizCtx.restore();
   }
   if (W.step === 2 && W.scaleMode === 'line' && W.calib) {
@@ -235,7 +317,7 @@ function drawWiz() {
     wizCtx.restore();
   }
   if (W.step === 3 && W.mount === 'hanging') {
-    const bb = W.bb || (W.bb = contentBBox(W.work));
+    const bb = theBB();
     W.points.forEach((p, i) => {
       const q = toS(p.x, p.y);
       wizCtx.save();
@@ -248,24 +330,6 @@ function drawWiz() {
       wizCtx.fillText(String(i + 1), q.x, q.y);
       wizCtx.restore();
     });
-  }
-  if (W.crop) {
-    const a = toS(Math.min(W.crop.x0, W.crop.x1), Math.min(W.crop.y0, W.crop.y1));
-    const b = toS(Math.max(W.crop.x0, W.crop.x1), Math.max(W.crop.y0, W.crop.y1));
-    wizCtx.save();
-    wizCtx.fillStyle = 'rgba(0,0,0,.35)';
-    wizCtx.fillRect(0, 0, cw, ch);
-    wizCtx.clearRect(a.x, a.y, b.x - a.x, b.y - a.y);
-    wizCtx.save();
-    wizCtx.translate(t.ox, t.oy); wizCtx.scale(t.s, t.s);
-    wizCtx.beginPath();
-    wizCtx.rect((a.x - t.ox) / t.s, (a.y - t.oy) / t.s, (b.x - a.x) / t.s, (b.y - a.y) / t.s);
-    wizCtx.clip();
-    wizCtx.drawImage(W.work, 0, 0);
-    wizCtx.restore();
-    wizCtx.strokeStyle = A; wizCtx.lineWidth = 1.5; wizCtx.setLineDash([5, 4]);
-    wizCtx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
-    wizCtx.restore();
   }
   if (W.step === 1 && W.cursor && (W.tool === 'erase' || W.tool === 'restore')) {
     const q = toS(W.cursor.x, W.cursor.y);
@@ -291,15 +355,12 @@ function paintBrush(p) {
     c.drawImage(W.base, 0, 0);
   }
   c.restore();
-  W.bb = null;
+  autoBB();
 }
 
-function applyCrop() {
-  if (!W.crop) { toast('Drag a box over the part you want to keep first'); return; }
-  const x0 = Math.max(0, Math.round(Math.min(W.crop.x0, W.crop.x1)));
-  const y0 = Math.max(0, Math.round(Math.min(W.crop.y0, W.crop.y1)));
-  const x1 = Math.min(W.work.width, Math.round(Math.max(W.crop.x0, W.crop.x1)));
-  const y1 = Math.min(W.work.height, Math.round(Math.max(W.crop.y0, W.crop.y1)));
+function cropWork(ax, ay, bx, by) {
+  const x0 = Math.max(0, Math.min(ax, bx)), y0 = Math.max(0, Math.min(ay, by));
+  const x1 = Math.min(W.work.width, Math.max(ax, bx)), y1 = Math.min(W.work.height, Math.max(ay, by));
   if (x1 - x0 < 8 || y1 - y0 < 8) { toast('That box is too small'); return; }
   pushUndo();
   const cut = (src) => {
@@ -311,15 +372,15 @@ function applyCrop() {
   W.work = cut(W.work); W.base = cut(W.base);
   W.points = W.points.map(p => ({ x: p.x - x0, y: p.y - y0 }));
   if (W.calib) W.calib = { x1: W.calib.x1 - x0, y1: W.calib.y1 - y0, x2: W.calib.x2 - x0, y2: W.calib.y2 - y0 };
-  W.crop = null; W.bb = null; W.zoom = 1; W.pan = { x: 0, y: 0 };
+  autoBB(); W.zoom = 1; W.pan = { x: 0, y: 0 };
   drawWiz(); refreshScale();
-  toast('Cropped');
+  toast(`Cropped to ${x1 - x0} × ${y1 - y0} px`);
 }
 
 function transformWork(fn) {
   pushUndo();
   W.work = fn(W.work); W.base = fn(W.base);
-  W.points = []; W.calib = null; W.crop = null; W.bb = null;
+  W.points = []; W.calib = null; autoBB();
   W.zoom = 1; W.pan = { x: 0, y: 0 };
   /* the picture turned, so the size fields swap meaning */
   const t = W.widthCm; W.widthCm = W.heightCm; W.heightCm = t;
@@ -353,8 +414,17 @@ wizCv.addEventListener('pointerdown', e => {
     W.panning = { sx: e.clientX, sy: e.clientY, px: W.pan.x, py: W.pan.y };
     return;
   }
+  if (W.step === 2) {
+    /* the measurement box has first claim on the pointer, so a stray
+       speck can be dragged out of the way before anything else happens */
+    const part = bbPart(p);
+    if (part) {
+      const bb = theBB();
+      W.bbDrag = { part, px: p.x, py: p.y, box: { x0: bb.x, y0: bb.y, x1: bb.x + bb.w, y1: bb.y + bb.h } };
+      return;
+    }
+  }
   if (W.step === 1) {
-    if (W.tool === 'crop') { W.crop = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; W.painting = true; drawWiz(); return; }
     if (W.tool === 'pick') {
       const d = W.work.getContext('2d', { willReadFrequently: true }).getImageData(clamp(p.x | 0, 0, W.work.width - 1), clamp(p.y | 0, 0, W.work.height - 1), 1, 1).data;
       W.bgColour = [d[0], d[1], d[2]];
@@ -369,7 +439,7 @@ wizCv.addEventListener('pointerdown', e => {
       const col = [d[0], d[1], d[2]];
       if (W.cutMode === 'all') colourKey(W.work, W.tol, col);
       else flood(W.work, [iy * W.work.width + ix], W.tol, col);
-      W.bb = null; drawWiz(); refreshScale();
+      autoBB(); drawWiz(); refreshScale();
     } else { W.painting = true; paintBrush(p); drawWiz(); }
   } else if (W.step === 2 && W.scaleMode === 'line') {
     W.calib = { x1: p.x, y1: p.y, x2: p.x, y2: p.y }; W.painting = true; drawWiz();
@@ -394,15 +464,23 @@ wizCv.addEventListener('pointermove', e => {
   }
   const p = wizPt(e);
   W.cursor = p;
+  if (W.bbDrag) {
+    bbDragTo(p);
+    refreshScale();
+    drawWiz();
+    return;
+  }
   if (W.painting) {
-    if (W.step === 1 && W.tool === 'crop') { W.crop.x1 = p.x; W.crop.y1 = p.y; }
-    else if (W.step === 1) paintBrush(p);
+    if (W.step === 1) paintBrush(p);
     else if (W.step === 2 && W.calib) { W.calib.x2 = p.x; W.calib.y2 = p.y; refreshScale(); }
+  } else if (W.step === 2) {
+    setWizCursor(bbPart(p));
   }
   drawWiz();
 });
 const wizStop = () => {
-  if (W.painting && W.step === 1 && W.tool !== 'crop') refreshScale();
+  if (W.painting && W.step === 1) refreshScale();
+  if (W.bbDrag) { W.bbDrag = null; refreshScale(); }
   W.painting = false; W.panning = false;
 };
 wizCv.addEventListener('pointerup', wizStop);
@@ -426,7 +504,6 @@ const TOOLHELP = {
   wand: 'Click a patch of background to clear it. With “Everywhere” on, one click keys that colour out of the whole picture — which is how you get the gaps inside a rete.',
   erase: 'Paint away anything the passes left behind. Scroll to zoom right in for fine work.',
   restore: 'Paint back anything that was removed by mistake.',
-  crop: 'Drag a box around what you want to keep, then Apply crop. Everything outside it goes for good.',
   pick: 'Click the actual background in the picture. The passes then work from that colour rather than guessing from the border.',
   pan: 'Drag to move the picture around. Scroll zooms at any time.'
 };
@@ -434,7 +511,7 @@ const TOOLHELP = {
 function setStep(n) {
   if (W.mode === 'top') n = 1;
   W.step = n;
-  if (n >= 2) W.bb = contentBBox(W.work);
+  if (n >= 2) theBB();
   $$('#wizSteps button').forEach(b => b.dataset.on = b.dataset.step === String(n) ? '1' : '0');
   $$('#wizSide [data-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== String(n)));
   $('#wizBack1').disabled = n === 1;
@@ -452,8 +529,8 @@ function updateHint() {
   if (W.mode === 'top') { h.textContent = 'Cut out the object as seen from above, then use it as the plan view.'; return; }
   if (W.step === 1) h.textContent = TOOLHELP[W.tool] || '';
   else if (W.step === 2) h.textContent = W.scaleMode === 'line'
-    ? 'Drag a line across something you know the length of.'
-    : 'The dashed box is the cut-out — that is what gets measured.';
+    ? 'Drag a line across something you know the length of. The dashed box still sets the size — drag its edges to adjust it.'
+    : 'The dashed box is what gets measured. Drag its edges or corners to adjust it, or drag inside it to move it.';
   else h.textContent = W.mount === 'hanging'
     ? 'Click the picture where each wire attaches.'
     : W.mount === 'wall' ? 'Fixed flat to the back wall — set its height on the right.'
@@ -461,9 +538,12 @@ function updateHint() {
 }
 
 /* the cursor is owned by the step, not by whichever brush was last used */
-function setWizCursor() {
+function setWizCursor(part) {
   const hideForBrush = W.step === 1 && (W.tool === 'erase' || W.tool === 'restore');
-  wizCv.style.cursor = W.panning || W.tool === 'pan' ? 'grab' : hideForBrush ? 'none' : 'crosshair';
+  const grip = part && (part === 'move' ? 'move' : GRIP_CURSOR[part]);
+  wizCv.style.cursor = W.panning || W.tool === 'pan' ? 'grab'
+    : grip ? grip
+      : hideForBrush ? 'none' : 'crosshair';
 }
 
 const calibLen = () => W.calib ? Math.hypot(W.calib.x2 - W.calib.x1, W.calib.y2 - W.calib.y1) : 0;
@@ -471,7 +551,7 @@ const calibLen = () => W.calib ? Math.hypot(W.calib.x2 - W.calib.x1, W.calib.y2 
 /* cm per pixel, separately for each axis so a deliberately
    non-proportional size is possible */
 function scaleFactors() {
-  const bb = W.bb || (W.bb = contentBBox(W.work));
+  const bb = theBB();
   if (!W.keepAspect) {
     return { kx: bb.w ? W.widthCm / bb.w : 0, ky: bb.h ? W.heightCm / bb.h : 0, bb };
   }
@@ -484,8 +564,8 @@ function scaleFactors() {
 
 function refreshScale() {
   if (W.step !== 2 || !W.work) return;
-  W.bb = contentBBox(W.work);
   const { kx, ky, bb } = scaleFactors();
+  refreshBBReadout();
   const out = $('#scaleReadout');
   if (!out) return;
   if (!kx || !ky) {
@@ -499,8 +579,7 @@ function refreshScale() {
     if (wi && document.activeElement !== wi) wi.value = W.widthCm;
     if (hi && document.activeElement !== hi) hi.value = W.heightCm;
   }
-  out.innerHTML = `<span>cut-out <b>${bb.w}&times;${bb.h}</b> px</span>
-    <span><b>${rnd(1 / kx, 2)}</b> px/cm</span>
+  out.innerHTML = `<span><b>${rnd(1 / kx, 2)}</b> px/cm</span>
     <span>object <b>${rnd(bb.w * kx, 2)} &times; ${rnd(bb.h * ky, 2)}</b> cm</span>`;
 }
 
@@ -568,7 +647,6 @@ function syncWizFields() {
   $$('#brushTools button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.brush === W.tool)));
   $$('#cutMode button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cut === W.cutMode)));
   $('#scaleLine').classList.toggle('hidden', W.scaleMode !== 'line');
-  $('#cropRow').classList.toggle('hidden', W.tool !== 'crop');
   $('#brushSizeWrap').classList.toggle('hidden', W.tool !== 'erase' && W.tool !== 'restore');
   $('#scaleHelp').textContent = W.keepAspect
     ? 'Type either measurement and the other follows the picture.'
@@ -608,7 +686,7 @@ async function nextFromQueue() {
     const cv = await fileToCanvas(f);
     W.mode = 'object'; W.editId = null; W.topFor = null;
     W.raw = cv; W.base = cv; W.work = copyCanvas(cv);
-    W.undo = []; W.calib = null; W.points = []; W.bb = null; W.crop = null;
+    W.undo = []; W.calib = null; W.points = []; autoBB();
     W.zoom = 1; W.pan = { x: 0, y: 0 }; W.bgColour = null; W.tool = 'wand'; W.cutMode = 'edges';
     W.name = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 60);
     W.widthCm = 20; W.heightCm = 15; W.depthCm = 3; W.keepAspect = true; W.scaleMode = 'width';
@@ -632,7 +710,7 @@ async function openWizard({ edit, step = 1 }) {
   W.base = cv; W.work = copyCanvas(cv);
   W.raw = null;
   if (o.raw) { try { const r = await loadImage(o.raw); const rc = newCanvas(r.width, r.height); rc.getContext('2d').drawImage(r, 0, 0); W.raw = rc; } catch (e) { } }
-  W.undo = []; W.calib = null; W.crop = null; W.bb = contentBBox(cv);
+  W.undo = []; W.calib = null; autoBB();
   W.zoom = 1; W.pan = { x: 0, y: 0 }; W.bgColour = null; W.tool = 'wand'; W.cutMode = 'edges';
   W.name = o.name; W.widthCm = rnd(o.w, 2); W.heightCm = rnd(o.h, 2); W.depthCm = rnd(o.depth, 2);
   W.keepAspect = o.keepAspect !== false; W.scaleMode = 'width';
@@ -641,7 +719,8 @@ async function openWizard({ edit, step = 1 }) {
   W.wallY = o.wallY || rnd(S.cs.h * 0.55); W.face = o.face || 'back';
   W.planShape = o.planShape || 'auto';
   W.stand = o.stand ? { ...o.stand } : { kind: 'none', w: 0, d: 0, h: 0 };
-  W.points = (o.wires || []).map(wr => ({ x: W.bb.x + wr.ax * W.bb.w, y: W.bb.y + wr.ay * W.bb.h }));
+  const ebb = theBB();
+  W.points = (o.wires || []).map(wr => ({ x: ebb.x + wr.ax * ebb.w, y: ebb.y + wr.ay * ebb.h }));
   showWizard('Edit ' + o.name);
   setStep(step);
 }
@@ -655,7 +734,7 @@ async function openTopWizard(id, file) {
     const cv = await fileToCanvas(file);
     W.mode = 'top'; W.topFor = id; W.editId = null;
     W.raw = cv; W.base = cv; W.work = copyCanvas(cv);
-    W.undo = []; W.crop = null; W.calib = null; W.points = []; W.bb = null;
+    W.undo = []; W.calib = null; W.points = []; autoBB();
     W.zoom = 1; W.pan = { x: 0, y: 0 }; W.bgColour = null; W.tool = 'wand'; W.cutMode = 'edges';
     showWizard('Top view — ' + (byId(id)?.name || 'object'));
     runAuto();
@@ -673,7 +752,7 @@ function showWizard(title) {
   syncStandFields();
   $('#wizFoot').innerHTML = W.raw && W.editId ? '<button class="btn ghost sm" id="fromOrig">Start again from the original photo</button>' : '';
   const fo = $('#fromOrig');
-  if (fo) fo.onclick = () => { pushUndo(); W.base = W.raw; W.work = copyCanvas(W.raw); W.bb = null; runAuto(); toast('Back to the original photo'); };
+  if (fo) fo.onclick = () => { pushUndo(); W.base = W.raw; W.work = copyCanvas(W.raw); autoBB(); runAuto(); toast('Back to the original photo'); };
   requestAnimationFrame(() => { drawWiz(); setWizCursor(); });
 }
 
@@ -703,7 +782,9 @@ function discardWizard() {
 }
 
 function finishWizard() {
-  const bb = contentBBox(W.work);
+  /* trim to the measurement box, not to the ink — if you dragged the box
+     the cut-out must match what you measured, or the cm are a lie */
+  const bb = theBB();
   const out = newCanvas(bb.w, bb.h);
   out.getContext('2d').drawImage(W.work, bb.x, bb.y, bb.w, bb.h, 0, 0, bb.w, bb.h);
   const png = out.toDataURL('image/png');
@@ -731,7 +812,7 @@ function finishWizard() {
   const wires = (W.mount === 'hanging'
     ? (W.points.length ? W.points : [{ x: bb.x + bb.w / 2, y: bb.y + bb.h * 0.04 }])
     : []
-  ).map(p => ({ ax: clamp((p.x - bb.x) / bb.w, 0, 1), ay: clamp((p.y - bb.y) / bb.h, 0, 1), len: 0 }));
+  ).map(p => ({ ax: clamp((p.x - bb.x) / bb.w, 0, 1), ay: clamp((p.y - bb.y) / bb.h, 0, 1) }));
 
   let o = byId(W.editId);
   const isNew = !o;
@@ -751,12 +832,13 @@ function finishWizard() {
       wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect, face: W.face,
       stand: { ...W.stand }
     });
-    if (wires.length) o.wires = wires.map((nw, i) => ({ ...nw, len: (o.wires && o.wires[i]) ? o.wires[i].len : 0 }));
+    /* marking the wires never moves the object: the lengths are derived */
+    if (wires.length) o.wires = wires;
   }
 
   if (o.mount === 'hanging') {
     o.rail = o.rail || S.rail;
-    for (const wr of o.wires) if (!wr.len) wr.len = rnd(10 + wr.ay * o.h, 1);
+    if (o.hangY == null) o.hangY = rnd(clamp((o.rail ?? S.rail) - 10 - o.h, 0, S.cs.h), 1);
   } else if (o.mount === 'placed') {
     /* a new object lands centred on whatever it stands on; one you are
        re-editing keeps the place you put it unless it is now off it */
@@ -1075,15 +1157,41 @@ function commit() {
 }
 
 /* fill in anything a file saved by an older build has not got */
+/* Files saved before the wire model was inverted carry a length on each
+   wire and no hangY, and their tilt lived in those lengths. Replay the
+   old sum once, so an old case opens looking exactly as it was left. */
+function migrateWires(o) {
+  if (o.mount !== 'hanging' || o.hangY != null) return;
+  const ws = (o.wires && o.wires.length) ? o.wires : [{ ax: 0.5, ay: 0.04, len: 20 }];
+  const w1 = ws[0];
+  const rail = o.rail ?? S.rail;
+  const p1 = { x: o.x + w1.ax * o.w, y: rail - (w1.len ?? 20) };
+  let rot = 0;
+  if (ws.length > 1) {
+    const dx = (ws[1].ax - w1.ax) * o.w;
+    if (Math.abs(dx) > 1e-6) rot = Math.atan2((rail - (ws[1].len ?? 20)) - p1.y, dx);
+  }
+  /* where the old pivot put the bottom centre, which is the new pivot */
+  const lx = (0.5 - w1.ax) * o.w, ly = (w1.ay - 1) * o.h;
+  const c = Math.cos(rot + (o.spin || 0) * DEG), s = Math.sin(rot + (o.spin || 0) * DEG);
+  o.x = rnd(p1.x + lx * c - ly * s - o.w / 2, 2);
+  o.hangY = rnd(p1.y + lx * s + ly * c, 2);
+  o.spin = rnd((((((o.spin || 0) + rot / DEG) % 360) + 360) % 360), 1);
+  o.wires = ws.map(w => ({ ax: w.ax, ay: w.ay }));
+}
+
 function upgrade(o) {
   if (o.type !== 'object') return o;
-  return Object.assign(blankObject({ id: o.id }), { render: o.png ? 'image' : 'rect' }, o, {
+  const up = Object.assign(blankObject({ id: o.id }), { render: o.png ? 'image' : 'rect' }, o, {
     stand: o.stand || { kind: 'none', w: 0, d: 0, h: 0 },
     leanFrom: o.leanFrom || 'upright',
     planShape: o.planShape || 'auto',
     spin: o.spin || 0,
+    yaw: o.yaw || 0,
     wallY: o.wallY ?? 100
   });
+  migrateWires(up);
+  return up;
 }
 
 async function restore(data) {
@@ -1133,25 +1241,79 @@ async function download(blob, filename) {
    Export
    ============================================================ */
 
-function exportPNG(scale = 2) {
+/* ---- exporting a picture ----
+   The renderer draws into whatever `ctx`/`VW`/`VH` point at, so an export
+   is the same paint() at a bigger scale with the drafting options set to
+   whatever was asked for, then everything put back. */
+
+const EXP = { fmt: 'png', view: 'front', scale: 2, rulers: false, grid: false, dims: false, caption: true };
+
+const viewWord = v => v === 'front' ? 'elevation' : 'plan';
+
+function renderSheet(view, scale, opt, caption) {
   const w = cvs.clientWidth, h = cvs.clientHeight;
   const off = newCanvas(Math.round(w * scale), Math.round(h * scale));
   const oc = off.getContext('2d');
   oc.setTransform(scale, 0, 0, scale, 0, 0);
-  const keepCtx = ctx, keepW = VW, keepH = VH;
-  ctx = oc; VW = w; VH = h;
+  const keepCtx = ctx, keepW = VW, keepH = VH, keepView = S.view, keepOpt = S.opt, keepT = T;
+  ctx = oc; VW = w; VH = h; S.view = view; S.opt = { ...S.opt, ...opt };
   readPalette();
+  /* JPEG has no transparency, so the sheet has to be painted in or the
+     picture comes out on black */
+  oc.fillStyle = C.sheet; oc.fillRect(0, 0, w, h);
   T = calcT();
   paint();
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  ctx.fillStyle = C.ink3; ctx.font = `11px ${MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText(`${S.name} — ${S.view === 'front' ? 'elevation' : 'plan'} — case ${rnd(S.cs.w)}×${rnd(S.cs.h)}×${rnd(S.cs.d)} cm`, GUT + 4, h - 8);
-  ctx = keepCtx; VW = keepW; VH = keepH;
+  if (caption) {
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = C.ink3; ctx.font = `11px ${MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(`${S.name} — ${viewWord(view)} — case ${rnd(S.cs.w)}×${rnd(S.cs.h)}×${rnd(S.cs.d)} cm`, GUT + 4, h - 8);
+  }
+  ctx = keepCtx; VW = keepW; VH = keepH; S.view = keepView; S.opt = keepOpt; T = keepT;
+  readPalette();
+  return off;
+}
+
+function saveSheet(view) {
+  const off = renderSheet(view, EXP.scale, { rulers: EXP.rulers, grid: EXP.grid, dims: EXP.dims }, EXP.caption);
+  const jpeg = EXP.fmt === 'jpeg';
   off.toBlob(b => {
-    download(b, `${S.name.replace(/[^\w -]+/g, '') || 'case'} ${S.view === 'front' ? 'elevation' : 'plan'}.png`);
-  }, 'image/png');
+    download(b, `${S.name.replace(/[^\w -]+/g, '') || 'case'} ${viewWord(view)}.${jpeg ? 'jpg' : 'png'}`);
+  }, jpeg ? 'image/jpeg' : 'image/png', jpeg ? 0.92 : undefined);
+}
+
+function runExport() {
+  const views = EXP.view === 'both' ? ['front', 'plan'] : [EXP.view];
+  views.forEach((v, i) => setTimeout(() => saveSheet(v), i * 350));
+  closeExport();
+  toast(views.length > 1 ? 'Exporting both views' : `Exporting the ${viewWord(views[0])}`);
   draw();
 }
+
+function syncExport() {
+  $$('#expFormat button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.fmt === EXP.fmt)));
+  $$('#expView button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ev === EXP.view)));
+  $$('#expScale button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.sc === EXP.scale)));
+  $('#expRulers').checked = EXP.rulers;
+  $('#expGrid').checked = EXP.grid;
+  $('#expDimsOn').checked = EXP.dims;
+  $('#expCaption').checked = EXP.caption;
+  $('#expFmtHelp').textContent = EXP.fmt === 'jpeg'
+    ? 'Smaller file, no transparency, and fine detail softens a little. Right for pasting into a document.'
+    : 'Lossless, and every line stays crisp. Right for anything that will be printed or drawn over.';
+  const w = Math.round(cvs.clientWidth * EXP.scale), h = Math.round(cvs.clientHeight * EXP.scale);
+  $('#expDims').innerHTML = `<span><b class="mono">${w} × ${h}</b> px</span><span>${EXP.view === 'both' ? 'two files' : 'one file'}</span>`;
+  $('#expFoot').textContent = EXP.view === 'both'
+    ? 'Both views come out as two separate files.'
+    : `The ${viewWord(EXP.view)}, framed as it is on screen.`;
+}
+
+function openExport() {
+  EXP.view = S.view;
+  EXP.rulers = S.opt.rulers; EXP.grid = S.opt.grid; EXP.dims = S.opt.dims;
+  $('#expBack').hidden = false;
+  syncExport();
+}
+function closeExport() { $('#expBack').hidden = true; }
 
 function buildSchedule() {
   const objs = S.items.filter(i => i.type === 'object');
@@ -1171,7 +1333,7 @@ function buildSchedule() {
       'Z cm': rnd(f.z, 1),
       'Deck cm': rnd(f.d, 1),
       Lean: o.mount === 'placed' ? leanLabel(o) || '0°' : '—',
-      Wires: o.mount === 'hanging' ? o.wires.map(w => rnd(w.len, 1)).join(' / ') : '—'
+      Wires: o.mount === 'hanging' ? o.wires.map(w => rnd(wireLen(o, w), 1)).join(' / ') : '—'
     };
   });
   const cols = rows.length ? Object.keys(rows[0]) : [];

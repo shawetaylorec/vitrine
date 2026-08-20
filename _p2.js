@@ -116,8 +116,7 @@ function applyAlign(it) {
   } else if (it.type === 'object' && it.mount === 'wall') {
     it.wallY = rnd((it.wallY || 0) + alignSnap(it, 'y'), 2);
   } else if (it.type === 'object' && it.mount === 'hanging') {
-    const d = alignSnap(it, 'y');
-    if (d) it.wires.forEach(w => { w.len = Math.max(0, rnd(w.len - d, 2)); });
+    it.hangY = rnd((it.hangY || 0) + alignSnap(it, 'y'), 2);
   }
 }
 
@@ -204,8 +203,8 @@ function pick(it) {
   if (it.type === 'object') {
     k.support = it.support;
     k.wallY = it.wallY;
+    k.hangY = it.hangY;
     k.spin = it.spin || 0;
-    k.wires = JSON.parse(JSON.stringify(it.wires || []));
   }
   return k;
 }
@@ -226,9 +225,10 @@ cvs.addEventListener('pointerdown', e => {
   const h = spinHandlePos();
   if (h && Math.hypot(px - h.x, py - h.y) < 11) {
     const o = byId(S.sel);
-    const b = bbox(o);
-    const c = w2s((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2);
-    drag = { spin: true, id: o.id, cx: c.x, cy: c.y, start: o.spin || 0, a0: Math.atan2(py - c.y, px - c.x) };
+    const c = h.prop === 'yaw'
+      ? (f => w2s(f.x + f.w / 2, f.z + f.d / 2))(footprint(o))
+      : (b => w2s((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2))(bbox(o));
+    drag = { spin: true, prop: h.prop, id: o.id, cx: c.x, cy: c.y, start: o[h.prop] || 0, a0: Math.atan2(py - c.y, px - c.x) };
     return;
   }
 
@@ -293,9 +293,12 @@ cvs.addEventListener('pointermove', e => {
   if (drag.spin) {
     const o = byId(drag.id); if (!o) return;
     const a = Math.atan2(py - drag.cy, px - drag.cx);
-    let deg = drag.start - (a - drag.a0) / DEG;   /* screen y is down, world y is up */
+    /* in elevation screen y is down while world y is up, so the sense
+       flips; looking down, screen and world already agree */
+    const sense = drag.prop === 'yaw' ? 1 : -1;
+    let deg = drag.start + sense * (a - drag.a0) / DEG;
     if (!e.shiftKey) deg = Math.round(deg / 5) * 5;
-    o.spin = rnd(((deg % 360) + 360) % 360, 1);
+    o[drag.prop || 'spin'] = rnd(((deg % 360) + 360) % 360, 1);
     drag.moved = true;
     syncInspector(); draw();
     return;
@@ -330,7 +333,7 @@ cvs.addEventListener('pointermove', e => {
     for (const k of drag.kids) { const kid = byId(k.id); if (kid) kid.x = q(k.x + da); }
   } else if (it.mount === 'hanging') {
     it.x = q(drag.snap.x + da);
-    it.wires.forEach((w, i) => { w.len = Math.max(0, rnd(drag.snap.wires[i].len - db, 1)); });
+    it.hangY = q((drag.snap.hangY || 0) + db);
   } else if (it.mount === 'wall') {
     it.x = q(drag.snap.x + da);
     it.wallY = q((drag.snap.wallY || 0) + db);
@@ -388,6 +391,11 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
   if (e.key.toLowerCase() === 'p') { enterPreview(); return; }
   if (!$('#shapeBack').hidden) { if (e.key === 'Escape') closeShapePicker(); return; }
+  if (!$('#expBack').hidden) {
+    if (e.key === 'Escape') closeExport();
+    if (e.key === 'Enter') runExport();
+    return;
+  }
   if (!$('#wizBack').hidden) {
     if (e.key === 'Escape') minimiseWizard();
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); wizUndo(); }
@@ -423,7 +431,7 @@ document.addEventListener('keydown', e => {
       }
       else if (o.type === 'shelf') o.y = rnd(o.y + dv, 1);
       else if (o.type === 'plinth') o.h = Math.max(0.5, rnd(o.h + dv, 1));
-      else if (o.mount === 'hanging') o.wires.forEach(w => { w.len = Math.max(0, rnd(w.len - dv, 1)); });
+      else if (o.mount === 'hanging') o.hangY = rnd((o.hangY || 0) + dv, 1);
       else if (o.mount === 'wall') o.wallY = rnd((o.wallY || 0) + dv, 1);
       else o.support = stepSupport(o, dv);   /* up and down step between supports */
     }
@@ -487,7 +495,7 @@ function blankObject(extra) {
     x: rnd(S.cs.w / 2 - 10), z: 4, wallY: 100, spin: 0,
     mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright',
     stand: { kind: 'none', w: 0, d: 0, h: 0 },
-    rail: S.rail, wires: [], flip: false, flipV: false, hide: false
+    rail: S.rail, hangY: null, yaw: 0, wires: [], flip: false, flipV: false, hide: false
   }, extra || {});
 }
 
@@ -668,7 +676,7 @@ function toast(msg) {
    ============================================================ */
 
 function objBadge(o) {
-  if (o.mount === 'hanging') return 'wire ' + rnd(o.wires && o.wires[0] ? o.wires[0].len : 0);
+  if (o.mount === 'hanging') return o.wires && o.wires[0] ? 'wire ' + rnd(wireLen(o, o.wires[0])) : 'on wires';
   if (o.mount === 'wall') return rnd(o.wallY || 0) + ' cm';
   return rnd(bbox(o).y0) + ' cm';
 }
@@ -682,13 +690,6 @@ function objGlyph(o) {
 function syncChrome() {
   const chip = $('#caseChipName');
   if (chip) chip.textContent = S.name || 'Untitled case';
-  const es = $('#emptyState');
-  if (es) {
-    const bare = S.items.length === 0 && !PREVIEW;
-    es.hidden = !bare;
-    if (bare) $('#emptyTitle').textContent =
-      `An empty ${rnd(S.cs.w)} × ${rnd(S.cs.h)} cm case`;
-  }
 }
 
 function renderLists() {
@@ -802,11 +803,15 @@ function renderInspector() {
       <label class="f full"><span>Name</span><input type="text" id="iName" value="${esc(o.name)}"></label>
       ${o.render === 'panel' ? `
         <label class="f full"><span>Text &mdash; paste straight in</span><textarea id="iText" rows="4" placeholder="Interpretation text">${esc(o.text || '')}</textarea></label>
+        <div class="row">
+          <button class="btn sm" id="iBold" style="flex:1"><b>B</b>&nbsp; Make this line a title</button>
+        </div>
         <div class="fields">
           ${fld('Text size cm', 'iTextSize', rnd(textSizeOf(o), 2), { step: 0.05, min: 0.1 })}
           <label class="f"><span>&asymp; points</span><input type="text" id="iTextPt" value="${ptOf(textSizeOf(o))} pt" disabled></label>
           <label class="f"><span>Fill</span><input type="color" id="iColour" value="${o.colour || '#ffffff'}"></label>
         </div>
+        <button class="btn sm" id="iFitText">Set the type as large as it will go</button>
         ${panelFits(o) ? '' : '<p class="warnbox">The text runs past the bottom of the panel. Make the panel taller, or the type smaller.</p>'}
         <button class="btn sm ghost" id="iToShape">Turn it into a shape&hellip;</button>` : ''}
       ${isShape(o) ? `<div class="row">
@@ -818,6 +823,7 @@ function renderInspector() {
       <div class="readout">
         <span>occupies <b>${rnd(b.x1 - b.x0)} &times; ${rnd(b.y1 - b.y0)}</b> cm</span>
         <span>base <b>${rnd(b.y0)}</b> · top <b>${rnd(b.y1)}</b></span>
+        <span>on the deck <b>${rnd(footprint(o).d)}</b> cm${(o.lean || 0) > 0.5 ? ` <i style="font-style:normal;color:var(--ink-3)">(${rnd(o.depth, 2)} cm thick, ${leanText(o)})</i>` : ''}</span>
       </div>
       ${warn.length ? `<p class="warnbox">Sticks out: ${warn.join('; ')}.</p>` : ''}
       <div class="fields">
@@ -831,7 +837,11 @@ function renderInspector() {
         <label class="f"><span>Quick</span><button class="btn" id="iSpin90" style="padding:4px">&#8635; 90&deg;</button></label>
         <label class="f"><span>Mirror</span><button class="btn" id="iFlip" style="padding:4px">${o.flip ? 'Flipped' : 'Normal'}</button></label>
       </div>
-      <p class="note">Drag the round handle above a selected object to turn it by hand.</p>
+      ${o.mount === 'wall' ? '' : `<div class="fields two">
+        ${fld('Turn in plan &deg;', 'iYaw', rnd(signedDeg(o.yaw)), { step: 1 })}
+        <div class="f"><span>Elevation then shows</span><b class="mono" id="iYawW">${rnd(yawParts(o).width, 1)} cm wide</b></div>
+      </div>`}
+      <p class="note">Drag the round handle by a selected object to turn it by hand &mdash; in elevation it turns in the picture plane, in plan it swings the object round, which narrows what you see from the front.</p>
     </section>
 
     <section class="sect">
@@ -873,20 +883,23 @@ function renderInspector() {
           : 'Stuck flat to the back wall.'}</p>`;
     } else {
       html += `
-      <label class="f full"><span>Rail height cm</span><input type="number" id="iRail" value="${rnd(o.rail ?? S.rail)}" step="0.5"></label>
+      <div class="fields two">
+        ${fld('Rail height cm', 'iRail', rnd(o.rail ?? S.rail), { step: 0.5 })}
+        ${fld('Bottom edge cm', 'iHangY', rnd(o.hangY || 0), { step: 0.5 })}
+      </div>
       <div class="list">
         ${(o.wires || []).map((w, i) => `
           <div class="fields two" style="align-items:end">
-            <label class="f"><span>Wire ${i + 1} length</span><input type="number" data-wl="${i}" value="${rnd(w.len)}" step="0.5" min="0"></label>
-            <label class="f"><span>Across image %</span><input type="number" data-wa="${i}" value="${Math.round(w.ax * 100)}" step="1" min="0" max="100"></label>
+            <label class="f"><span>Wire ${i + 1} across %</span><input type="number" data-wa="${i}" value="${Math.round(w.ax * 100)}" step="1" min="0" max="100"></label>
+            <div class="f"><span>Cut it to</span><b class="mono" data-wl="${i}">${rnd(wireLen(o, w))} cm</b></div>
           </div>`).join('')}
       </div>
       <div class="row">
         ${(o.wires || []).length < 2 ? '<button class="btn ghost" id="iAddWire" style="flex:1">Add second wire</button>' : '<button class="btn ghost" id="iDropWire" style="flex:1">Use one wire</button>'}
-        ${(o.wires || []).length > 1 ? '<button class="btn ghost" id="iLevelWires">Level</button>' : ''}
+        <button class="btn ghost" id="iLevelWires">Hang level</button>
       </div>
-      <div class="readout"><span>spacing <b>${(o.wires || []).length > 1 ? rnd(Math.abs(o.wires[1].ax - o.wires[0].ax) * o.w) : '—'}</b> cm</span><span>hangs at <b>${rnd(-L.rot / DEG)}&deg;</b></span></div>
-      <p class="note">Drag the object up or down to change both wire lengths at once.</p>`;
+      <div class="readout"><span>spacing <b>${(o.wires || []).length > 1 ? rnd(Math.abs(o.wires[1].ax - o.wires[0].ax) * o.w) : '—'}</b> cm</span><span>hangs at <b>${rnd(tiltOf(o))}&deg;</b></span></div>
+      <p class="note">Put the object where you want it &mdash; drag it, and turn it with Turn&nbsp;&deg; above. The wire lengths follow from that, not the other way round.</p>`;
     }
     html += `</section>`;
 
@@ -1032,6 +1045,13 @@ function bindInspector(o) {
     draw();
   });
   on('iTextSize', 'change', () => commit());
+  on('iFitText', 'click', () => {
+    if (!o.text || !o.text.trim()) { toast('Write something on the panel first'); return; }
+    o.textSize = bestTextSize(o);
+    toast(`Set to ${rnd(o.textSize, 2)} cm — about ${ptOf(o.textSize)} pt`);
+    commit();
+  });
+  on('iBold', 'click', () => toggleTitleLine(o));
   on('iColour', 'input', e => { o.colour = e.target.value; draw(); });
   on('iColour', 'change', () => commit());
   on('iShape', 'click', () => openShapePicker('change'));
@@ -1045,6 +1065,7 @@ function bindInspector(o) {
   setNum('iT', v => o.t = Math.max(0.1, v));
   setNum('iY', v => o.y = clamp(v, 0, S.cs.h));
   setNum('iRail', v => o.rail = v);
+  setNum('iHangY', v => o.hangY = v);
   setNum('iWallY', v => o.wallY = v);
   setNum('iZ2', v => o.z = Math.max(0, v));
   on('iFace', 'change', e => { o.face = e.target.value; landOnFace(o); commit(); });
@@ -1073,6 +1094,7 @@ function bindInspector(o) {
     on('iAspect', 'change', e => { o.keepAspect = e.target.checked; });
     setNum('iD', v => o.depth = Math.max(0.1, v));
     setNum('iSpin', v => o.spin = rnd(((v % 360) + 360) % 360, 1));
+    setNum('iYaw', v => o.yaw = rnd(((v % 360) + 360) % 360, 1));
     on('iSpin90', 'click', () => { o.spin = rnd((((o.spin || 0) + 90) % 360), 1); commit(); });
     on('iFlip', 'click', () => { o.flip = !o.flip; commit(); });
     on('iSupport', 'change', e => {
@@ -1120,15 +1142,14 @@ function bindInspector(o) {
     });
     on('iTopView', 'click', () => pickTopView(o.id));
 
-    for (const el of $$('[data-wl]')) el.addEventListener('change', () => { o.wires[+el.dataset.wl].len = Math.max(0, num(el.value)); commit(); });
     for (const el of $$('[data-wa]')) el.addEventListener('change', () => { o.wires[+el.dataset.wa].ax = clamp(num(el.value) / 100, 0, 1); commit(); });
     on('iAddWire', 'click', () => {
-      const a = (o.wires && o.wires[0]) || { ax: 0.5, ay: 0.05, len: 20 };
+      const a = (o.wires && o.wires[0]) || { ax: 0.5, ay: 0.05 };
       o.wires = [{ ...a, ax: 0.2 }, { ...a, ax: 0.8 }];
       commit();
     });
     on('iDropWire', 'click', () => { o.wires = [{ ...o.wires[0], ax: 0.5 }]; commit(); });
-    on('iLevelWires', 'click', () => { const l = o.wires[0].len; o.wires.forEach(w => w.len = l); commit(); });
+    on('iLevelWires', 'click', () => { o.spin = 0; commit(); });
     on('iMount', 'click', e => {
       const b = e.target.closest('[data-mount]'); if (!b) return;
       setMount(o, b.dataset.mount); commit();
@@ -1182,14 +1203,43 @@ function bindInspector(o) {
   on('iDel', 'click', () => removeItem(o.id));
 }
 
+/* Wrap the line the caret is on in **, or unwrap it if it is already a
+   title. Works on the selection when there is one, so several lines can
+   be marked at once, and puts the caret back where it was. */
+function toggleTitleLine(o) {
+  const ta = $('#iText');
+  if (!ta) return;
+  const text = ta.value;
+  const a = ta.selectionStart ?? text.length, b = ta.selectionEnd ?? a;
+  const from = text.lastIndexOf('\n', Math.max(0, a - 1)) + 1;
+  let to = text.indexOf('\n', b);
+  if (to < 0) to = text.length;
+  const block = text.slice(from, to);
+  if (!block.trim()) { toast('Put the caret on the line you want as a title'); return; }
+  const out = block.split('\n').map(line => {
+    const m = line.match(BOLD_RE);
+    return m ? m[1] : (line.trim() ? `**${line.trim()}**` : line);
+  }).join('\n');
+  ta.value = text.slice(0, from) + out + text.slice(to);
+  o.text = ta.value;
+  ta.focus();
+  ta.setSelectionRange(from, from + out.length);
+  draw();
+  scheduleSave();
+}
+
 function setMount(o, mount) {
   if (o.mount === mount) return;
   const b = bbox(o);
   o.mount = mount;
+  /* a lean only means something for a thing standing on a surface. Left
+     on, it survives into a mount where nothing shows it and quietly
+     bloats the footprint in plan. */
+  if (mount !== 'placed') o.lean = 0;
   if (mount === 'hanging') {
     o.rail = o.rail || S.rail;
-    if (!o.wires || !o.wires.length) o.wires = [{ ax: 0.5, ay: 0.05, len: 20 }];
-    o.wires.forEach(w => { w.len = Math.max(0, rnd(o.rail - (b.y1 - w.ay * o.h), 1)); });
+    if (!o.wires || !o.wires.length) o.wires = [{ ax: 0.5, ay: 0.05 }];
+    o.hangY = rnd(b.y0, 1);
   } else if (mount === 'wall') {
     o.wallY = rnd(b.y0);
     o.face = o.face || 'back';
@@ -1211,7 +1261,13 @@ function syncInspector() {
   if (o.type === 'plinth') set('iH', rnd(o.h));
   if (o.type === 'object') {
     set('iSpin', rnd(o.spin || 0));
+    set('iYaw', rnd(signedDeg(o.yaw)));
+    const yw = $('#iYawW'); if (yw) yw.textContent = rnd(yawParts(o).width, 1) + ' cm wide';
     set('iWallY', rnd(o.wallY || 0));
-    if (o.wires) for (const el of $$('[data-wl]')) if (document.activeElement !== el) el.value = rnd(o.wires[+el.dataset.wl].len);
+    set('iHangY', rnd(o.hangY || 0));
+    /* the wire lengths are output, so they are text, not fields */
+    if (o.mount === 'hanging' && o.wires) {
+      for (const el of $$('[data-wl]')) el.textContent = `${rnd(wireLen(o, o.wires[+el.dataset.wl]))} cm`;
+    }
   }
 }

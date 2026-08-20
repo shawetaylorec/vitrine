@@ -79,8 +79,6 @@ right:
 - **Wand** — click a patch of background to clear just that patch.
 - **Erase** / **Restore** — paint by hand. Scroll to zoom right in; the brushes work at
   any magnification.
-- **Crop** — drag a box round what you want to keep, then **Apply crop**. Useful for
-  getting rid of colour charts, rulers and label cards before anything else.
 - **Orientation** — rotate 90° either way, flip either axis. This turns the picture
   itself, so the width and height swap with it. Use it when a photograph is on its
   side or upside down, or to choose which way up a circular object hangs.
@@ -91,8 +89,18 @@ from the original photo*.
 
 ### Step 2 — Size
 
-The dashed box is the cut-out, and that is what gets measured — the transparent margin
-is trimmed off first, so the width you type is the object's real width.
+The dashed box is what gets measured — the transparent margin is trimmed off first, so
+the width you type is the object's real width.
+
+**The box is yours to adjust.** The automatic one is read from the pixels that are
+still opaque, so a speck you missed erasing drags an edge out and the scale goes with
+it. Drag any edge or corner to put it right, or drag inside the box to move the whole
+thing. **Snap back to the cut-out** re-reads it from the picture.
+
+**Crop to the box** throws away everything outside it for good &mdash; the tidy way to lose
+a colour chart, a ruler, a label card, or a speck you keep missing. Cropping is here
+rather than on the cut-out step because the box you measure and the box you keep are
+the same box.
 
 Choose **by width**, **by height**, or **by line**. By line lets you drag across
 something you have a measurement for — a scale bar, a known dimension — and type that
@@ -110,8 +118,9 @@ leaving it at the default.
 **Placed** — choose what it rests on. If you pick a plinth, the object is centred on it
 automatically when you finish.
 
-**On wires** — click the picture where each wire attaches. One point hangs it straight.
-Two points let you tilt it by giving the wires different lengths.
+**On wires** — click the picture where each wire attaches. One point, or two. Marking
+them never moves the object: you put it where you want it and turn it how you want it,
+and the app works out how long each wire has to be to hold it there.
 
 **Fixed** — flat against a vertical surface. Pick the back wall or the front of any
 plinth, and give the height of its bottom edge.
@@ -149,7 +158,9 @@ What follows from that:
 - the **elevation** foreshortens the height, so a 50 cm manuscript at 15° from flat
   stands about 13 cm tall;
 - the **plan** shows the deck it actually covers, which is nearly its full length —
-  this is where cases run out of room, and the warning will tell you;
+  this is where cases run out of room, and the warning will tell you. Looking down, a
+  lean is otherwise invisible, so the span is raked, the edge it touches down on is
+  drawn heavier, and the angle is written beside it;
 - once it leans past halfway to flat, the plan draws **the picture itself** rather than
   a rectangle, because that is what you would see looking down.
 
@@ -163,8 +174,7 @@ Drag in either view.
   along its plinth stays on that plinth even when it overhangs the edge, which is
   flagged rather than corrected. Dragging up or down by more than a couple of
   centimetres is what lifts it onto a different shelf or plinth.
-- Elevation, hung object: sideways moves it; up and down changes both wire lengths at
-  once.
+- Elevation, hung object: sideways and up and down, freely. The wire lengths follow.
 - Plan: sideways and back-to-front.
 - Arrow left and right nudge 1 cm, <kbd>Shift</kbd> 0.1 cm, <kbd>Ctrl</kbd> 5 cm.
 
@@ -185,7 +195,7 @@ an object on the centre line of the case.
 The tolerance is a few *screen* pixels, so zooming in gives you finer control and zooming
 out makes it grabbier. It works sideways in both views, front-to-back in plan, and
 vertically in elevation for the things that can move vertically — shelves, wall-fixed
-panels, and hung objects, which shorten or lengthen their wires to match.
+panels, and hung objects, whose wires are recalculated to match.
 
 **Snap** in the case panel governs all of this, along with the surface snapping above.
 Turn it off and everything moves freely.
@@ -238,6 +248,15 @@ warning in the inspector and a red rule on the drawing. Shrink the type or grow 
 panel until it stops complaining. When the type is too small to read on screen it is
 drawn as grey rules, so a full panel still looks full; zoom in for the words.
 
+**Set the type as large as it will go** finds the largest size the wording still fits
+at and uses it. Useful for a short caption on a big board, and for seeing at once
+whether a long text is ever going to work at a readable size.
+
+**Titles are bold.** Put the caret on a line and press **B — Make this line a title**,
+and the line is wrapped in `**` and drawn bold; press it again to undo. Select several
+lines to mark them all at once. You can type the `**` yourself if you prefer. It works
+by whole lines, because on a panel what wants weight is the heading.
+
 To get wording in, either type into the box, or **select the panel and press
 <kbd>Ctrl</kbd>+<kbd>V</kbd>** with text on the clipboard. Line breaks are kept.
 
@@ -249,6 +268,20 @@ Each object has a **plan shape**:
 - **Rectangle** / **Circle or oval**
 - **The picture itself** — force it
 - **Top-view picture** — cut out a separate photograph taken from above
+
+### Turning an object in plan
+
+**Turn in plan °** swings the object about its vertical axis — an astrolabe set at an
+angle to the glass, a book angled towards the corner. Drag the round handle beside a
+selected object in plan view, or type the angle.
+
+This is the mirror of a lean. A lean tips the object towards you and shortens what
+elevation shows; turning it swings it round and *narrows* what elevation shows, by
+exactly as much as it deepens the footprint. Both views stay in step, and the inspector
+tells you the width the elevation is left with.
+
+Note that **Turn °** is a different thing: that one rotates the picture where it
+stands, in the plane you are looking at.
 
 ## 9. Undoing
 
@@ -304,8 +337,11 @@ matters, and for moving a case to another machine or sending it to a colleague.
 
 ## 12. Getting it out
 
-- **Export PNG** — the current view, at twice screen resolution, captioned with the
-  case dimensions.
+- **Export image** — a PNG or a JPEG. The dialogue lets you choose the format, which
+  view (or both, as two files), the size from ×1 to ×4 of what is on screen, and
+  whether to draw the rulers, the grid, the dimensions and the caption. PNG keeps every
+  line crisp and is the one to print or draw over; JPEG is smaller and right for
+  pasting into a document.
 - **Schedule** — every object with its size, mount, support, stand, position, base and
   top heights, deck used, lean and wire lengths. **Copy as TSV** pastes straight into
   a spreadsheet.
@@ -318,9 +354,11 @@ matters, and for moving a case to another machine or sending it to a colleague.
 that is the whole model. Add a plinth, or a block stand, or turn off **Snap** and set
 the support explicitly.
 
-**The wires are not vertical.** They will not be, once two wires have different
-lengths: the object swings and the attachment points move with it. That is correct.
-Press **Level** to make them equal again.
+**The two wires came out different lengths.** They will, as soon as the object is
+tilted: each wire hangs plumb to wherever its attachment point has ended up, and a
+tilted object puts them at different heights. That is the answer you want &mdash; it is
+what to cut. Press **Hang level** to set the tilt back to zero and the two lengths
+will agree again.
 
 **My manuscript says it is past the case depth.** Almost certainly true. A manuscript
 near flat is mostly depth. Either stand it up more, or it needs a deeper case.

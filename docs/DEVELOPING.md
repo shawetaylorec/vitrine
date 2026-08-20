@@ -36,13 +36,13 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 132 assertions covering the
-cut-out crop, support heights, stand footprints, wire tilt, lean maths in both
-reference frames, rotation, plan-shape selection, panels fixed to plinth faces, depth
-ordering, overhang detection, the shape picker, panel text fitting, support stickiness
-while dragging, alignment snapping, plan pick order, cascade placement, undo and redo,
-the case library, the save/open round trip, opening a file written by an older build,
-and PNG export.
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 158 assertions covering the
+cut-out crop, dragging the measurement box, support heights, stand footprints, derived
+wire lengths, lean maths in both reference frames, yaw, rotation, plan-shape selection,
+panels fixed to plinth faces, panel auto-fit and title lines, depth ordering, overhang
+detection, the shape picker, support stickiness while dragging, alignment snapping,
+plan pick order, cascade placement, undo and redo, the case library, the save/open
+round trip, opening a file written by an older build, and PNG and JPEG export.
 
 Append a hash to the URL to screenshot a different state:
 
@@ -52,7 +52,9 @@ Append a hash to the URL to screenshot a different state:
 | `#plan` | plan |
 | `#dark` | dark theme |
 | `#wiz` | the cut-out step, erase brush selected |
+| `#wiz2` | the size step, with the measurement box and its grips |
 | `#wiz3` | the mounting step — also asserts the cursor is visible there |
+| `#export` | the export dialogue |
 | `#sched` | the schedule |
 | `#shapes` | the shape picker |
 | `#cases` | the case library |
@@ -70,7 +72,7 @@ Centimetres everywhere.
 
 `w2s()` and `s2w()` convert between world and screen and are the only places that know
 which view is active. `ctx`, `VW` and `VH` are module-level and get swapped out when
-rendering to an offscreen canvas for PNG export — that is why `paint()` is separate
+rendering to an offscreen canvas for image export — that is why `paint()` is separate
 from `render()`. `GUT` is the ruler gutter and collapses when the rulers are off or
 preview is on, so the drawing takes the space back.
 
@@ -83,9 +85,10 @@ rotated by `rot`. Three cases:
 - **placed** — the pivot is the bottom centre. Lean foreshortens the height by
   `cos(lean)`, spin turns it, and then the whole thing is dropped until its lowest
   corner rests on `support.top + standLift(o)`.
-- **hanging** — the pivot is the first wire's attachment point, at `rail − length`.
-  With two wires, `rot` is the angle between the two attachment points, so unequal
-  lengths tilt the object. Spin adds to that.
+- **hanging** — the pivot is the bottom centre at `hangY`, exactly as for a placed
+  object, and `rot` is the spin. The wires are read off that, not the other way
+  round: `wireLen(o, wr)` is `rail − attachWorld(o, wr).y`, the plumb drop to
+  wherever the attachment point has ended up.
 - **wall** — the pivot is the bottom centre at `wallY`.
 
 Everything else derives from `layout`: `corners`, `bbox`, `footprint`, `envelope`, hit
@@ -98,6 +101,21 @@ typed and displayed — `shownLean()` does the conversion.
 elevation gets `h·cos` — the foreshortened face and nothing more, because drawing the
 block's edge as well puts an unexplained bar under everything. The deck it covers is
 `h·sin + depth·cos`, which is the honest number and the one the warnings use.
+
+`yawParts(o)` is the mirror of it in the other plane. Lean tips the object about a
+horizontal axis; yaw swings it about the vertical one, so the same sum runs the other
+way: elevation shows `w·cos(yaw) + deck·sin(yaw)` and the footprint takes
+`deck·cos(yaw) + wPlan·sin(yaw)`. Turning it therefore narrows the elevation by
+exactly as much as it deepens the plan. Only the elevation width is fed back into
+`layout`; plan draws the true rectangle rotated inside the box it occupies, so a
+turned object reads as turned rather than merely wider.
+
+**A lean has to be legible in plan.** Nothing about a 0.5 cm panel covering 7 cm of
+deck explains itself when you are looking straight down, so `drawPlan` rakes the span
+(except over a photograph, where the picture already says it), weights the edge that
+actually touches down, and writes the angle beside it. The inspector says the same
+thing in words. Changing the mount zeroes `lean`, because an angle that survives into
+a mount where nothing shows it silently bloats the footprint.
 
 `footprint(o)` treats `z` as the back edge of the span. `envelope(o)` is the footprint
 unioned with the stand's.
@@ -186,6 +204,16 @@ on screen. `layoutText` wraps to a width while keeping authored line breaks;
 pixels the text is greeked as grey rules rather than skipped, so a full panel still
 reads as full.
 
+A line wrapped in `**` is a title and is set bold. Whole lines rather than words:
+what wants weight on a panel is the heading, and this way you can see at a glance
+which lines are titles. `layoutText` returns `{text, bold}` per line and measures each
+in the face it will be drawn in, or a bold line wraps a word short.
+
+**Auto-fit bisects rather than steps.** Wrapping makes the fit lumpy — a point smaller
+can save two lines — so there is no useful increment to walk. `bestTextSize` halves
+the interval between "certainly fits" and "certainly does not" twenty-six times, which
+lands well inside the rounding.
+
 ## Choosing a support
 
 An object's support is deliberately sticky. `supportAfterDrag()` ignores sideways
@@ -237,6 +265,33 @@ The wizard keeps three canvases: `raw` (the original photograph), `base` (what R
 and the Restore brush pull from) and `work` (what you are editing). Crops and rotations
 are applied to `base` as well as `work`, or the Restore brush would smear.
 
+## The measurement box
+
+`contentBBox()` guesses the box from the opaque pixels, and the guess is right until a
+speck you missed erasing drags an edge out — at which point the scale, which is derived
+from that box, is quietly wrong. So the guess is only a starting point. `theBB()`
+returns the current box, computing it lazily; dragging an edge sets `bbManual`, and
+after that nothing recomputes it until the picture itself changes (`autoBB()` clears
+both). `bbPart()` reports which grip or edge is under the pointer, and `bbDragTo()`
+moves each edge independently, so one side can be pulled off a speck without disturbing
+the other three.
+
+The same box is the crop box, which is why *Crop* lives on the size step rather than
+the cut-out step: what you measure is what you keep. `finishWizard` trims to `theBB()`
+and not to the ink, or a box you dragged would not match the centimetres it produced.
+
+## Exporting a picture
+
+`renderSheet(view, scale, opt, caption)` is the whole of it: point `ctx`, `VW` and `VH`
+at an offscreen canvas, override `S.view` and `S.opt` with what was asked for, run the
+ordinary `paint()`, then put everything back. So the export is the same renderer, not a
+second one, and the options in the dialogue are the same options as on the left rail.
+
+The sheet colour is painted in explicitly before anything else, because JPEG has no
+transparency and would otherwise come out on black. *Both* is two files rather than one
+composite, staggered by a third of a second so the browser does not swallow the second
+download.
+
 ## Preview
 
 `PREVIEW` is a module flag checked by the renderer. `label()` returns early, the grid,
@@ -259,7 +314,7 @@ be drawn without loading a single case, which matters once they carry photograph
 
 `renderThumb()` draws the case small by borrowing the main renderer: it swaps `ctx`,
 `VW` and `VH` for an offscreen canvas, turns `PREVIEW` on for a clean picture, paints,
-and puts everything back. Same trick as `exportPNG`.
+and puts everything back. Same trick as `renderSheet`.
 
 `persistCurrent()` is what `scheduleSave()` calls, so ordinary autosave and the library
 are the same path — there is no separate "save" concept and nothing to forget.
@@ -278,12 +333,13 @@ keeps opening as the model grows.
 anchor. The hosted copy is sandboxed and ordinary download links are inert there, so
 both paths are needed.
 
-## Chrome and first run
+## Chrome
 
-`syncChrome()` keeps the two bits of interface that follow the case rather than the
-selection: the name on the toolbar chip, and the first-run card, which shows only while
-`S.items` is empty and preview is off. It is called from `renderLists()`, so every
-`commit()` refreshes it.
+`syncChrome()` keeps the bit of interface that follows the case rather than the
+selection: the name on the toolbar chip. It is called from `renderLists()`, so every
+`commit()` refreshes it. There is no first-run card &mdash; the app opens straight onto an
+empty case, because a panel you have to dismiss before you can start is a tax on every
+session after the first.
 
 The left rail folds section by section — each `h2` is a control, and the folded set is
 remembered in `localStorage`. The inspector is deliberately not foldable: it is rebuilt

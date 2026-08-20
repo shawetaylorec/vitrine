@@ -84,23 +84,6 @@ button,input,select,textarea{font:inherit;color:inherit}
 .stage{position:relative;background:var(--sheet);overflow:hidden}
 #sheet{display:block;width:100%;height:100%;touch-action:none}
 
-/* ---------- first-run card ---------- */
-.firstrun{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:3}
-.firstrun[hidden]{display:none}
-.firstrun-card{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;
-  padding:26px 30px 24px;max-width:400px;text-align:center;box-shadow:var(--shadow-lg);
-  animation:cardIn .32s cubic-bezier(.2,.8,.3,1) both}
-@keyframes cardIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
-.firstrun-mark{width:56px;height:64px;margin-bottom:12px}
-.firstrun-mark .em-case{fill:var(--case-fill);stroke:var(--case-edge);stroke-width:1.5}
-.firstrun-mark .em-shelf{stroke:var(--struct-edge);stroke-width:2.5}
-.firstrun-mark .em-plinth{fill:var(--struct);stroke:var(--struct-edge);stroke-width:1}
-.firstrun-mark .em-obj{fill:var(--accent);opacity:.85}
-.firstrun-mark .em-wire{stroke:var(--ink-3);stroke-width:1}
-.firstrun-card h2{margin:0 0 7px;font-size:19px;font-weight:600;letter-spacing:.01em}
-.firstrun-card p{margin:0 0 17px;font-size:13px;line-height:1.55;color:var(--ink-2)}
-.firstrun-acts{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
-.firstrun-acts+.firstrun-acts{margin-top:7px}
 
 /* ---------- controls ---------- */
 .seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel-2);flex:none}
@@ -181,6 +164,8 @@ label.chk input{accent-color:var(--accent)}
 .readout{font-size:11px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:2px 10px;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
 .readout b{font-weight:600;color:var(--ink)}
 .note{font-size:12px;color:var(--ink-3);line-height:1.4}
+.wiznote{margin:0;padding:11px 13px;border-bottom:1px solid var(--line);background:var(--panel-2);font-size:12.5px;color:var(--ink-2);line-height:1.4}
+.wiznote:empty{display:none}
 .warnbox{font-size:12px;color:var(--warn);border-left:2px solid var(--warn);padding-left:8px;line-height:1.4}
 
 /* ---------- hud ---------- */
@@ -219,8 +204,6 @@ button.chip:hover{background:var(--accent-soft)}
   background-image:linear-gradient(45deg,color-mix(in srgb,var(--ink) 7%,transparent) 25%,transparent 25%),linear-gradient(-45deg,color-mix(in srgb,var(--ink) 7%,transparent) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,color-mix(in srgb,var(--ink) 7%,transparent) 75%),linear-gradient(-45deg,transparent 75%,color-mix(in srgb,var(--ink) 7%,transparent) 75%);
   background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}
 #wizCanvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
-.wizhint{position:absolute;left:10px;right:10px;bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:5px 10px;font-size:12px;color:var(--ink-2);box-shadow:var(--shadow);text-align:center;pointer-events:none}
-.wizhint:empty{display:none}
 .wizzoom{position:absolute;right:10px;top:10px;display:flex;gap:2px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:3px 5px;box-shadow:var(--shadow)}
 .wizzoom button{background:none;border:0;width:24px;height:22px;cursor:pointer;color:var(--ink-2);font-size:14px;line-height:1;border-radius:99px}
 .wizzoom button:hover{background:var(--panel-2);color:var(--ink)}
@@ -317,8 +300,8 @@ body.preview .previewbar{display:flex}
     <div class="tgroup">
       <button class="btn ghost" id="btnPreview" title="Full-screen preview (P)">Preview</button>
       <button class="btn ghost" id="btnSchedule">Schedule</button>
-      <button class="btn ghost" id="btnExportPng">Export</button>
-      <button class="btn ghost" id="btnSave">Save</button>
+      <button class="btn ghost" id="btnExportPng" title="A PNG or JPEG picture of the case">Export image&hellip;</button>
+      <button class="btn ghost" id="btnSave" title="Save the whole case as a file you can reopen">Save file</button>
     </div>
     <button class="btn ghost ico" id="btnTheme" title="Light or dark">&#9682;</button>
     <input type="file" id="fileImg" accept="image/*" multiple hidden>
@@ -392,29 +375,6 @@ body.preview .previewbar{display:flex}
     <canvas id="sheet"></canvas>
     <div class="dropzone"><span>Drop to add an object</span></div>
 
-    <div class="firstrun" id="emptyState" hidden>
-      <div class="firstrun-card">
-        <svg class="firstrun-mark" viewBox="0 0 64 74" aria-hidden="true">
-          <rect x="4" y="4" width="56" height="62" rx="2" class="em-case"/>
-          <line x1="4" y1="40" x2="60" y2="40" class="em-shelf"/>
-          <rect x="38" y="46" width="15" height="20" class="em-plinth"/>
-          <circle cx="21" cy="24" r="8" class="em-obj"/>
-          <line x1="21" y1="4" x2="21" y2="16" class="em-wire"/>
-        </svg>
-        <h2 id="emptyTitle">An empty case</h2>
-        <p>Drop a photograph anywhere on this sheet, paste one with
-          <kbd>Ctrl</kbd>&#8202;+&#8202;<kbd>V</kbd>, or block it out with shapes first.</p>
-        <div class="firstrun-acts">
-          <button class="btn primary" id="esPhoto">Add from a photograph</button>
-          <button class="btn" id="esShape">Start with a shape</button>
-        </div>
-        <div class="firstrun-acts">
-          <button class="btn ghost sm" id="esShelf">Add a shelf</button>
-          <button class="btn ghost sm" id="esPlinth">Add a plinth</button>
-          <button class="btn ghost sm" id="esCases">Open another case</button>
-        </div>
-      </div>
-    </div>
     <div class="hud">
       <span class="chip" id="hudPos">&mdash;</span>
       <span class="chip" id="hudSel">Nothing selected</span>
@@ -468,9 +428,10 @@ body.preview .previewbar{display:flex}
           <button id="wzIn" title="Zoom in">+</button>
           <button id="wzFit" title="Fit" style="width:auto;padding:0 7px;font-size:11px">FIT</button>
         </div>
-        <div class="wizhint" id="wizHint"></div>
       </div>
       <div class="wizside" id="wizSide">
+
+        <p class="wiznote" id="wizHint"></p>
 
         <div data-panel="1">
           <section class="sect">
@@ -479,17 +440,12 @@ body.preview .previewbar{display:flex}
               <button data-brush="wand" aria-pressed="true">Wand</button>
               <button data-brush="erase" aria-pressed="false">Erase</button>
               <button data-brush="restore" aria-pressed="false">Restore</button>
-              <button data-brush="crop" aria-pressed="false">Crop</button>
               <button data-brush="pick" aria-pressed="false">Pick colour</button>
               <button data-brush="pan" aria-pressed="false">Pan</button>
             </div>
             <div class="slid" id="brushSizeWrap">
               <label>Brush size <b id="brushVal">36 px</b></label>
               <input type="range" id="brush" min="2" max="200" value="36">
-            </div>
-            <div class="row" id="cropRow">
-              <button class="btn" id="btnCropApply" style="flex:1">Apply crop</button>
-              <button class="btn ghost" id="btnCropCancel">Clear</button>
             </div>
           </section>
           <section class="sect">
@@ -526,6 +482,15 @@ body.preview .previewbar{display:flex}
         </div>
 
         <div data-panel="2" class="hidden">
+          <section class="sect">
+            <h2>Measurement box</h2>
+            <div class="readout" id="bbReadout"></div>
+            <div class="row">
+              <button class="btn ghost sm" id="btnBBReset" style="flex:1">Snap back to the cut-out</button>
+              <button class="btn ghost sm" id="btnBBCrop">Crop to the box</button>
+            </div>
+            <p class="help">Snapping back re-reads it from the cut-out. Cropping throws away everything outside it for good &mdash; which is the tidy way to lose a speck you keep missing.</p>
+          </section>
           <section class="sect">
             <h2>Real size</h2>
             <div class="tools" id="scaleTools">
@@ -655,6 +620,56 @@ body.preview .previewbar{display:flex}
     <div class="shapegrid" id="shapeGrid"></div>
     <footer>
       <span class="note">Stand-ins for anything you have not photographed. Every one arrives with sensible dimensions and the right footprint in plan &mdash; change them afterwards on the right.</span>
+    </footer>
+  </div>
+</div>
+
+<div class="backdrop" id="expBack" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="expTitle" style="width:min(520px,100%)">
+    <header>
+      <h3 id="expTitle">Export a picture</h3>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="expClose">Cancel</button>
+    </header>
+    <div class="scroller">
+      <section class="sect">
+        <h2>File</h2>
+        <div class="tools" id="expFormat">
+          <button data-fmt="png" aria-pressed="true">PNG</button>
+          <button data-fmt="jpeg" aria-pressed="false">JPEG</button>
+        </div>
+        <p class="help" id="expFmtHelp"></p>
+      </section>
+      <section class="sect">
+        <h2>View</h2>
+        <div class="tools" id="expView">
+          <button data-ev="front" aria-pressed="true">Elevation</button>
+          <button data-ev="plan" aria-pressed="false">Plan</button>
+          <button data-ev="both" aria-pressed="false">Both</button>
+        </div>
+      </section>
+      <section class="sect">
+        <h2>Size</h2>
+        <div class="tools" id="expScale">
+          <button data-sc="1" aria-pressed="false">&times;1</button>
+          <button data-sc="2" aria-pressed="true">&times;2</button>
+          <button data-sc="3" aria-pressed="false">&times;3</button>
+          <button data-sc="4" aria-pressed="false">&times;4</button>
+        </div>
+        <div class="readout" id="expDims"></div>
+      </section>
+      <section class="sect">
+        <h2>What to draw</h2>
+        <label class="chk"><input type="checkbox" id="expRulers">Rulers down the edges</label>
+        <label class="chk"><input type="checkbox" id="expGrid">Grid</label>
+        <label class="chk"><input type="checkbox" id="expDimsOn">Dimensions on the selected item</label>
+        <label class="chk"><input type="checkbox" id="expCaption" checked>Caption along the bottom</label>
+      </section>
+    </div>
+    <footer>
+      <span class="note" id="expFoot"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="expGo">Export</button>
     </footer>
   </div>
 </div>

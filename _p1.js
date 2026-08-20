@@ -136,22 +136,38 @@ function leanParts(o) {
     deck: o.h * Math.sin(th) + (o.depth || 0) * Math.cos(th)
   };
 }
+
+/* Yaw is lean's mirror. Lean tips the object towards you about a
+   horizontal axis; yaw swings it about the vertical one. The projection
+   is the same sum in the other plane, so turning it narrows what
+   elevation shows by exactly as much as it deepens the footprint. */
+function yawParts(o) {
+  const th = (o.yaw || 0) * DEG;
+  const c = Math.abs(Math.cos(th)), s = Math.abs(Math.sin(th));
+  const spin = (o.spin || 0) * DEG;
+  const placed = o.mount === 'placed';
+  const deck = placed ? leanParts(o).deck : (o.depth || 0);
+  const hEff = placed ? leanParts(o).height : o.h;
+  /* how wide it lies looking down before yaw turns it — a spun object
+     covers its turned width, not the width of the picture */
+  const wPlan = o.w * Math.abs(Math.cos(spin)) + hEff * Math.abs(Math.sin(spin));
+  return {
+    width: o.w * c + deck * s,        // the face elevation still sees
+    deck: deck * c + wPlan * s,       // the ground it covers in plan
+    wPlan, thick: deck
+  };
+}
 const isFlat = o => o.mount === 'placed' && (o.lean || 0) > 45;
 
 function layout(o) {
   const spin = (o.spin || 0) * DEG;
 
   if (o.mount === 'hanging') {
-    const ws = (o.wires && o.wires.length) ? o.wires : [{ ax: 0.5, ay: 0.04, len: 20 }];
-    const w1 = ws[0];
-    const p1 = { x: o.x + w1.ax * o.w, y: (o.rail ?? S.rail) - w1.len };
-    let rot = 0;
-    if (ws.length > 1) {
-      const w2 = ws[1];
-      const dx = (w2.ax - w1.ax) * o.w;
-      if (Math.abs(dx) > 1e-6) rot = Math.atan2(((o.rail ?? S.rail) - w2.len) - p1.y, dx);
-    }
-    return { w: o.w, h: o.h, rot: rot + spin, pivot: p1, u: w1.ax, v: w1.ay };
+    /* The object is placed and turned to where you want it; the wires are
+       whatever length that orientation demands. It used to work the other
+       way round — two lengths derived the tilt — which meant marking a
+       second attachment point swung the object off its position. */
+    return { w: yawParts(o).width, h: o.h, rot: spin, pivot: { x: o.x + o.w / 2, y: o.hangY ?? 60 }, u: 0.5, v: 1 };
   }
 
   if (o.mount === 'wall') {
@@ -162,15 +178,15 @@ function layout(o) {
      thickness into view, so in elevation you see a foreshortened face
      with the edge of the block below it. Lying flat that is all edge —
      which is exactly what a label card on a plinth looks like. */
-  const p = leanParts(o);
-  const hEff = p.height;
+  const hEff = leanParts(o).height;
+  const wEff = yawParts(o).width;
   const base = supportOf(o).top + standLift(o);
   const c = Math.cos(spin), s = Math.sin(spin);
   let minY = Infinity;
-  for (const [a, b] of [[-o.w / 2, 0], [o.w / 2, 0], [o.w / 2, hEff], [-o.w / 2, hEff]]) {
+  for (const [a, b] of [[-wEff / 2, 0], [wEff / 2, 0], [wEff / 2, hEff], [-wEff / 2, hEff]]) {
     minY = Math.min(minY, a * s + b * c);
   }
-  return { w: o.w, h: hEff, rot: spin, pivot: { x: o.x + o.w / 2, y: base - minY }, u: 0.5, v: 1 };
+  return { w: wEff, h: hEff, rot: spin, pivot: { x: o.x + o.w / 2, y: base - minY }, u: 0.5, v: 1 };
 }
 
 function corners(o) {
@@ -200,8 +216,7 @@ function footprint(o) {
   /* stuck to a plinth front it sits at that face, proud by its own
      thickness — so from above it is barely a line */
   if (f) return { x: b.x0, w: b.x1 - b.x0, z: f.z + f.d, d: o.depth || 0.4 };
-  const d = o.mount === 'placed' ? leanParts(o).deck : (o.depth || 0);
-  return { x: b.x0, w: b.x1 - b.x0, z: o.z, d };
+  return { x: b.x0, w: b.x1 - b.x0, z: o.z, d: yawParts(o).deck };
 }
 
 /* everything the object needs room for, stand included */
@@ -306,19 +321,30 @@ function label(text, x, y, { size = 11, font = MONO, fill = C.ink2, align = 'cen
   ctx.fillText(text, x, y);
 }
 
-/* wrap to a width, keeping the line breaks the writer typed.
-   ctx.font must already be set — the caller owns the measuring. */
-function layoutText(text, maxW) {
+/* A line wrapped in ** is a title and is set bold. Whole lines rather
+   than words: on a panel what wants weight is the heading, and this way
+   the writer can see at a glance which lines are titles. */
+const BOLD_RE = /^\s*\*\*([\s\S]*?)\*\*\s*$/;
+const boldFont = (sizePx, bold) => `${bold ? '600 ' : ''}${sizePx}px ${UIFONT}`;
+
+/* wrap to a width, keeping the line breaks the writer typed. Returns
+   {text, bold} per line. `sizePx` is needed because a bold line has to
+   be measured in the bold face or it wraps a word short. */
+function layoutText(text, maxW, sizePx) {
   const lines = [];
   for (const para of String(text).split(/\r?\n/)) {
-    if (!para.trim()) { lines.push(''); continue; }
+    const m = para.match(BOLD_RE);
+    const bold = !!m;
+    const body = bold ? m[1] : para;
+    if (!body.trim()) { lines.push({ text: '', bold }); continue; }
+    if (sizePx) ctx.font = boldFont(sizePx, bold);
     let cur = '';
-    for (const wd of para.split(/\s+/).filter(Boolean)) {
+    for (const wd of body.split(/\s+/).filter(Boolean)) {
       const test = cur ? cur + ' ' + wd : wd;
-      if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = wd; }
+      if (ctx.measureText(test).width > maxW && cur) { lines.push({ text: cur, bold }); cur = wd; }
       else cur = test;
     }
-    if (cur) lines.push(cur);
+    if (cur) lines.push({ text: cur, bold });
   }
   return lines;
 }
@@ -667,6 +693,25 @@ function drawFront() {
   }
 }
 
+/* the span a leaning object sweeps, raked back from the contact edge
+   towards where its top overhangs — read it as "this is tipped, not
+   thick" */
+function leanRake(x, y, w, h, col, alpha) {
+  if (h < 3) return;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.strokeStyle = col; ctx.globalAlpha = alpha * .35; ctx.lineWidth = 1;
+  for (let i = -h; i < w + h; i += 6) {
+    ctx.beginPath(); ctx.moveTo(x + i, y + h); ctx.lineTo(x + i + h, y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* worded the way it was typed in, so it matches the inspector */
+function leanText(o) {
+  return `${rnd(shownLean(o))}° from ${o.leanFrom === 'flat' ? 'flat' : 'upright'}`;
+}
+
 function hatch(x, y, w, h) {
   if (PREVIEW) return;
   ctx.save();
@@ -757,16 +802,35 @@ const textSizeOf = o => o.textSize || 0.55;
 const ptOf = cm => Math.round(cm * 28.35);
 
 function panelLines(o, wpx, sizePx) {
-  ctx.font = `${sizePx}px ${UIFONT}`;
   const padPx = PANEL_PAD * (T ? T.sc : 1);
-  return layoutText(o.text || '', Math.abs(wpx) - padPx * 2);
+  return layoutText(o.text || '', Math.abs(wpx) - padPx * 2, sizePx);
+}
+
+/* would this wording fit the panel at this size, in cm? */
+function panelFitsAt(o, cm) {
+  const sc = T ? T.sc : 20;
+  const sizePx = Math.max(1, cm * sc);
+  const lines = panelLines(o, o.w * sc, sizePx);
+  const padPx = PANEL_PAD * sc;
+  return lines.length * sizePx * 1.32 <= o.h * sc - padPx * 2 + 0.5;
 }
 function panelFits(o) {
-  if (!T || o.render !== 'panel' || !o.text) return true;
-  const sizePx = textSizeOf(o) * T.sc;
-  const lines = panelLines(o, o.w * T.sc, sizePx);
-  const padPx = PANEL_PAD * T.sc;
-  return lines.length * sizePx * 1.32 <= o.h * T.sc - padPx * 2 + 0.5;
+  if (o.render !== 'panel' || !o.text) return true;
+  return panelFitsAt(o, textSizeOf(o));
+}
+
+/* the largest size the wording still fits at. Bisecting beats stepping
+   because wrapping makes the fit lumpy — one point smaller can save two
+   lines — so there is no useful increment to walk. */
+function bestTextSize(o) {
+  if (o.render !== 'panel' || !o.text || !o.text.trim()) return textSizeOf(o);
+  let lo = 0.08, hi = Math.max(o.h, 1);
+  if (panelFitsAt(o, hi)) return rnd(hi, 2);
+  for (let i = 0; i < 26; i++) {
+    const mid = (lo + hi) / 2;
+    if (panelFitsAt(o, mid)) lo = mid; else hi = mid;
+  }
+  return Math.max(0.08, rnd(lo, 2));
 }
 
 /* draw the object's own body into a rect in its own rotated frame */
@@ -807,14 +871,17 @@ function paintBody(o, dx, dy, wpx, hpx, forPlan) {
     const maxW = Math.abs(wpx) - padPx * 2;
     shown.forEach((l, i) => {
       const w = i === shown.length - 1 ? maxW * 0.62 : maxW;
-      ctx.fillRect(dx + padPx, dy + padPx + i * lineH, w, Math.max(0.8, sizePx * 0.6));
+      /* a title greeks heavier, so the shape of the panel still reads */
+      ctx.fillRect(dx + padPx, dy + padPx + i * lineH, l.bold ? w * 0.7 : w, Math.max(0.8, sizePx * (l.bold ? 0.8 : 0.6)));
     });
     ctx.globalAlpha = 1;
   } else {
-    ctx.font = `${sizePx}px ${UIFONT}`;
     ctx.fillStyle = C.ink;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    shown.forEach((l, i) => ctx.fillText(l, dx + padPx, dy + padPx + i * lineH));
+    shown.forEach((l, i) => {
+      ctx.font = boldFont(sizePx, l.bold);
+      ctx.fillText(l.text, dx + padPx, dy + padPx + i * lineH);
+    });
   }
 
   if (lines.length > room) {
@@ -833,8 +900,8 @@ function drawObjectFront(o) {
     ctx.strokeStyle = sel ? C.accent : C.ink3;
     ctx.lineWidth = sel ? 1.6 : 1.1;
     for (const wr of (o.wires || [])) {
-      const a = w2s(o.x + wr.ax * o.w, o.rail ?? S.rail);
       const att = attachWorld(o, wr);
+      const a = w2s(att.x, o.rail ?? S.rail);   /* plumb, so straight above */
       const b = w2s(att.x, att.y);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       ctx.fillStyle = sel ? C.accent : C.ink3;
@@ -888,6 +955,21 @@ function attachWorld(o, wr) {
   return { x: L.pivot.x + lx * c - ly * s, y: L.pivot.y + lx * s + ly * c };
 }
 
+/* what the mount-maker needs to cut: a wire drops plumb from the rail to
+   wherever its attachment point has ended up, so its length is simply the
+   drop. This is the answer the app gives, never an input. */
+function wireLen(o, wr) {
+  return Math.max(0, (o.rail ?? S.rail) - attachWorld(o, wr).y);
+}
+
+/* an angle read as a tilt: ±180 rather than 0–360, so a slight
+   anticlockwise lean reads −4° and not 356° */
+function signedDeg(v) {
+  const d = (((v || 0) % 360) + 360) % 360;
+  return d > 180 ? d - 360 : d;
+}
+const tiltOf = o => signedDeg(o.spin);
+
 /* ---------------- plan ---------------- */
 
 function planMode(o) {
@@ -937,45 +1019,76 @@ function drawPlan() {
     if ((mode === 'image' || mode === 'top') && !planImg) mode = 'rect';
     const tint = o.mount === 'hanging' ? C.plan : o.mount === 'wall' ? C.ink3 : C.accent;
 
-    ctx.save();
+    /* Turned about the vertical axis, it is drawn turned: the footprint
+       is a rectangle at an angle inside the box it occupies, not a wider
+       box. Anything at yaw 0 keeps exactly the rectangle it had. */
+    const yp = yawParts(o);
+    const turn = faceOf(o) ? 0 : (o.yaw || 0) * DEG;
+    const cen = w2s(f.x + f.w / 2, f.z + f.d / 2);
+    const lw = turn ? yp.wPlan * T.sc : w;
+    const lh = turn ? Math.max(3, yp.thick * T.sc) : h;
+    const lx = turn ? -lw / 2 : a.x;
+    const ly = turn ? -lh / 2 : a.y;
+    const enter = () => {
+      ctx.save();
+      if (turn) { ctx.translate(cen.x, cen.y); ctx.rotate(turn); }
+    };
+
+    enter();
     ctx.globalAlpha = o.hide ? .3 : 1;
     if (mode === 'panel') {
-      paintBody(o, a.x, a.y, w, h, false);
+      paintBody(o, lx, ly, lw, lh, false);
     } else if (mode === 'image' || mode === 'top') {
       const img = planImg;
       ctx.save();
       if (o.flip || o.flipV) {
-        ctx.translate(a.x + w / 2, a.y + h / 2);
+        ctx.translate(lx + lw / 2, ly + lh / 2);
         ctx.scale(o.flip ? -1 : 1, o.flipV ? -1 : 1);
-        ctx.translate(-(a.x + w / 2), -(a.y + h / 2));
+        ctx.translate(-(lx + lw / 2), -(ly + lh / 2));
       }
-      ctx.drawImage(img, a.x, a.y, w, h);
+      ctx.drawImage(img, lx, ly, lw, lh);
       ctx.restore();
     } else if (mode === 'ellipse') {
       ctx.fillStyle = tint; ctx.globalAlpha *= .28;
-      ctx.beginPath(); ctx.ellipse(a.x + w / 2, a.y + h / 2, Math.abs(w) / 2, Math.abs(h) / 2, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(lx + lw / 2, ly + lh / 2, Math.abs(lw) / 2, Math.abs(lh) / 2, 0, 0, 7); ctx.fill();
       ctx.globalAlpha = o.hide ? .3 : 1;
       ctx.strokeStyle = tint; ctx.lineWidth = sel ? 2 : 1.2;
-      ctx.beginPath(); ctx.ellipse(a.x + w / 2, a.y + h / 2, Math.abs(w) / 2, Math.abs(h) / 2, 0, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(lx + lw / 2, ly + lh / 2, Math.abs(lw) / 2, Math.abs(lh) / 2, 0, 0, 7); ctx.stroke();
     } else {
       ctx.fillStyle = tint; ctx.globalAlpha *= .28;
-      ctx.fillRect(a.x, a.y, w, h);
+      ctx.fillRect(lx, ly, lw, lh);
       ctx.globalAlpha = o.hide ? .3 : 1;
     }
     ctx.restore();
 
     if (mode === 'rect') {
+      enter();
       ctx.strokeStyle = tint; ctx.lineWidth = sel ? 2 : 1.2;
       if (o.mount !== 'placed') ctx.setLineDash([4, 3]);
-      ctx.strokeRect(a.x + .5, a.y + .5, w - 1, h - 1);
-      ctx.setLineDash([]);
+      ctx.strokeRect(lx + .5, ly + .5, lw - 1, lh - 1);
+      ctx.restore();
     }
 
-    /* where it actually touches down: the front edge of the span */
-    if (o.mount === 'placed' && o.lean > 0) {
-      const base = w2s(f.x, f.z + f.d);
+    /* A lean is invisible looking down — all you see is that something
+       0.5 cm thick is covering 7 cm of deck, with no clue why. So say so:
+       rake the span it sweeps, weight the edge it actually touches down
+       on, and put the angle beside it. */
+    if (o.mount === 'placed' && o.lean > 0.5) {
+      enter();
+      /* not over a photograph: there the picture already says what it is,
+         and raking it just muddies the one view where you can see it */
+      if (mode !== 'image' && mode !== 'top') leanRake(lx, ly, lw, lh, tint, o.hide ? .3 : 1);
       ctx.strokeStyle = tint; ctx.lineWidth = 2.4;
-      ctx.beginPath(); ctx.moveTo(a.x, base.y - 1); ctx.lineTo(b.x, base.y - 1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lx, ly + lh - 1); ctx.lineTo(lx + lw, ly + lh - 1); ctx.stroke();
+      ctx.restore();
+      if (h > 9 && w > 30) {
+        label(leanText(o), a.x + w / 2, w2s(f.x, f.z + f.d).y - 8,
+          { size: 9, font: MONO, fill: tint, box: true, bg: caseGround() });
+      }
+    }
+    if (turn && w > 26) {
+      label(`${rnd(signedDeg(o.yaw))}° turned`, a.x + w / 2, a.y - 7,
+        { size: 9, font: MONO, fill: tint, box: true, bg: caseGround() });
     }
 
     if (w > 26 && mode !== 'image' && mode !== 'top' && mode !== 'panel') {
@@ -1007,8 +1120,9 @@ function drawSelectionDims() {
     if (y0 > 1.5) arrowDim(l.x, w2s(0, 0).y, l.x, l.y, `${rnd(y0)}`, C.accent);
     if (o.type === 'object' && o.mount === 'hanging' && o.wires && o.wires[0]) {
       const wr = o.wires[0];
-      const a = w2s(o.x + wr.ax * o.w, o.rail ?? S.rail), b2 = w2s(o.x + wr.ax * o.w, (o.rail ?? S.rail) - wr.len);
-      arrowDim(a.x - 14, a.y, a.x - 14, b2.y, `${rnd(wr.len)}`, C.accent);
+      const att = attachWorld(o, wr);
+      const a = w2s(att.x, o.rail ?? S.rail), b2 = w2s(att.x, att.y);
+      arrowDim(a.x - 14, a.y, a.x - 14, b2.y, `${rnd(wireLen(o, wr))}`, C.accent);
     }
   } else {
     const f = o.type === 'object' ? envelope(o) : { x: o.x, w: o.w, z: o.z, d: o.d };
@@ -1022,12 +1136,21 @@ function drawSelectionDims() {
 
 /* the little handle you drag to turn an object */
 const SPIN_ARM = 26;
+/* The same handle in both views, turning the object about whichever
+   axis you are looking along: in elevation that is the picture plane
+   (spin), looking down it is the vertical axis (yaw). */
 function spinHandlePos() {
   const o = byId(S.sel);
-  if (!o || o.type !== 'object' || S.view !== 'front') return null;
-  const b = bbox(o);
-  const top = w2s((b.x0 + b.x1) / 2, b.y1);
-  return { x: top.x, y: top.y - SPIN_ARM, anchor: top };
+  if (!o || o.type !== 'object') return null;
+  if (S.view === 'front') {
+    const b = bbox(o);
+    const top = w2s((b.x0 + b.x1) / 2, b.y1);
+    return { x: top.x, y: top.y - SPIN_ARM, anchor: top, prop: 'spin' };
+  }
+  if (faceOf(o) || o.mount === 'wall') return null;   /* flat to a face: nothing to turn */
+  const f = footprint(o);
+  const back = w2s(f.x + f.w / 2, f.z);
+  return { x: back.x, y: back.y - SPIN_ARM, anchor: back, prop: 'yaw' };
 }
 function drawSpinHandle() {
   const h = spinHandlePos();

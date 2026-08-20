@@ -25,7 +25,7 @@ drawing and an install schedule, and it is deliberately not 3D.
 **Objects come from photographs.** Drop, paste or pick an image and a three-step
 panel opens: cut the background out, say how big it really is, say how it is mounted.
 Background removal is a flood fill in plain JavaScript — no model download — with a
-wand, erase and restore brushes, a crop tool and zoom for fine work. Two passes are
+wand, erase and restore brushes and zoom for fine work. Two passes are
 offered: *from edges* for solid objects, and *everywhere*, which keys a colour out of
 the whole picture and is what openwork like an astrolabe rete needs.
 
@@ -33,12 +33,17 @@ the whole picture and is what openwork like an astrolabe rete needs.
 other follows from the picture. Or drag a line across something you know the length
 of and give that. Depth you type, because a flat photograph cannot tell you.
 
+What gets measured is the dashed box round the cut-out, drawn automatically from the
+pixels still standing. A speck you missed erasing would drag that box out and take the
+scale with it, so the box is yours to adjust: drag any edge or corner, or crop the
+picture to it and lose the speck for good.
+
 **Mounting is modelled properly.**
 
 | Mount | What it means |
 | --- | --- |
 | Placed | Rests on the case floor, a shelf or a plinth. Optional stand or book cradle. Can lean back. |
-| On wires | Hangs from a rail at a given height. One wire hangs it straight; two wires of different lengths tilt it. |
+| On wires | Hangs from a rail at a given height. Put it where you want it, turn it how you want it, and the wire lengths are worked out from that. |
 | Fixed | Stuck flat to a vertical surface — the back wall, or the front face of any plinth. |
 
 **Stands and cradles belong to the object.** A V stand, a plain block or a book cradle
@@ -52,7 +57,14 @@ warnings use it.
 **Lean can be measured from upright or from flat.** For a manuscript in a cradle,
 "15° from flat" is the natural way to say it. The elevation shows the foreshortened
 height, the plan shows the deck it actually covers, and once something leans past
-halfway to flat the plan draws the picture itself rather than a rectangle.
+halfway to flat the plan draws the picture itself rather than a rectangle. Looking
+down, a lean would otherwise be invisible &mdash; a 0.5 cm panel covering 7 cm of deck with
+nothing to explain it &mdash; so the plan rakes the span, weights the edge it touches down
+on, and writes the angle beside it.
+
+**Turning an object in plan is the same projection in the other plane.** Swing an
+astrolabe round to face the corner and the elevation narrows by exactly as much as the
+footprint deepens. Drag the handle in plan, or type the angle.
 
 ![The plan view](docs/images/shotplan.png)
 
@@ -91,9 +103,10 @@ there, so a second plinth never lands invisibly on the first.
 
 **Interpretation panels carry real type.** Text size is set in centimetres and shown in
 points, so the panel tells you whether that wording actually fits at 16 pt on a
-30 × 20 cm board before anyone sets it. Paste wording straight in from a label document;
-line breaks are kept. Select a plinth before adding one and it goes on that plinth's
-front face, sized to fit.
+30 × 20 cm board before anyone sets it. One button sets the type as large as it will go
+and still fit; a line wrapped in `**` is a title and is set bold. Paste wording straight
+in from a label document; line breaks are kept. Select a plinth before adding one and it
+goes on that plinth's front face, sized to fit.
 
 **Preview mode** goes full screen and strips every drafting mark — grid, rulers,
 dimensions, labels, handles — leaving the case as it would be seen, lit against a dark
@@ -112,8 +125,9 @@ everything is filed as you go, so there is nothing to remember to save.
 
 Also: shelves and plinths, a back wall colour or image, graphics fixed to the wall, a
 plan-level filter, a turn handle for rotating objects, toggles for grid, dimensions and
-rulers, PNG export of either view, light and dark, and save/open to a `.vitrine.json`
-file that carries the cut-outs with it.
+rulers, PNG and JPEG export of either view or both at up to four times screen size,
+light and dark, and save/open to a `.vitrine.json` file that carries the cut-outs with
+it.
 
 ## Running it
 
@@ -137,7 +151,7 @@ that survives a cleared browser.
 | <kbd>P</kbd> | preview mode (<kbd>Esc</kbd> to leave) |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> | undo / redo |
 | <kbd>←</kbd><kbd>→</kbd> | nudge 1 cm — <kbd>Shift</kbd> 0.1 cm, <kbd>Ctrl</kbd> 5 cm |
-| <kbd>↑</kbd><kbd>↓</kbd> | step between surfaces, or change wire length |
+| <kbd>↑</kbd><kbd>↓</kbd> | step between surfaces, or move a hung or fixed object |
 | <kbd>R</kbd> | turn 90° |
 | <kbd>Enter</kbd> | reopen the mounting page |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Del</kbd> | duplicate / remove |

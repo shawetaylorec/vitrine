@@ -169,9 +169,9 @@ $('#erode').addEventListener('change', runAuto);
 $('#brush').addEventListener('input', e => { W.brush = +e.target.value; $('#brushVal').textContent = W.brush + ' px'; drawWiz(); });
 $('#btnAuto').onclick = runAuto;
 $('#btnUndo').onclick = wizUndo;
-$('#btnReset').onclick = () => { pushUndo(); W.work = copyCanvas(W.base); W.bb = null; drawWiz(); refreshScale(); };
-$('#btnCropApply').onclick = applyCrop;
-$('#btnCropCancel').onclick = () => { W.crop = null; drawWiz(); };
+$('#btnReset').onclick = () => { pushUndo(); W.work = copyCanvas(W.base); autoBB(); drawWiz(); refreshScale(); };
+$('#btnBBReset').onclick = () => { autoBB(); drawWiz(); refreshScale(); };
+$('#btnBBCrop').onclick = cropToBox;
 $('#rotL').onclick = () => transformWork(rotCanvas(-1));
 $('#rotR').onclick = () => transformWork(rotCanvas(1));
 $('#flipH').onclick = () => transformWork(mirrorCanvas(false));
@@ -180,7 +180,6 @@ $('#flipV').onclick = () => transformWork(mirrorCanvas(true));
 $('#brushTools').addEventListener('click', e => {
   const b = e.target.closest('[data-brush]'); if (!b) return;
   W.tool = b.dataset.brush;
-  if (W.tool !== 'crop') W.crop = null;
   syncWizFields(); setWizCursor(); updateHint(); drawWiz();
 });
 $('#cutMode').addEventListener('click', e => {
@@ -286,7 +285,25 @@ $('#fileJson').addEventListener('change', async e => {
     toast(`Opened “${S.name}” — it is now one of your cases`);
   } catch (err) { toast('Could not read that file'); }
 });
-$('#btnExportPng').onclick = () => exportPNG(2);
+$('#btnExportPng').onclick = openExport;
+$('#expClose').onclick = closeExport;
+$('#expBack').addEventListener('pointerdown', e => { if (e.target.id === 'expBack') closeExport(); });
+$('#expGo').onclick = runExport;
+$('#expFormat').addEventListener('click', e => {
+  const b = e.target.closest('[data-fmt]'); if (!b) return;
+  EXP.fmt = b.dataset.fmt; syncExport();
+});
+$('#expView').addEventListener('click', e => {
+  const b = e.target.closest('[data-ev]'); if (!b) return;
+  EXP.view = b.dataset.ev; syncExport();
+});
+$('#expScale').addEventListener('click', e => {
+  const b = e.target.closest('[data-sc]'); if (!b) return;
+  EXP.scale = +b.dataset.sc; syncExport();
+});
+for (const [id, key] of [['expRulers', 'rulers'], ['expGrid', 'grid'], ['expDimsOn', 'dims'], ['expCaption', 'caption']]) {
+  $('#' + id).addEventListener('change', e => { EXP[key] = e.target.checked; syncExport(); });
+}
 
 /* ---------- the case library ---------- */
 async function renderCases() {
@@ -337,13 +354,6 @@ $('#casesClose').onclick = closeCases;
 $('#casesBack').addEventListener('pointerdown', e => { if (e.target.id === 'casesBack') closeCases(); });
 $('#btnNewCase').onclick = async () => { await newCase(); renderCases(); };
 $('#btnImportCase').onclick = () => $('#fileJson').click();
-
-/* ---------- empty state ---------- */
-$('#esPhoto').onclick = pickImages;
-$('#esShape').onclick = addShape;
-$('#esShelf').onclick = addShelf;
-$('#esPlinth').onclick = addPlinth;
-$('#esCases').onclick = openCases;
 
 /* ---------- folding the left rail ---------- */
 {

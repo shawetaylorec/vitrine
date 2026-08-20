@@ -84,23 +84,6 @@ button,input,select,textarea{font:inherit;color:inherit}
 .stage{position:relative;background:var(--sheet);overflow:hidden}
 #sheet{display:block;width:100%;height:100%;touch-action:none}
 
-/* ---------- first-run card ---------- */
-.firstrun{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:3}
-.firstrun[hidden]{display:none}
-.firstrun-card{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;
-  padding:26px 30px 24px;max-width:400px;text-align:center;box-shadow:var(--shadow-lg);
-  animation:cardIn .32s cubic-bezier(.2,.8,.3,1) both}
-@keyframes cardIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
-.firstrun-mark{width:56px;height:64px;margin-bottom:12px}
-.firstrun-mark .em-case{fill:var(--case-fill);stroke:var(--case-edge);stroke-width:1.5}
-.firstrun-mark .em-shelf{stroke:var(--struct-edge);stroke-width:2.5}
-.firstrun-mark .em-plinth{fill:var(--struct);stroke:var(--struct-edge);stroke-width:1}
-.firstrun-mark .em-obj{fill:var(--accent);opacity:.85}
-.firstrun-mark .em-wire{stroke:var(--ink-3);stroke-width:1}
-.firstrun-card h2{margin:0 0 7px;font-size:19px;font-weight:600;letter-spacing:.01em}
-.firstrun-card p{margin:0 0 17px;font-size:13px;line-height:1.55;color:var(--ink-2)}
-.firstrun-acts{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
-.firstrun-acts+.firstrun-acts{margin-top:7px}
 
 /* ---------- controls ---------- */
 .seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel-2);flex:none}
@@ -181,6 +164,8 @@ label.chk input{accent-color:var(--accent)}
 .readout{font-size:11px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:2px 10px;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
 .readout b{font-weight:600;color:var(--ink)}
 .note{font-size:12px;color:var(--ink-3);line-height:1.4}
+.wiznote{margin:0;padding:11px 13px;border-bottom:1px solid var(--line);background:var(--panel-2);font-size:12.5px;color:var(--ink-2);line-height:1.4}
+.wiznote:empty{display:none}
 .warnbox{font-size:12px;color:var(--warn);border-left:2px solid var(--warn);padding-left:8px;line-height:1.4}
 
 /* ---------- hud ---------- */
@@ -219,8 +204,6 @@ button.chip:hover{background:var(--accent-soft)}
   background-image:linear-gradient(45deg,color-mix(in srgb,var(--ink) 7%,transparent) 25%,transparent 25%),linear-gradient(-45deg,color-mix(in srgb,var(--ink) 7%,transparent) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,color-mix(in srgb,var(--ink) 7%,transparent) 75%),linear-gradient(-45deg,transparent 75%,color-mix(in srgb,var(--ink) 7%,transparent) 75%);
   background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}
 #wizCanvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
-.wizhint{position:absolute;left:10px;right:10px;bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:5px 10px;font-size:12px;color:var(--ink-2);box-shadow:var(--shadow);text-align:center;pointer-events:none}
-.wizhint:empty{display:none}
 .wizzoom{position:absolute;right:10px;top:10px;display:flex;gap:2px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:3px 5px;box-shadow:var(--shadow)}
 .wizzoom button{background:none;border:0;width:24px;height:22px;cursor:pointer;color:var(--ink-2);font-size:14px;line-height:1;border-radius:99px}
 .wizzoom button:hover{background:var(--panel-2);color:var(--ink)}
@@ -317,8 +300,8 @@ body.preview .previewbar{display:flex}
     <div class="tgroup">
       <button class="btn ghost" id="btnPreview" title="Full-screen preview (P)">Preview</button>
       <button class="btn ghost" id="btnSchedule">Schedule</button>
-      <button class="btn ghost" id="btnExportPng">Export</button>
-      <button class="btn ghost" id="btnSave">Save</button>
+      <button class="btn ghost" id="btnExportPng" title="A PNG or JPEG picture of the case">Export image&hellip;</button>
+      <button class="btn ghost" id="btnSave" title="Save the whole case as a file you can reopen">Save file</button>
     </div>
     <button class="btn ghost ico" id="btnTheme" title="Light or dark">&#9682;</button>
     <input type="file" id="fileImg" accept="image/*" multiple hidden>
@@ -392,29 +375,6 @@ body.preview .previewbar{display:flex}
     <canvas id="sheet"></canvas>
     <div class="dropzone"><span>Drop to add an object</span></div>
 
-    <div class="firstrun" id="emptyState" hidden>
-      <div class="firstrun-card">
-        <svg class="firstrun-mark" viewBox="0 0 64 74" aria-hidden="true">
-          <rect x="4" y="4" width="56" height="62" rx="2" class="em-case"/>
-          <line x1="4" y1="40" x2="60" y2="40" class="em-shelf"/>
-          <rect x="38" y="46" width="15" height="20" class="em-plinth"/>
-          <circle cx="21" cy="24" r="8" class="em-obj"/>
-          <line x1="21" y1="4" x2="21" y2="16" class="em-wire"/>
-        </svg>
-        <h2 id="emptyTitle">An empty case</h2>
-        <p>Drop a photograph anywhere on this sheet, paste one with
-          <kbd>Ctrl</kbd>&#8202;+&#8202;<kbd>V</kbd>, or block it out with shapes first.</p>
-        <div class="firstrun-acts">
-          <button class="btn primary" id="esPhoto">Add from a photograph</button>
-          <button class="btn" id="esShape">Start with a shape</button>
-        </div>
-        <div class="firstrun-acts">
-          <button class="btn ghost sm" id="esShelf">Add a shelf</button>
-          <button class="btn ghost sm" id="esPlinth">Add a plinth</button>
-          <button class="btn ghost sm" id="esCases">Open another case</button>
-        </div>
-      </div>
-    </div>
     <div class="hud">
       <span class="chip" id="hudPos">&mdash;</span>
       <span class="chip" id="hudSel">Nothing selected</span>
@@ -468,9 +428,10 @@ body.preview .previewbar{display:flex}
           <button id="wzIn" title="Zoom in">+</button>
           <button id="wzFit" title="Fit" style="width:auto;padding:0 7px;font-size:11px">FIT</button>
         </div>
-        <div class="wizhint" id="wizHint"></div>
       </div>
       <div class="wizside" id="wizSide">
+
+        <p class="wiznote" id="wizHint"></p>
 
         <div data-panel="1">
           <section class="sect">
@@ -479,17 +440,12 @@ body.preview .previewbar{display:flex}
               <button data-brush="wand" aria-pressed="true">Wand</button>
               <button data-brush="erase" aria-pressed="false">Erase</button>
               <button data-brush="restore" aria-pressed="false">Restore</button>
-              <button data-brush="crop" aria-pressed="false">Crop</button>
               <button data-brush="pick" aria-pressed="false">Pick colour</button>
               <button data-brush="pan" aria-pressed="false">Pan</button>
             </div>
             <div class="slid" id="brushSizeWrap">
               <label>Brush size <b id="brushVal">36 px</b></label>
               <input type="range" id="brush" min="2" max="200" value="36">
-            </div>
-            <div class="row" id="cropRow">
-              <button class="btn" id="btnCropApply" style="flex:1">Apply crop</button>
-              <button class="btn ghost" id="btnCropCancel">Clear</button>
             </div>
           </section>
           <section class="sect">
@@ -526,6 +482,15 @@ body.preview .previewbar{display:flex}
         </div>
 
         <div data-panel="2" class="hidden">
+          <section class="sect">
+            <h2>Measurement box</h2>
+            <div class="readout" id="bbReadout"></div>
+            <div class="row">
+              <button class="btn ghost sm" id="btnBBReset" style="flex:1">Snap back to the cut-out</button>
+              <button class="btn ghost sm" id="btnBBCrop">Crop to the box</button>
+            </div>
+            <p class="help">Snapping back re-reads it from the cut-out. Cropping throws away everything outside it for good &mdash; which is the tidy way to lose a speck you keep missing.</p>
+          </section>
           <section class="sect">
             <h2>Real size</h2>
             <div class="tools" id="scaleTools">
@@ -655,6 +620,56 @@ body.preview .previewbar{display:flex}
     <div class="shapegrid" id="shapeGrid"></div>
     <footer>
       <span class="note">Stand-ins for anything you have not photographed. Every one arrives with sensible dimensions and the right footprint in plan &mdash; change them afterwards on the right.</span>
+    </footer>
+  </div>
+</div>
+
+<div class="backdrop" id="expBack" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="expTitle" style="width:min(520px,100%)">
+    <header>
+      <h3 id="expTitle">Export a picture</h3>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="expClose">Cancel</button>
+    </header>
+    <div class="scroller">
+      <section class="sect">
+        <h2>File</h2>
+        <div class="tools" id="expFormat">
+          <button data-fmt="png" aria-pressed="true">PNG</button>
+          <button data-fmt="jpeg" aria-pressed="false">JPEG</button>
+        </div>
+        <p class="help" id="expFmtHelp"></p>
+      </section>
+      <section class="sect">
+        <h2>View</h2>
+        <div class="tools" id="expView">
+          <button data-ev="front" aria-pressed="true">Elevation</button>
+          <button data-ev="plan" aria-pressed="false">Plan</button>
+          <button data-ev="both" aria-pressed="false">Both</button>
+        </div>
+      </section>
+      <section class="sect">
+        <h2>Size</h2>
+        <div class="tools" id="expScale">
+          <button data-sc="1" aria-pressed="false">&times;1</button>
+          <button data-sc="2" aria-pressed="true">&times;2</button>
+          <button data-sc="3" aria-pressed="false">&times;3</button>
+          <button data-sc="4" aria-pressed="false">&times;4</button>
+        </div>
+        <div class="readout" id="expDims"></div>
+      </section>
+      <section class="sect">
+        <h2>What to draw</h2>
+        <label class="chk"><input type="checkbox" id="expRulers">Rulers down the edges</label>
+        <label class="chk"><input type="checkbox" id="expGrid">Grid</label>
+        <label class="chk"><input type="checkbox" id="expDimsOn">Dimensions on the selected item</label>
+        <label class="chk"><input type="checkbox" id="expCaption" checked>Caption along the bottom</label>
+      </section>
+    </div>
+    <footer>
+      <span class="note" id="expFoot"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="expGo">Export</button>
     </footer>
   </div>
 </div>
@@ -809,22 +824,38 @@ function leanParts(o) {
     deck: o.h * Math.sin(th) + (o.depth || 0) * Math.cos(th)
   };
 }
+
+/* Yaw is lean's mirror. Lean tips the object towards you about a
+   horizontal axis; yaw swings it about the vertical one. The projection
+   is the same sum in the other plane, so turning it narrows what
+   elevation shows by exactly as much as it deepens the footprint. */
+function yawParts(o) {
+  const th = (o.yaw || 0) * DEG;
+  const c = Math.abs(Math.cos(th)), s = Math.abs(Math.sin(th));
+  const spin = (o.spin || 0) * DEG;
+  const placed = o.mount === 'placed';
+  const deck = placed ? leanParts(o).deck : (o.depth || 0);
+  const hEff = placed ? leanParts(o).height : o.h;
+  /* how wide it lies looking down before yaw turns it — a spun object
+     covers its turned width, not the width of the picture */
+  const wPlan = o.w * Math.abs(Math.cos(spin)) + hEff * Math.abs(Math.sin(spin));
+  return {
+    width: o.w * c + deck * s,        // the face elevation still sees
+    deck: deck * c + wPlan * s,       // the ground it covers in plan
+    wPlan, thick: deck
+  };
+}
 const isFlat = o => o.mount === 'placed' && (o.lean || 0) > 45;
 
 function layout(o) {
   const spin = (o.spin || 0) * DEG;
 
   if (o.mount === 'hanging') {
-    const ws = (o.wires && o.wires.length) ? o.wires : [{ ax: 0.5, ay: 0.04, len: 20 }];
-    const w1 = ws[0];
-    const p1 = { x: o.x + w1.ax * o.w, y: (o.rail ?? S.rail) - w1.len };
-    let rot = 0;
-    if (ws.length > 1) {
-      const w2 = ws[1];
-      const dx = (w2.ax - w1.ax) * o.w;
-      if (Math.abs(dx) > 1e-6) rot = Math.atan2(((o.rail ?? S.rail) - w2.len) - p1.y, dx);
-    }
-    return { w: o.w, h: o.h, rot: rot + spin, pivot: p1, u: w1.ax, v: w1.ay };
+    /* The object is placed and turned to where you want it; the wires are
+       whatever length that orientation demands. It used to work the other
+       way round — two lengths derived the tilt — which meant marking a
+       second attachment point swung the object off its position. */
+    return { w: yawParts(o).width, h: o.h, rot: spin, pivot: { x: o.x + o.w / 2, y: o.hangY ?? 60 }, u: 0.5, v: 1 };
   }
 
   if (o.mount === 'wall') {
@@ -835,15 +866,15 @@ function layout(o) {
      thickness into view, so in elevation you see a foreshortened face
      with the edge of the block below it. Lying flat that is all edge —
      which is exactly what a label card on a plinth looks like. */
-  const p = leanParts(o);
-  const hEff = p.height;
+  const hEff = leanParts(o).height;
+  const wEff = yawParts(o).width;
   const base = supportOf(o).top + standLift(o);
   const c = Math.cos(spin), s = Math.sin(spin);
   let minY = Infinity;
-  for (const [a, b] of [[-o.w / 2, 0], [o.w / 2, 0], [o.w / 2, hEff], [-o.w / 2, hEff]]) {
+  for (const [a, b] of [[-wEff / 2, 0], [wEff / 2, 0], [wEff / 2, hEff], [-wEff / 2, hEff]]) {
     minY = Math.min(minY, a * s + b * c);
   }
-  return { w: o.w, h: hEff, rot: spin, pivot: { x: o.x + o.w / 2, y: base - minY }, u: 0.5, v: 1 };
+  return { w: wEff, h: hEff, rot: spin, pivot: { x: o.x + o.w / 2, y: base - minY }, u: 0.5, v: 1 };
 }
 
 function corners(o) {
@@ -873,8 +904,7 @@ function footprint(o) {
   /* stuck to a plinth front it sits at that face, proud by its own
      thickness — so from above it is barely a line */
   if (f) return { x: b.x0, w: b.x1 - b.x0, z: f.z + f.d, d: o.depth || 0.4 };
-  const d = o.mount === 'placed' ? leanParts(o).deck : (o.depth || 0);
-  return { x: b.x0, w: b.x1 - b.x0, z: o.z, d };
+  return { x: b.x0, w: b.x1 - b.x0, z: o.z, d: yawParts(o).deck };
 }
 
 /* everything the object needs room for, stand included */
@@ -979,19 +1009,30 @@ function label(text, x, y, { size = 11, font = MONO, fill = C.ink2, align = 'cen
   ctx.fillText(text, x, y);
 }
 
-/* wrap to a width, keeping the line breaks the writer typed.
-   ctx.font must already be set — the caller owns the measuring. */
-function layoutText(text, maxW) {
+/* A line wrapped in ** is a title and is set bold. Whole lines rather
+   than words: on a panel what wants weight is the heading, and this way
+   the writer can see at a glance which lines are titles. */
+const BOLD_RE = /^\s*\*\*([\s\S]*?)\*\*\s*$/;
+const boldFont = (sizePx, bold) => `${bold ? '600 ' : ''}${sizePx}px ${UIFONT}`;
+
+/* wrap to a width, keeping the line breaks the writer typed. Returns
+   {text, bold} per line. `sizePx` is needed because a bold line has to
+   be measured in the bold face or it wraps a word short. */
+function layoutText(text, maxW, sizePx) {
   const lines = [];
   for (const para of String(text).split(/\r?\n/)) {
-    if (!para.trim()) { lines.push(''); continue; }
+    const m = para.match(BOLD_RE);
+    const bold = !!m;
+    const body = bold ? m[1] : para;
+    if (!body.trim()) { lines.push({ text: '', bold }); continue; }
+    if (sizePx) ctx.font = boldFont(sizePx, bold);
     let cur = '';
-    for (const wd of para.split(/\s+/).filter(Boolean)) {
+    for (const wd of body.split(/\s+/).filter(Boolean)) {
       const test = cur ? cur + ' ' + wd : wd;
-      if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = wd; }
+      if (ctx.measureText(test).width > maxW && cur) { lines.push({ text: cur, bold }); cur = wd; }
       else cur = test;
     }
-    if (cur) lines.push(cur);
+    if (cur) lines.push({ text: cur, bold });
   }
   return lines;
 }
@@ -1340,6 +1381,25 @@ function drawFront() {
   }
 }
 
+/* the span a leaning object sweeps, raked back from the contact edge
+   towards where its top overhangs — read it as "this is tipped, not
+   thick" */
+function leanRake(x, y, w, h, col, alpha) {
+  if (h < 3) return;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.strokeStyle = col; ctx.globalAlpha = alpha * .35; ctx.lineWidth = 1;
+  for (let i = -h; i < w + h; i += 6) {
+    ctx.beginPath(); ctx.moveTo(x + i, y + h); ctx.lineTo(x + i + h, y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* worded the way it was typed in, so it matches the inspector */
+function leanText(o) {
+  return `${rnd(shownLean(o))}° from ${o.leanFrom === 'flat' ? 'flat' : 'upright'}`;
+}
+
 function hatch(x, y, w, h) {
   if (PREVIEW) return;
   ctx.save();
@@ -1430,16 +1490,35 @@ const textSizeOf = o => o.textSize || 0.55;
 const ptOf = cm => Math.round(cm * 28.35);
 
 function panelLines(o, wpx, sizePx) {
-  ctx.font = `${sizePx}px ${UIFONT}`;
   const padPx = PANEL_PAD * (T ? T.sc : 1);
-  return layoutText(o.text || '', Math.abs(wpx) - padPx * 2);
+  return layoutText(o.text || '', Math.abs(wpx) - padPx * 2, sizePx);
+}
+
+/* would this wording fit the panel at this size, in cm? */
+function panelFitsAt(o, cm) {
+  const sc = T ? T.sc : 20;
+  const sizePx = Math.max(1, cm * sc);
+  const lines = panelLines(o, o.w * sc, sizePx);
+  const padPx = PANEL_PAD * sc;
+  return lines.length * sizePx * 1.32 <= o.h * sc - padPx * 2 + 0.5;
 }
 function panelFits(o) {
-  if (!T || o.render !== 'panel' || !o.text) return true;
-  const sizePx = textSizeOf(o) * T.sc;
-  const lines = panelLines(o, o.w * T.sc, sizePx);
-  const padPx = PANEL_PAD * T.sc;
-  return lines.length * sizePx * 1.32 <= o.h * T.sc - padPx * 2 + 0.5;
+  if (o.render !== 'panel' || !o.text) return true;
+  return panelFitsAt(o, textSizeOf(o));
+}
+
+/* the largest size the wording still fits at. Bisecting beats stepping
+   because wrapping makes the fit lumpy — one point smaller can save two
+   lines — so there is no useful increment to walk. */
+function bestTextSize(o) {
+  if (o.render !== 'panel' || !o.text || !o.text.trim()) return textSizeOf(o);
+  let lo = 0.08, hi = Math.max(o.h, 1);
+  if (panelFitsAt(o, hi)) return rnd(hi, 2);
+  for (let i = 0; i < 26; i++) {
+    const mid = (lo + hi) / 2;
+    if (panelFitsAt(o, mid)) lo = mid; else hi = mid;
+  }
+  return Math.max(0.08, rnd(lo, 2));
 }
 
 /* draw the object's own body into a rect in its own rotated frame */
@@ -1480,14 +1559,17 @@ function paintBody(o, dx, dy, wpx, hpx, forPlan) {
     const maxW = Math.abs(wpx) - padPx * 2;
     shown.forEach((l, i) => {
       const w = i === shown.length - 1 ? maxW * 0.62 : maxW;
-      ctx.fillRect(dx + padPx, dy + padPx + i * lineH, w, Math.max(0.8, sizePx * 0.6));
+      /* a title greeks heavier, so the shape of the panel still reads */
+      ctx.fillRect(dx + padPx, dy + padPx + i * lineH, l.bold ? w * 0.7 : w, Math.max(0.8, sizePx * (l.bold ? 0.8 : 0.6)));
     });
     ctx.globalAlpha = 1;
   } else {
-    ctx.font = `${sizePx}px ${UIFONT}`;
     ctx.fillStyle = C.ink;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    shown.forEach((l, i) => ctx.fillText(l, dx + padPx, dy + padPx + i * lineH));
+    shown.forEach((l, i) => {
+      ctx.font = boldFont(sizePx, l.bold);
+      ctx.fillText(l.text, dx + padPx, dy + padPx + i * lineH);
+    });
   }
 
   if (lines.length > room) {
@@ -1506,8 +1588,8 @@ function drawObjectFront(o) {
     ctx.strokeStyle = sel ? C.accent : C.ink3;
     ctx.lineWidth = sel ? 1.6 : 1.1;
     for (const wr of (o.wires || [])) {
-      const a = w2s(o.x + wr.ax * o.w, o.rail ?? S.rail);
       const att = attachWorld(o, wr);
+      const a = w2s(att.x, o.rail ?? S.rail);   /* plumb, so straight above */
       const b = w2s(att.x, att.y);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       ctx.fillStyle = sel ? C.accent : C.ink3;
@@ -1561,6 +1643,21 @@ function attachWorld(o, wr) {
   return { x: L.pivot.x + lx * c - ly * s, y: L.pivot.y + lx * s + ly * c };
 }
 
+/* what the mount-maker needs to cut: a wire drops plumb from the rail to
+   wherever its attachment point has ended up, so its length is simply the
+   drop. This is the answer the app gives, never an input. */
+function wireLen(o, wr) {
+  return Math.max(0, (o.rail ?? S.rail) - attachWorld(o, wr).y);
+}
+
+/* an angle read as a tilt: ±180 rather than 0–360, so a slight
+   anticlockwise lean reads −4° and not 356° */
+function signedDeg(v) {
+  const d = (((v || 0) % 360) + 360) % 360;
+  return d > 180 ? d - 360 : d;
+}
+const tiltOf = o => signedDeg(o.spin);
+
 /* ---------------- plan ---------------- */
 
 function planMode(o) {
@@ -1610,45 +1707,76 @@ function drawPlan() {
     if ((mode === 'image' || mode === 'top') && !planImg) mode = 'rect';
     const tint = o.mount === 'hanging' ? C.plan : o.mount === 'wall' ? C.ink3 : C.accent;
 
-    ctx.save();
+    /* Turned about the vertical axis, it is drawn turned: the footprint
+       is a rectangle at an angle inside the box it occupies, not a wider
+       box. Anything at yaw 0 keeps exactly the rectangle it had. */
+    const yp = yawParts(o);
+    const turn = faceOf(o) ? 0 : (o.yaw || 0) * DEG;
+    const cen = w2s(f.x + f.w / 2, f.z + f.d / 2);
+    const lw = turn ? yp.wPlan * T.sc : w;
+    const lh = turn ? Math.max(3, yp.thick * T.sc) : h;
+    const lx = turn ? -lw / 2 : a.x;
+    const ly = turn ? -lh / 2 : a.y;
+    const enter = () => {
+      ctx.save();
+      if (turn) { ctx.translate(cen.x, cen.y); ctx.rotate(turn); }
+    };
+
+    enter();
     ctx.globalAlpha = o.hide ? .3 : 1;
     if (mode === 'panel') {
-      paintBody(o, a.x, a.y, w, h, false);
+      paintBody(o, lx, ly, lw, lh, false);
     } else if (mode === 'image' || mode === 'top') {
       const img = planImg;
       ctx.save();
       if (o.flip || o.flipV) {
-        ctx.translate(a.x + w / 2, a.y + h / 2);
+        ctx.translate(lx + lw / 2, ly + lh / 2);
         ctx.scale(o.flip ? -1 : 1, o.flipV ? -1 : 1);
-        ctx.translate(-(a.x + w / 2), -(a.y + h / 2));
+        ctx.translate(-(lx + lw / 2), -(ly + lh / 2));
       }
-      ctx.drawImage(img, a.x, a.y, w, h);
+      ctx.drawImage(img, lx, ly, lw, lh);
       ctx.restore();
     } else if (mode === 'ellipse') {
       ctx.fillStyle = tint; ctx.globalAlpha *= .28;
-      ctx.beginPath(); ctx.ellipse(a.x + w / 2, a.y + h / 2, Math.abs(w) / 2, Math.abs(h) / 2, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(lx + lw / 2, ly + lh / 2, Math.abs(lw) / 2, Math.abs(lh) / 2, 0, 0, 7); ctx.fill();
       ctx.globalAlpha = o.hide ? .3 : 1;
       ctx.strokeStyle = tint; ctx.lineWidth = sel ? 2 : 1.2;
-      ctx.beginPath(); ctx.ellipse(a.x + w / 2, a.y + h / 2, Math.abs(w) / 2, Math.abs(h) / 2, 0, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(lx + lw / 2, ly + lh / 2, Math.abs(lw) / 2, Math.abs(lh) / 2, 0, 0, 7); ctx.stroke();
     } else {
       ctx.fillStyle = tint; ctx.globalAlpha *= .28;
-      ctx.fillRect(a.x, a.y, w, h);
+      ctx.fillRect(lx, ly, lw, lh);
       ctx.globalAlpha = o.hide ? .3 : 1;
     }
     ctx.restore();
 
     if (mode === 'rect') {
+      enter();
       ctx.strokeStyle = tint; ctx.lineWidth = sel ? 2 : 1.2;
       if (o.mount !== 'placed') ctx.setLineDash([4, 3]);
-      ctx.strokeRect(a.x + .5, a.y + .5, w - 1, h - 1);
-      ctx.setLineDash([]);
+      ctx.strokeRect(lx + .5, ly + .5, lw - 1, lh - 1);
+      ctx.restore();
     }
 
-    /* where it actually touches down: the front edge of the span */
-    if (o.mount === 'placed' && o.lean > 0) {
-      const base = w2s(f.x, f.z + f.d);
+    /* A lean is invisible looking down — all you see is that something
+       0.5 cm thick is covering 7 cm of deck, with no clue why. So say so:
+       rake the span it sweeps, weight the edge it actually touches down
+       on, and put the angle beside it. */
+    if (o.mount === 'placed' && o.lean > 0.5) {
+      enter();
+      /* not over a photograph: there the picture already says what it is,
+         and raking it just muddies the one view where you can see it */
+      if (mode !== 'image' && mode !== 'top') leanRake(lx, ly, lw, lh, tint, o.hide ? .3 : 1);
       ctx.strokeStyle = tint; ctx.lineWidth = 2.4;
-      ctx.beginPath(); ctx.moveTo(a.x, base.y - 1); ctx.lineTo(b.x, base.y - 1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lx, ly + lh - 1); ctx.lineTo(lx + lw, ly + lh - 1); ctx.stroke();
+      ctx.restore();
+      if (h > 9 && w > 30) {
+        label(leanText(o), a.x + w / 2, w2s(f.x, f.z + f.d).y - 8,
+          { size: 9, font: MONO, fill: tint, box: true, bg: caseGround() });
+      }
+    }
+    if (turn && w > 26) {
+      label(`${rnd(signedDeg(o.yaw))}° turned`, a.x + w / 2, a.y - 7,
+        { size: 9, font: MONO, fill: tint, box: true, bg: caseGround() });
     }
 
     if (w > 26 && mode !== 'image' && mode !== 'top' && mode !== 'panel') {
@@ -1680,8 +1808,9 @@ function drawSelectionDims() {
     if (y0 > 1.5) arrowDim(l.x, w2s(0, 0).y, l.x, l.y, `${rnd(y0)}`, C.accent);
     if (o.type === 'object' && o.mount === 'hanging' && o.wires && o.wires[0]) {
       const wr = o.wires[0];
-      const a = w2s(o.x + wr.ax * o.w, o.rail ?? S.rail), b2 = w2s(o.x + wr.ax * o.w, (o.rail ?? S.rail) - wr.len);
-      arrowDim(a.x - 14, a.y, a.x - 14, b2.y, `${rnd(wr.len)}`, C.accent);
+      const att = attachWorld(o, wr);
+      const a = w2s(att.x, o.rail ?? S.rail), b2 = w2s(att.x, att.y);
+      arrowDim(a.x - 14, a.y, a.x - 14, b2.y, `${rnd(wireLen(o, wr))}`, C.accent);
     }
   } else {
     const f = o.type === 'object' ? envelope(o) : { x: o.x, w: o.w, z: o.z, d: o.d };
@@ -1695,12 +1824,21 @@ function drawSelectionDims() {
 
 /* the little handle you drag to turn an object */
 const SPIN_ARM = 26;
+/* The same handle in both views, turning the object about whichever
+   axis you are looking along: in elevation that is the picture plane
+   (spin), looking down it is the vertical axis (yaw). */
 function spinHandlePos() {
   const o = byId(S.sel);
-  if (!o || o.type !== 'object' || S.view !== 'front') return null;
-  const b = bbox(o);
-  const top = w2s((b.x0 + b.x1) / 2, b.y1);
-  return { x: top.x, y: top.y - SPIN_ARM, anchor: top };
+  if (!o || o.type !== 'object') return null;
+  if (S.view === 'front') {
+    const b = bbox(o);
+    const top = w2s((b.x0 + b.x1) / 2, b.y1);
+    return { x: top.x, y: top.y - SPIN_ARM, anchor: top, prop: 'spin' };
+  }
+  if (faceOf(o) || o.mount === 'wall') return null;   /* flat to a face: nothing to turn */
+  const f = footprint(o);
+  const back = w2s(f.x + f.w / 2, f.z);
+  return { x: back.x, y: back.y - SPIN_ARM, anchor: back, prop: 'yaw' };
 }
 function drawSpinHandle() {
   const h = spinHandlePos();
@@ -1867,8 +2005,7 @@ function applyAlign(it) {
   } else if (it.type === 'object' && it.mount === 'wall') {
     it.wallY = rnd((it.wallY || 0) + alignSnap(it, 'y'), 2);
   } else if (it.type === 'object' && it.mount === 'hanging') {
-    const d = alignSnap(it, 'y');
-    if (d) it.wires.forEach(w => { w.len = Math.max(0, rnd(w.len - d, 2)); });
+    it.hangY = rnd((it.hangY || 0) + alignSnap(it, 'y'), 2);
   }
 }
 
@@ -1955,8 +2092,8 @@ function pick(it) {
   if (it.type === 'object') {
     k.support = it.support;
     k.wallY = it.wallY;
+    k.hangY = it.hangY;
     k.spin = it.spin || 0;
-    k.wires = JSON.parse(JSON.stringify(it.wires || []));
   }
   return k;
 }
@@ -1977,9 +2114,10 @@ cvs.addEventListener('pointerdown', e => {
   const h = spinHandlePos();
   if (h && Math.hypot(px - h.x, py - h.y) < 11) {
     const o = byId(S.sel);
-    const b = bbox(o);
-    const c = w2s((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2);
-    drag = { spin: true, id: o.id, cx: c.x, cy: c.y, start: o.spin || 0, a0: Math.atan2(py - c.y, px - c.x) };
+    const c = h.prop === 'yaw'
+      ? (f => w2s(f.x + f.w / 2, f.z + f.d / 2))(footprint(o))
+      : (b => w2s((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2))(bbox(o));
+    drag = { spin: true, prop: h.prop, id: o.id, cx: c.x, cy: c.y, start: o[h.prop] || 0, a0: Math.atan2(py - c.y, px - c.x) };
     return;
   }
 
@@ -2044,9 +2182,12 @@ cvs.addEventListener('pointermove', e => {
   if (drag.spin) {
     const o = byId(drag.id); if (!o) return;
     const a = Math.atan2(py - drag.cy, px - drag.cx);
-    let deg = drag.start - (a - drag.a0) / DEG;   /* screen y is down, world y is up */
+    /* in elevation screen y is down while world y is up, so the sense
+       flips; looking down, screen and world already agree */
+    const sense = drag.prop === 'yaw' ? 1 : -1;
+    let deg = drag.start + sense * (a - drag.a0) / DEG;
     if (!e.shiftKey) deg = Math.round(deg / 5) * 5;
-    o.spin = rnd(((deg % 360) + 360) % 360, 1);
+    o[drag.prop || 'spin'] = rnd(((deg % 360) + 360) % 360, 1);
     drag.moved = true;
     syncInspector(); draw();
     return;
@@ -2081,7 +2222,7 @@ cvs.addEventListener('pointermove', e => {
     for (const k of drag.kids) { const kid = byId(k.id); if (kid) kid.x = q(k.x + da); }
   } else if (it.mount === 'hanging') {
     it.x = q(drag.snap.x + da);
-    it.wires.forEach((w, i) => { w.len = Math.max(0, rnd(drag.snap.wires[i].len - db, 1)); });
+    it.hangY = q((drag.snap.hangY || 0) + db);
   } else if (it.mount === 'wall') {
     it.x = q(drag.snap.x + da);
     it.wallY = q((drag.snap.wallY || 0) + db);
@@ -2139,6 +2280,11 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
   if (e.key.toLowerCase() === 'p') { enterPreview(); return; }
   if (!$('#shapeBack').hidden) { if (e.key === 'Escape') closeShapePicker(); return; }
+  if (!$('#expBack').hidden) {
+    if (e.key === 'Escape') closeExport();
+    if (e.key === 'Enter') runExport();
+    return;
+  }
   if (!$('#wizBack').hidden) {
     if (e.key === 'Escape') minimiseWizard();
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); wizUndo(); }
@@ -2174,7 +2320,7 @@ document.addEventListener('keydown', e => {
       }
       else if (o.type === 'shelf') o.y = rnd(o.y + dv, 1);
       else if (o.type === 'plinth') o.h = Math.max(0.5, rnd(o.h + dv, 1));
-      else if (o.mount === 'hanging') o.wires.forEach(w => { w.len = Math.max(0, rnd(w.len - dv, 1)); });
+      else if (o.mount === 'hanging') o.hangY = rnd((o.hangY || 0) + dv, 1);
       else if (o.mount === 'wall') o.wallY = rnd((o.wallY || 0) + dv, 1);
       else o.support = stepSupport(o, dv);   /* up and down step between supports */
     }
@@ -2238,7 +2384,7 @@ function blankObject(extra) {
     x: rnd(S.cs.w / 2 - 10), z: 4, wallY: 100, spin: 0,
     mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright',
     stand: { kind: 'none', w: 0, d: 0, h: 0 },
-    rail: S.rail, wires: [], flip: false, flipV: false, hide: false
+    rail: S.rail, hangY: null, yaw: 0, wires: [], flip: false, flipV: false, hide: false
   }, extra || {});
 }
 
@@ -2419,7 +2565,7 @@ function toast(msg) {
    ============================================================ */
 
 function objBadge(o) {
-  if (o.mount === 'hanging') return 'wire ' + rnd(o.wires && o.wires[0] ? o.wires[0].len : 0);
+  if (o.mount === 'hanging') return o.wires && o.wires[0] ? 'wire ' + rnd(wireLen(o, o.wires[0])) : 'on wires';
   if (o.mount === 'wall') return rnd(o.wallY || 0) + ' cm';
   return rnd(bbox(o).y0) + ' cm';
 }
@@ -2433,13 +2579,6 @@ function objGlyph(o) {
 function syncChrome() {
   const chip = $('#caseChipName');
   if (chip) chip.textContent = S.name || 'Untitled case';
-  const es = $('#emptyState');
-  if (es) {
-    const bare = S.items.length === 0 && !PREVIEW;
-    es.hidden = !bare;
-    if (bare) $('#emptyTitle').textContent =
-      `An empty ${rnd(S.cs.w)} × ${rnd(S.cs.h)} cm case`;
-  }
 }
 
 function renderLists() {
@@ -2553,11 +2692,15 @@ function renderInspector() {
       <label class="f full"><span>Name</span><input type="text" id="iName" value="${esc(o.name)}"></label>
       ${o.render === 'panel' ? `
         <label class="f full"><span>Text &mdash; paste straight in</span><textarea id="iText" rows="4" placeholder="Interpretation text">${esc(o.text || '')}</textarea></label>
+        <div class="row">
+          <button class="btn sm" id="iBold" style="flex:1"><b>B</b>&nbsp; Make this line a title</button>
+        </div>
         <div class="fields">
           ${fld('Text size cm', 'iTextSize', rnd(textSizeOf(o), 2), { step: 0.05, min: 0.1 })}
           <label class="f"><span>&asymp; points</span><input type="text" id="iTextPt" value="${ptOf(textSizeOf(o))} pt" disabled></label>
           <label class="f"><span>Fill</span><input type="color" id="iColour" value="${o.colour || '#ffffff'}"></label>
         </div>
+        <button class="btn sm" id="iFitText">Set the type as large as it will go</button>
         ${panelFits(o) ? '' : '<p class="warnbox">The text runs past the bottom of the panel. Make the panel taller, or the type smaller.</p>'}
         <button class="btn sm ghost" id="iToShape">Turn it into a shape&hellip;</button>` : ''}
       ${isShape(o) ? `<div class="row">
@@ -2569,6 +2712,7 @@ function renderInspector() {
       <div class="readout">
         <span>occupies <b>${rnd(b.x1 - b.x0)} &times; ${rnd(b.y1 - b.y0)}</b> cm</span>
         <span>base <b>${rnd(b.y0)}</b> · top <b>${rnd(b.y1)}</b></span>
+        <span>on the deck <b>${rnd(footprint(o).d)}</b> cm${(o.lean || 0) > 0.5 ? ` <i style="font-style:normal;color:var(--ink-3)">(${rnd(o.depth, 2)} cm thick, ${leanText(o)})</i>` : ''}</span>
       </div>
       ${warn.length ? `<p class="warnbox">Sticks out: ${warn.join('; ')}.</p>` : ''}
       <div class="fields">
@@ -2582,7 +2726,11 @@ function renderInspector() {
         <label class="f"><span>Quick</span><button class="btn" id="iSpin90" style="padding:4px">&#8635; 90&deg;</button></label>
         <label class="f"><span>Mirror</span><button class="btn" id="iFlip" style="padding:4px">${o.flip ? 'Flipped' : 'Normal'}</button></label>
       </div>
-      <p class="note">Drag the round handle above a selected object to turn it by hand.</p>
+      ${o.mount === 'wall' ? '' : `<div class="fields two">
+        ${fld('Turn in plan &deg;', 'iYaw', rnd(signedDeg(o.yaw)), { step: 1 })}
+        <div class="f"><span>Elevation then shows</span><b class="mono" id="iYawW">${rnd(yawParts(o).width, 1)} cm wide</b></div>
+      </div>`}
+      <p class="note">Drag the round handle by a selected object to turn it by hand &mdash; in elevation it turns in the picture plane, in plan it swings the object round, which narrows what you see from the front.</p>
     </section>
 
     <section class="sect">
@@ -2624,20 +2772,23 @@ function renderInspector() {
           : 'Stuck flat to the back wall.'}</p>`;
     } else {
       html += `
-      <label class="f full"><span>Rail height cm</span><input type="number" id="iRail" value="${rnd(o.rail ?? S.rail)}" step="0.5"></label>
+      <div class="fields two">
+        ${fld('Rail height cm', 'iRail', rnd(o.rail ?? S.rail), { step: 0.5 })}
+        ${fld('Bottom edge cm', 'iHangY', rnd(o.hangY || 0), { step: 0.5 })}
+      </div>
       <div class="list">
         ${(o.wires || []).map((w, i) => `
           <div class="fields two" style="align-items:end">
-            <label class="f"><span>Wire ${i + 1} length</span><input type="number" data-wl="${i}" value="${rnd(w.len)}" step="0.5" min="0"></label>
-            <label class="f"><span>Across image %</span><input type="number" data-wa="${i}" value="${Math.round(w.ax * 100)}" step="1" min="0" max="100"></label>
+            <label class="f"><span>Wire ${i + 1} across %</span><input type="number" data-wa="${i}" value="${Math.round(w.ax * 100)}" step="1" min="0" max="100"></label>
+            <div class="f"><span>Cut it to</span><b class="mono" data-wl="${i}">${rnd(wireLen(o, w))} cm</b></div>
           </div>`).join('')}
       </div>
       <div class="row">
         ${(o.wires || []).length < 2 ? '<button class="btn ghost" id="iAddWire" style="flex:1">Add second wire</button>' : '<button class="btn ghost" id="iDropWire" style="flex:1">Use one wire</button>'}
-        ${(o.wires || []).length > 1 ? '<button class="btn ghost" id="iLevelWires">Level</button>' : ''}
+        <button class="btn ghost" id="iLevelWires">Hang level</button>
       </div>
-      <div class="readout"><span>spacing <b>${(o.wires || []).length > 1 ? rnd(Math.abs(o.wires[1].ax - o.wires[0].ax) * o.w) : '—'}</b> cm</span><span>hangs at <b>${rnd(-L.rot / DEG)}&deg;</b></span></div>
-      <p class="note">Drag the object up or down to change both wire lengths at once.</p>`;
+      <div class="readout"><span>spacing <b>${(o.wires || []).length > 1 ? rnd(Math.abs(o.wires[1].ax - o.wires[0].ax) * o.w) : '—'}</b> cm</span><span>hangs at <b>${rnd(tiltOf(o))}&deg;</b></span></div>
+      <p class="note">Put the object where you want it &mdash; drag it, and turn it with Turn&nbsp;&deg; above. The wire lengths follow from that, not the other way round.</p>`;
     }
     html += `</section>`;
 
@@ -2783,6 +2934,13 @@ function bindInspector(o) {
     draw();
   });
   on('iTextSize', 'change', () => commit());
+  on('iFitText', 'click', () => {
+    if (!o.text || !o.text.trim()) { toast('Write something on the panel first'); return; }
+    o.textSize = bestTextSize(o);
+    toast(`Set to ${rnd(o.textSize, 2)} cm — about ${ptOf(o.textSize)} pt`);
+    commit();
+  });
+  on('iBold', 'click', () => toggleTitleLine(o));
   on('iColour', 'input', e => { o.colour = e.target.value; draw(); });
   on('iColour', 'change', () => commit());
   on('iShape', 'click', () => openShapePicker('change'));
@@ -2796,6 +2954,7 @@ function bindInspector(o) {
   setNum('iT', v => o.t = Math.max(0.1, v));
   setNum('iY', v => o.y = clamp(v, 0, S.cs.h));
   setNum('iRail', v => o.rail = v);
+  setNum('iHangY', v => o.hangY = v);
   setNum('iWallY', v => o.wallY = v);
   setNum('iZ2', v => o.z = Math.max(0, v));
   on('iFace', 'change', e => { o.face = e.target.value; landOnFace(o); commit(); });
@@ -2824,6 +2983,7 @@ function bindInspector(o) {
     on('iAspect', 'change', e => { o.keepAspect = e.target.checked; });
     setNum('iD', v => o.depth = Math.max(0.1, v));
     setNum('iSpin', v => o.spin = rnd(((v % 360) + 360) % 360, 1));
+    setNum('iYaw', v => o.yaw = rnd(((v % 360) + 360) % 360, 1));
     on('iSpin90', 'click', () => { o.spin = rnd((((o.spin || 0) + 90) % 360), 1); commit(); });
     on('iFlip', 'click', () => { o.flip = !o.flip; commit(); });
     on('iSupport', 'change', e => {
@@ -2871,15 +3031,14 @@ function bindInspector(o) {
     });
     on('iTopView', 'click', () => pickTopView(o.id));
 
-    for (const el of $$('[data-wl]')) el.addEventListener('change', () => { o.wires[+el.dataset.wl].len = Math.max(0, num(el.value)); commit(); });
     for (const el of $$('[data-wa]')) el.addEventListener('change', () => { o.wires[+el.dataset.wa].ax = clamp(num(el.value) / 100, 0, 1); commit(); });
     on('iAddWire', 'click', () => {
-      const a = (o.wires && o.wires[0]) || { ax: 0.5, ay: 0.05, len: 20 };
+      const a = (o.wires && o.wires[0]) || { ax: 0.5, ay: 0.05 };
       o.wires = [{ ...a, ax: 0.2 }, { ...a, ax: 0.8 }];
       commit();
     });
     on('iDropWire', 'click', () => { o.wires = [{ ...o.wires[0], ax: 0.5 }]; commit(); });
-    on('iLevelWires', 'click', () => { const l = o.wires[0].len; o.wires.forEach(w => w.len = l); commit(); });
+    on('iLevelWires', 'click', () => { o.spin = 0; commit(); });
     on('iMount', 'click', e => {
       const b = e.target.closest('[data-mount]'); if (!b) return;
       setMount(o, b.dataset.mount); commit();
@@ -2933,14 +3092,43 @@ function bindInspector(o) {
   on('iDel', 'click', () => removeItem(o.id));
 }
 
+/* Wrap the line the caret is on in **, or unwrap it if it is already a
+   title. Works on the selection when there is one, so several lines can
+   be marked at once, and puts the caret back where it was. */
+function toggleTitleLine(o) {
+  const ta = $('#iText');
+  if (!ta) return;
+  const text = ta.value;
+  const a = ta.selectionStart ?? text.length, b = ta.selectionEnd ?? a;
+  const from = text.lastIndexOf('\n', Math.max(0, a - 1)) + 1;
+  let to = text.indexOf('\n', b);
+  if (to < 0) to = text.length;
+  const block = text.slice(from, to);
+  if (!block.trim()) { toast('Put the caret on the line you want as a title'); return; }
+  const out = block.split('\n').map(line => {
+    const m = line.match(BOLD_RE);
+    return m ? m[1] : (line.trim() ? `**${line.trim()}**` : line);
+  }).join('\n');
+  ta.value = text.slice(0, from) + out + text.slice(to);
+  o.text = ta.value;
+  ta.focus();
+  ta.setSelectionRange(from, from + out.length);
+  draw();
+  scheduleSave();
+}
+
 function setMount(o, mount) {
   if (o.mount === mount) return;
   const b = bbox(o);
   o.mount = mount;
+  /* a lean only means something for a thing standing on a surface. Left
+     on, it survives into a mount where nothing shows it and quietly
+     bloats the footprint in plan. */
+  if (mount !== 'placed') o.lean = 0;
   if (mount === 'hanging') {
     o.rail = o.rail || S.rail;
-    if (!o.wires || !o.wires.length) o.wires = [{ ax: 0.5, ay: 0.05, len: 20 }];
-    o.wires.forEach(w => { w.len = Math.max(0, rnd(o.rail - (b.y1 - w.ay * o.h), 1)); });
+    if (!o.wires || !o.wires.length) o.wires = [{ ax: 0.5, ay: 0.05 }];
+    o.hangY = rnd(b.y0, 1);
   } else if (mount === 'wall') {
     o.wallY = rnd(b.y0);
     o.face = o.face || 'back';
@@ -2962,8 +3150,14 @@ function syncInspector() {
   if (o.type === 'plinth') set('iH', rnd(o.h));
   if (o.type === 'object') {
     set('iSpin', rnd(o.spin || 0));
+    set('iYaw', rnd(signedDeg(o.yaw)));
+    const yw = $('#iYawW'); if (yw) yw.textContent = rnd(yawParts(o).width, 1) + ' cm wide';
     set('iWallY', rnd(o.wallY || 0));
-    if (o.wires) for (const el of $$('[data-wl]')) if (document.activeElement !== el) el.value = rnd(o.wires[+el.dataset.wl].len);
+    set('iHangY', rnd(o.hangY || 0));
+    /* the wire lengths are output, so they are text, not fields */
+    if (o.mount === 'hanging' && o.wires) {
+      for (const el of $$('[data-wl]')) el.textContent = `${rnd(wireLen(o, o.wires[+el.dataset.wl]))} cm`;
+    }
   }
 }
 /* ============================================================
@@ -2981,7 +3175,6 @@ const W = {
   work: null,     // canvas being edited
   undo: [],
   tol: 32, erode: 1, brush: 36, tool: 'wand', cutMode: 'edges', bgColour: null,
-  crop: null,
   scaleMode: 'width', keepAspect: true, widthCm: 20, heightCm: 15, lineCm: 10, calib: null,
   depthCm: 3, name: '',
   mount: 'placed', support: 'floor', lean: 0, leanFrom: 'upright', wallY: 100, face: 'back',
@@ -2989,7 +3182,7 @@ const W = {
   planShape: 'auto',
   points: [],     // wire attachment points, in work-canvas pixels
   zoom: 1, pan: { x: 0, y: 0 },
-  bb: null,
+  bb: null, bbManual: false, bbDrag: null,
   cursor: null, painting: false, panning: false
 };
 
@@ -3009,6 +3202,80 @@ function contentBBox(cv) {
   }
   if (x1 < 0) return { x: 0, y: 0, w: cv.width, h: cv.height };
   return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/* ---- the measurement box ----
+   contentBBox guesses it from the opaque pixels, which is right until a
+   speck you missed erasing drags an edge out and throws off the scale.
+   So the guess is only a starting point: drag an edge and W.bbManual
+   pins it, and nothing recomputes it behind your back until the picture
+   itself changes. */
+const GRIP = 9;                  // handle size in screen pixels
+const GRIP_TOL = 10;             // how near you must be to grab one
+
+function theBB() {
+  if (!W.bb) { W.bb = contentBBox(W.work); W.bbManual = false; }
+  return W.bb;
+}
+function autoBB() { W.bb = null; W.bbManual = false; }
+
+function gripPoints(a, b) {
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  return [[a.x, a.y], [mx, a.y], [b.x, a.y], [b.x, my], [b.x, b.y], [mx, b.y], [a.x, b.y], [a.x, my]];
+}
+const GRIP_EDGE = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+const GRIP_CURSOR = { nw: 'nwse-resize', n: 'ns-resize', ne: 'nesw-resize', e: 'ew-resize', se: 'nwse-resize', s: 'ns-resize', sw: 'nesw-resize', w: 'ew-resize' };
+
+/* which part of the box is under this work-canvas point, if any */
+function bbPart(p) {
+  if (W.step !== 2 || W.mode === 'top' || !W.work) return null;
+  const t = wizT();
+  const bb = theBB();
+  const a = { x: t.ox + bb.x * t.s, y: t.oy + bb.y * t.s };
+  const b = { x: t.ox + (bb.x + bb.w) * t.s, y: t.oy + (bb.y + bb.h) * t.s };
+  const q = { x: t.ox + p.x * t.s, y: t.oy + p.y * t.s };
+  const g = gripPoints(a, b);
+  for (let i = 0; i < g.length; i++) {
+    if (Math.abs(q.x - g[i][0]) <= GRIP_TOL && Math.abs(q.y - g[i][1]) <= GRIP_TOL) return GRIP_EDGE[i];
+  }
+  if (q.x > a.x && q.x < b.x && q.y > a.y && q.y < b.y) return 'move';
+  return null;
+}
+
+/* live edge dragging — edges move independently, so the box can be
+   pulled off a speck without disturbing the other three sides */
+function bbDragTo(p) {
+  const d = W.bbDrag;
+  const dx = p.x - d.px, dy = p.y - d.py;
+  const W0 = W.work.width, H0 = W.work.height;
+  let { x0, y0, x1, y1 } = d.box;
+  if (d.part === 'move') {
+    const w = x1 - x0, h = y1 - y0;
+    x0 = clamp(x0 + dx, 0, W0 - w); y0 = clamp(y0 + dy, 0, H0 - h);
+    x1 = x0 + w; y1 = y0 + h;
+  } else {
+    if (d.part.includes('w')) x0 = clamp(x0 + dx, 0, x1 - 4);
+    if (d.part.includes('e')) x1 = clamp(x1 + dx, x0 + 4, W0);
+    if (d.part.includes('n')) y0 = clamp(y0 + dy, 0, y1 - 4);
+    if (d.part.includes('s')) y1 = clamp(y1 + dy, y0 + 4, H0);
+  }
+  W.bb = { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
+  W.bbManual = true;
+}
+
+function refreshBBReadout() {
+  const el = $('#bbReadout');
+  if (!el || !W.work) return;
+  const bb = theBB();
+  el.innerHTML =
+    `<span>box <b>${Math.round(bb.w)} &times; ${Math.round(bb.h)}</b> px</span>` +
+    `<span>set by <b>${W.bbManual ? 'you' : 'the cut-out'}</b></span>`;
+}
+
+/* the box is the crop box too — what you measure is what you keep */
+function cropToBox() {
+  const bb = theBB();
+  cropWork(Math.round(bb.x), Math.round(bb.y), Math.round(bb.x + bb.w), Math.round(bb.y + bb.h));
 }
 
 /* ---- background removal ------------------------------------
@@ -3123,7 +3390,7 @@ function runAuto() {
   if (W.cutMode === 'all') colourKey(W.work, W.tol, col);
   else flood(W.work, borderSeeds(W.work), W.tol, col);
   erodeAlpha(W.work, W.erode);
-  W.bb = null; drawWiz(); refreshScale();
+  autoBB(); drawWiz(); refreshScale();
 }
 
 function pushUndo() {
@@ -3134,7 +3401,7 @@ function pushUndo() {
 function wizUndo() {
   const c = W.undo.pop();
   if (!c) { toast('Nothing to undo'); return; }
-  W.work = c; W.bb = null; drawWiz(); refreshScale();
+  W.work = c; autoBB(); drawWiz(); refreshScale();
 }
 
 /* ---- wizard canvas ---- */
@@ -3187,11 +3454,20 @@ function drawWiz() {
   const toS = (x, y) => ({ x: t.ox + x * t.s, y: t.oy + y * t.s });
 
   if (W.step >= 2 && W.mode !== 'top') {
-    const bb = W.bb || (W.bb = contentBBox(W.work));
+    const bb = theBB();
     const a = toS(bb.x, bb.y), b = toS(bb.x + bb.w, bb.y + bb.h);
     wizCtx.save();
     wizCtx.strokeStyle = P; wizCtx.lineWidth = 1.5; wizCtx.setLineDash([6, 4]);
     wizCtx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+    /* on the size step the box is yours to adjust, so give it grips */
+    if (W.step === 2) {
+      wizCtx.setLineDash([]);
+      wizCtx.fillStyle = P; wizCtx.strokeStyle = '#fff'; wizCtx.lineWidth = 1.4;
+      for (const [hx, hy] of gripPoints(a, b)) {
+        wizCtx.beginPath(); wizCtx.rect(hx - GRIP / 2, hy - GRIP / 2, GRIP, GRIP);
+        wizCtx.fill(); wizCtx.stroke();
+      }
+    }
     wizCtx.restore();
   }
   if (W.step === 2 && W.scaleMode === 'line' && W.calib) {
@@ -3203,7 +3479,7 @@ function drawWiz() {
     wizCtx.restore();
   }
   if (W.step === 3 && W.mount === 'hanging') {
-    const bb = W.bb || (W.bb = contentBBox(W.work));
+    const bb = theBB();
     W.points.forEach((p, i) => {
       const q = toS(p.x, p.y);
       wizCtx.save();
@@ -3216,24 +3492,6 @@ function drawWiz() {
       wizCtx.fillText(String(i + 1), q.x, q.y);
       wizCtx.restore();
     });
-  }
-  if (W.crop) {
-    const a = toS(Math.min(W.crop.x0, W.crop.x1), Math.min(W.crop.y0, W.crop.y1));
-    const b = toS(Math.max(W.crop.x0, W.crop.x1), Math.max(W.crop.y0, W.crop.y1));
-    wizCtx.save();
-    wizCtx.fillStyle = 'rgba(0,0,0,.35)';
-    wizCtx.fillRect(0, 0, cw, ch);
-    wizCtx.clearRect(a.x, a.y, b.x - a.x, b.y - a.y);
-    wizCtx.save();
-    wizCtx.translate(t.ox, t.oy); wizCtx.scale(t.s, t.s);
-    wizCtx.beginPath();
-    wizCtx.rect((a.x - t.ox) / t.s, (a.y - t.oy) / t.s, (b.x - a.x) / t.s, (b.y - a.y) / t.s);
-    wizCtx.clip();
-    wizCtx.drawImage(W.work, 0, 0);
-    wizCtx.restore();
-    wizCtx.strokeStyle = A; wizCtx.lineWidth = 1.5; wizCtx.setLineDash([5, 4]);
-    wizCtx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
-    wizCtx.restore();
   }
   if (W.step === 1 && W.cursor && (W.tool === 'erase' || W.tool === 'restore')) {
     const q = toS(W.cursor.x, W.cursor.y);
@@ -3259,15 +3517,12 @@ function paintBrush(p) {
     c.drawImage(W.base, 0, 0);
   }
   c.restore();
-  W.bb = null;
+  autoBB();
 }
 
-function applyCrop() {
-  if (!W.crop) { toast('Drag a box over the part you want to keep first'); return; }
-  const x0 = Math.max(0, Math.round(Math.min(W.crop.x0, W.crop.x1)));
-  const y0 = Math.max(0, Math.round(Math.min(W.crop.y0, W.crop.y1)));
-  const x1 = Math.min(W.work.width, Math.round(Math.max(W.crop.x0, W.crop.x1)));
-  const y1 = Math.min(W.work.height, Math.round(Math.max(W.crop.y0, W.crop.y1)));
+function cropWork(ax, ay, bx, by) {
+  const x0 = Math.max(0, Math.min(ax, bx)), y0 = Math.max(0, Math.min(ay, by));
+  const x1 = Math.min(W.work.width, Math.max(ax, bx)), y1 = Math.min(W.work.height, Math.max(ay, by));
   if (x1 - x0 < 8 || y1 - y0 < 8) { toast('That box is too small'); return; }
   pushUndo();
   const cut = (src) => {
@@ -3279,15 +3534,15 @@ function applyCrop() {
   W.work = cut(W.work); W.base = cut(W.base);
   W.points = W.points.map(p => ({ x: p.x - x0, y: p.y - y0 }));
   if (W.calib) W.calib = { x1: W.calib.x1 - x0, y1: W.calib.y1 - y0, x2: W.calib.x2 - x0, y2: W.calib.y2 - y0 };
-  W.crop = null; W.bb = null; W.zoom = 1; W.pan = { x: 0, y: 0 };
+  autoBB(); W.zoom = 1; W.pan = { x: 0, y: 0 };
   drawWiz(); refreshScale();
-  toast('Cropped');
+  toast(`Cropped to ${x1 - x0} × ${y1 - y0} px`);
 }
 
 function transformWork(fn) {
   pushUndo();
   W.work = fn(W.work); W.base = fn(W.base);
-  W.points = []; W.calib = null; W.crop = null; W.bb = null;
+  W.points = []; W.calib = null; autoBB();
   W.zoom = 1; W.pan = { x: 0, y: 0 };
   /* the picture turned, so the size fields swap meaning */
   const t = W.widthCm; W.widthCm = W.heightCm; W.heightCm = t;
@@ -3321,8 +3576,17 @@ wizCv.addEventListener('pointerdown', e => {
     W.panning = { sx: e.clientX, sy: e.clientY, px: W.pan.x, py: W.pan.y };
     return;
   }
+  if (W.step === 2) {
+    /* the measurement box has first claim on the pointer, so a stray
+       speck can be dragged out of the way before anything else happens */
+    const part = bbPart(p);
+    if (part) {
+      const bb = theBB();
+      W.bbDrag = { part, px: p.x, py: p.y, box: { x0: bb.x, y0: bb.y, x1: bb.x + bb.w, y1: bb.y + bb.h } };
+      return;
+    }
+  }
   if (W.step === 1) {
-    if (W.tool === 'crop') { W.crop = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; W.painting = true; drawWiz(); return; }
     if (W.tool === 'pick') {
       const d = W.work.getContext('2d', { willReadFrequently: true }).getImageData(clamp(p.x | 0, 0, W.work.width - 1), clamp(p.y | 0, 0, W.work.height - 1), 1, 1).data;
       W.bgColour = [d[0], d[1], d[2]];
@@ -3337,7 +3601,7 @@ wizCv.addEventListener('pointerdown', e => {
       const col = [d[0], d[1], d[2]];
       if (W.cutMode === 'all') colourKey(W.work, W.tol, col);
       else flood(W.work, [iy * W.work.width + ix], W.tol, col);
-      W.bb = null; drawWiz(); refreshScale();
+      autoBB(); drawWiz(); refreshScale();
     } else { W.painting = true; paintBrush(p); drawWiz(); }
   } else if (W.step === 2 && W.scaleMode === 'line') {
     W.calib = { x1: p.x, y1: p.y, x2: p.x, y2: p.y }; W.painting = true; drawWiz();
@@ -3362,15 +3626,23 @@ wizCv.addEventListener('pointermove', e => {
   }
   const p = wizPt(e);
   W.cursor = p;
+  if (W.bbDrag) {
+    bbDragTo(p);
+    refreshScale();
+    drawWiz();
+    return;
+  }
   if (W.painting) {
-    if (W.step === 1 && W.tool === 'crop') { W.crop.x1 = p.x; W.crop.y1 = p.y; }
-    else if (W.step === 1) paintBrush(p);
+    if (W.step === 1) paintBrush(p);
     else if (W.step === 2 && W.calib) { W.calib.x2 = p.x; W.calib.y2 = p.y; refreshScale(); }
+  } else if (W.step === 2) {
+    setWizCursor(bbPart(p));
   }
   drawWiz();
 });
 const wizStop = () => {
-  if (W.painting && W.step === 1 && W.tool !== 'crop') refreshScale();
+  if (W.painting && W.step === 1) refreshScale();
+  if (W.bbDrag) { W.bbDrag = null; refreshScale(); }
   W.painting = false; W.panning = false;
 };
 wizCv.addEventListener('pointerup', wizStop);
@@ -3394,7 +3666,6 @@ const TOOLHELP = {
   wand: 'Click a patch of background to clear it. With “Everywhere” on, one click keys that colour out of the whole picture — which is how you get the gaps inside a rete.',
   erase: 'Paint away anything the passes left behind. Scroll to zoom right in for fine work.',
   restore: 'Paint back anything that was removed by mistake.',
-  crop: 'Drag a box around what you want to keep, then Apply crop. Everything outside it goes for good.',
   pick: 'Click the actual background in the picture. The passes then work from that colour rather than guessing from the border.',
   pan: 'Drag to move the picture around. Scroll zooms at any time.'
 };
@@ -3402,7 +3673,7 @@ const TOOLHELP = {
 function setStep(n) {
   if (W.mode === 'top') n = 1;
   W.step = n;
-  if (n >= 2) W.bb = contentBBox(W.work);
+  if (n >= 2) theBB();
   $$('#wizSteps button').forEach(b => b.dataset.on = b.dataset.step === String(n) ? '1' : '0');
   $$('#wizSide [data-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== String(n)));
   $('#wizBack1').disabled = n === 1;
@@ -3420,8 +3691,8 @@ function updateHint() {
   if (W.mode === 'top') { h.textContent = 'Cut out the object as seen from above, then use it as the plan view.'; return; }
   if (W.step === 1) h.textContent = TOOLHELP[W.tool] || '';
   else if (W.step === 2) h.textContent = W.scaleMode === 'line'
-    ? 'Drag a line across something you know the length of.'
-    : 'The dashed box is the cut-out — that is what gets measured.';
+    ? 'Drag a line across something you know the length of. The dashed box still sets the size — drag its edges to adjust it.'
+    : 'The dashed box is what gets measured. Drag its edges or corners to adjust it, or drag inside it to move it.';
   else h.textContent = W.mount === 'hanging'
     ? 'Click the picture where each wire attaches.'
     : W.mount === 'wall' ? 'Fixed flat to the back wall — set its height on the right.'
@@ -3429,9 +3700,12 @@ function updateHint() {
 }
 
 /* the cursor is owned by the step, not by whichever brush was last used */
-function setWizCursor() {
+function setWizCursor(part) {
   const hideForBrush = W.step === 1 && (W.tool === 'erase' || W.tool === 'restore');
-  wizCv.style.cursor = W.panning || W.tool === 'pan' ? 'grab' : hideForBrush ? 'none' : 'crosshair';
+  const grip = part && (part === 'move' ? 'move' : GRIP_CURSOR[part]);
+  wizCv.style.cursor = W.panning || W.tool === 'pan' ? 'grab'
+    : grip ? grip
+      : hideForBrush ? 'none' : 'crosshair';
 }
 
 const calibLen = () => W.calib ? Math.hypot(W.calib.x2 - W.calib.x1, W.calib.y2 - W.calib.y1) : 0;
@@ -3439,7 +3713,7 @@ const calibLen = () => W.calib ? Math.hypot(W.calib.x2 - W.calib.x1, W.calib.y2 
 /* cm per pixel, separately for each axis so a deliberately
    non-proportional size is possible */
 function scaleFactors() {
-  const bb = W.bb || (W.bb = contentBBox(W.work));
+  const bb = theBB();
   if (!W.keepAspect) {
     return { kx: bb.w ? W.widthCm / bb.w : 0, ky: bb.h ? W.heightCm / bb.h : 0, bb };
   }
@@ -3452,8 +3726,8 @@ function scaleFactors() {
 
 function refreshScale() {
   if (W.step !== 2 || !W.work) return;
-  W.bb = contentBBox(W.work);
   const { kx, ky, bb } = scaleFactors();
+  refreshBBReadout();
   const out = $('#scaleReadout');
   if (!out) return;
   if (!kx || !ky) {
@@ -3467,8 +3741,7 @@ function refreshScale() {
     if (wi && document.activeElement !== wi) wi.value = W.widthCm;
     if (hi && document.activeElement !== hi) hi.value = W.heightCm;
   }
-  out.innerHTML = `<span>cut-out <b>${bb.w}&times;${bb.h}</b> px</span>
-    <span><b>${rnd(1 / kx, 2)}</b> px/cm</span>
+  out.innerHTML = `<span><b>${rnd(1 / kx, 2)}</b> px/cm</span>
     <span>object <b>${rnd(bb.w * kx, 2)} &times; ${rnd(bb.h * ky, 2)}</b> cm</span>`;
 }
 
@@ -3536,7 +3809,6 @@ function syncWizFields() {
   $$('#brushTools button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.brush === W.tool)));
   $$('#cutMode button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cut === W.cutMode)));
   $('#scaleLine').classList.toggle('hidden', W.scaleMode !== 'line');
-  $('#cropRow').classList.toggle('hidden', W.tool !== 'crop');
   $('#brushSizeWrap').classList.toggle('hidden', W.tool !== 'erase' && W.tool !== 'restore');
   $('#scaleHelp').textContent = W.keepAspect
     ? 'Type either measurement and the other follows the picture.'
@@ -3576,7 +3848,7 @@ async function nextFromQueue() {
     const cv = await fileToCanvas(f);
     W.mode = 'object'; W.editId = null; W.topFor = null;
     W.raw = cv; W.base = cv; W.work = copyCanvas(cv);
-    W.undo = []; W.calib = null; W.points = []; W.bb = null; W.crop = null;
+    W.undo = []; W.calib = null; W.points = []; autoBB();
     W.zoom = 1; W.pan = { x: 0, y: 0 }; W.bgColour = null; W.tool = 'wand'; W.cutMode = 'edges';
     W.name = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 60);
     W.widthCm = 20; W.heightCm = 15; W.depthCm = 3; W.keepAspect = true; W.scaleMode = 'width';
@@ -3600,7 +3872,7 @@ async function openWizard({ edit, step = 1 }) {
   W.base = cv; W.work = copyCanvas(cv);
   W.raw = null;
   if (o.raw) { try { const r = await loadImage(o.raw); const rc = newCanvas(r.width, r.height); rc.getContext('2d').drawImage(r, 0, 0); W.raw = rc; } catch (e) { } }
-  W.undo = []; W.calib = null; W.crop = null; W.bb = contentBBox(cv);
+  W.undo = []; W.calib = null; autoBB();
   W.zoom = 1; W.pan = { x: 0, y: 0 }; W.bgColour = null; W.tool = 'wand'; W.cutMode = 'edges';
   W.name = o.name; W.widthCm = rnd(o.w, 2); W.heightCm = rnd(o.h, 2); W.depthCm = rnd(o.depth, 2);
   W.keepAspect = o.keepAspect !== false; W.scaleMode = 'width';
@@ -3609,7 +3881,8 @@ async function openWizard({ edit, step = 1 }) {
   W.wallY = o.wallY || rnd(S.cs.h * 0.55); W.face = o.face || 'back';
   W.planShape = o.planShape || 'auto';
   W.stand = o.stand ? { ...o.stand } : { kind: 'none', w: 0, d: 0, h: 0 };
-  W.points = (o.wires || []).map(wr => ({ x: W.bb.x + wr.ax * W.bb.w, y: W.bb.y + wr.ay * W.bb.h }));
+  const ebb = theBB();
+  W.points = (o.wires || []).map(wr => ({ x: ebb.x + wr.ax * ebb.w, y: ebb.y + wr.ay * ebb.h }));
   showWizard('Edit ' + o.name);
   setStep(step);
 }
@@ -3623,7 +3896,7 @@ async function openTopWizard(id, file) {
     const cv = await fileToCanvas(file);
     W.mode = 'top'; W.topFor = id; W.editId = null;
     W.raw = cv; W.base = cv; W.work = copyCanvas(cv);
-    W.undo = []; W.crop = null; W.calib = null; W.points = []; W.bb = null;
+    W.undo = []; W.calib = null; W.points = []; autoBB();
     W.zoom = 1; W.pan = { x: 0, y: 0 }; W.bgColour = null; W.tool = 'wand'; W.cutMode = 'edges';
     showWizard('Top view — ' + (byId(id)?.name || 'object'));
     runAuto();
@@ -3641,7 +3914,7 @@ function showWizard(title) {
   syncStandFields();
   $('#wizFoot').innerHTML = W.raw && W.editId ? '<button class="btn ghost sm" id="fromOrig">Start again from the original photo</button>' : '';
   const fo = $('#fromOrig');
-  if (fo) fo.onclick = () => { pushUndo(); W.base = W.raw; W.work = copyCanvas(W.raw); W.bb = null; runAuto(); toast('Back to the original photo'); };
+  if (fo) fo.onclick = () => { pushUndo(); W.base = W.raw; W.work = copyCanvas(W.raw); autoBB(); runAuto(); toast('Back to the original photo'); };
   requestAnimationFrame(() => { drawWiz(); setWizCursor(); });
 }
 
@@ -3671,7 +3944,9 @@ function discardWizard() {
 }
 
 function finishWizard() {
-  const bb = contentBBox(W.work);
+  /* trim to the measurement box, not to the ink — if you dragged the box
+     the cut-out must match what you measured, or the cm are a lie */
+  const bb = theBB();
   const out = newCanvas(bb.w, bb.h);
   out.getContext('2d').drawImage(W.work, bb.x, bb.y, bb.w, bb.h, 0, 0, bb.w, bb.h);
   const png = out.toDataURL('image/png');
@@ -3699,7 +3974,7 @@ function finishWizard() {
   const wires = (W.mount === 'hanging'
     ? (W.points.length ? W.points : [{ x: bb.x + bb.w / 2, y: bb.y + bb.h * 0.04 }])
     : []
-  ).map(p => ({ ax: clamp((p.x - bb.x) / bb.w, 0, 1), ay: clamp((p.y - bb.y) / bb.h, 0, 1), len: 0 }));
+  ).map(p => ({ ax: clamp((p.x - bb.x) / bb.w, 0, 1), ay: clamp((p.y - bb.y) / bb.h, 0, 1) }));
 
   let o = byId(W.editId);
   const isNew = !o;
@@ -3719,12 +3994,13 @@ function finishWizard() {
       wallY: W.wallY, planShape: W.planShape, keepAspect: W.keepAspect, face: W.face,
       stand: { ...W.stand }
     });
-    if (wires.length) o.wires = wires.map((nw, i) => ({ ...nw, len: (o.wires && o.wires[i]) ? o.wires[i].len : 0 }));
+    /* marking the wires never moves the object: the lengths are derived */
+    if (wires.length) o.wires = wires;
   }
 
   if (o.mount === 'hanging') {
     o.rail = o.rail || S.rail;
-    for (const wr of o.wires) if (!wr.len) wr.len = rnd(10 + wr.ay * o.h, 1);
+    if (o.hangY == null) o.hangY = rnd(clamp((o.rail ?? S.rail) - 10 - o.h, 0, S.cs.h), 1);
   } else if (o.mount === 'placed') {
     /* a new object lands centred on whatever it stands on; one you are
        re-editing keeps the place you put it unless it is now off it */
@@ -4043,15 +4319,41 @@ function commit() {
 }
 
 /* fill in anything a file saved by an older build has not got */
+/* Files saved before the wire model was inverted carry a length on each
+   wire and no hangY, and their tilt lived in those lengths. Replay the
+   old sum once, so an old case opens looking exactly as it was left. */
+function migrateWires(o) {
+  if (o.mount !== 'hanging' || o.hangY != null) return;
+  const ws = (o.wires && o.wires.length) ? o.wires : [{ ax: 0.5, ay: 0.04, len: 20 }];
+  const w1 = ws[0];
+  const rail = o.rail ?? S.rail;
+  const p1 = { x: o.x + w1.ax * o.w, y: rail - (w1.len ?? 20) };
+  let rot = 0;
+  if (ws.length > 1) {
+    const dx = (ws[1].ax - w1.ax) * o.w;
+    if (Math.abs(dx) > 1e-6) rot = Math.atan2((rail - (ws[1].len ?? 20)) - p1.y, dx);
+  }
+  /* where the old pivot put the bottom centre, which is the new pivot */
+  const lx = (0.5 - w1.ax) * o.w, ly = (w1.ay - 1) * o.h;
+  const c = Math.cos(rot + (o.spin || 0) * DEG), s = Math.sin(rot + (o.spin || 0) * DEG);
+  o.x = rnd(p1.x + lx * c - ly * s - o.w / 2, 2);
+  o.hangY = rnd(p1.y + lx * s + ly * c, 2);
+  o.spin = rnd((((((o.spin || 0) + rot / DEG) % 360) + 360) % 360), 1);
+  o.wires = ws.map(w => ({ ax: w.ax, ay: w.ay }));
+}
+
 function upgrade(o) {
   if (o.type !== 'object') return o;
-  return Object.assign(blankObject({ id: o.id }), { render: o.png ? 'image' : 'rect' }, o, {
+  const up = Object.assign(blankObject({ id: o.id }), { render: o.png ? 'image' : 'rect' }, o, {
     stand: o.stand || { kind: 'none', w: 0, d: 0, h: 0 },
     leanFrom: o.leanFrom || 'upright',
     planShape: o.planShape || 'auto',
     spin: o.spin || 0,
+    yaw: o.yaw || 0,
     wallY: o.wallY ?? 100
   });
+  migrateWires(up);
+  return up;
 }
 
 async function restore(data) {
@@ -4101,25 +4403,79 @@ async function download(blob, filename) {
    Export
    ============================================================ */
 
-function exportPNG(scale = 2) {
+/* ---- exporting a picture ----
+   The renderer draws into whatever `ctx`/`VW`/`VH` point at, so an export
+   is the same paint() at a bigger scale with the drafting options set to
+   whatever was asked for, then everything put back. */
+
+const EXP = { fmt: 'png', view: 'front', scale: 2, rulers: false, grid: false, dims: false, caption: true };
+
+const viewWord = v => v === 'front' ? 'elevation' : 'plan';
+
+function renderSheet(view, scale, opt, caption) {
   const w = cvs.clientWidth, h = cvs.clientHeight;
   const off = newCanvas(Math.round(w * scale), Math.round(h * scale));
   const oc = off.getContext('2d');
   oc.setTransform(scale, 0, 0, scale, 0, 0);
-  const keepCtx = ctx, keepW = VW, keepH = VH;
-  ctx = oc; VW = w; VH = h;
+  const keepCtx = ctx, keepW = VW, keepH = VH, keepView = S.view, keepOpt = S.opt, keepT = T;
+  ctx = oc; VW = w; VH = h; S.view = view; S.opt = { ...S.opt, ...opt };
   readPalette();
+  /* JPEG has no transparency, so the sheet has to be painted in or the
+     picture comes out on black */
+  oc.fillStyle = C.sheet; oc.fillRect(0, 0, w, h);
   T = calcT();
   paint();
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  ctx.fillStyle = C.ink3; ctx.font = `11px ${MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText(`${S.name} — ${S.view === 'front' ? 'elevation' : 'plan'} — case ${rnd(S.cs.w)}×${rnd(S.cs.h)}×${rnd(S.cs.d)} cm`, GUT + 4, h - 8);
-  ctx = keepCtx; VW = keepW; VH = keepH;
+  if (caption) {
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = C.ink3; ctx.font = `11px ${MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(`${S.name} — ${viewWord(view)} — case ${rnd(S.cs.w)}×${rnd(S.cs.h)}×${rnd(S.cs.d)} cm`, GUT + 4, h - 8);
+  }
+  ctx = keepCtx; VW = keepW; VH = keepH; S.view = keepView; S.opt = keepOpt; T = keepT;
+  readPalette();
+  return off;
+}
+
+function saveSheet(view) {
+  const off = renderSheet(view, EXP.scale, { rulers: EXP.rulers, grid: EXP.grid, dims: EXP.dims }, EXP.caption);
+  const jpeg = EXP.fmt === 'jpeg';
   off.toBlob(b => {
-    download(b, `${S.name.replace(/[^\w -]+/g, '') || 'case'} ${S.view === 'front' ? 'elevation' : 'plan'}.png`);
-  }, 'image/png');
+    download(b, `${S.name.replace(/[^\w -]+/g, '') || 'case'} ${viewWord(view)}.${jpeg ? 'jpg' : 'png'}`);
+  }, jpeg ? 'image/jpeg' : 'image/png', jpeg ? 0.92 : undefined);
+}
+
+function runExport() {
+  const views = EXP.view === 'both' ? ['front', 'plan'] : [EXP.view];
+  views.forEach((v, i) => setTimeout(() => saveSheet(v), i * 350));
+  closeExport();
+  toast(views.length > 1 ? 'Exporting both views' : `Exporting the ${viewWord(views[0])}`);
   draw();
 }
+
+function syncExport() {
+  $$('#expFormat button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.fmt === EXP.fmt)));
+  $$('#expView button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ev === EXP.view)));
+  $$('#expScale button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.sc === EXP.scale)));
+  $('#expRulers').checked = EXP.rulers;
+  $('#expGrid').checked = EXP.grid;
+  $('#expDimsOn').checked = EXP.dims;
+  $('#expCaption').checked = EXP.caption;
+  $('#expFmtHelp').textContent = EXP.fmt === 'jpeg'
+    ? 'Smaller file, no transparency, and fine detail softens a little. Right for pasting into a document.'
+    : 'Lossless, and every line stays crisp. Right for anything that will be printed or drawn over.';
+  const w = Math.round(cvs.clientWidth * EXP.scale), h = Math.round(cvs.clientHeight * EXP.scale);
+  $('#expDims').innerHTML = `<span><b class="mono">${w} × ${h}</b> px</span><span>${EXP.view === 'both' ? 'two files' : 'one file'}</span>`;
+  $('#expFoot').textContent = EXP.view === 'both'
+    ? 'Both views come out as two separate files.'
+    : `The ${viewWord(EXP.view)}, framed as it is on screen.`;
+}
+
+function openExport() {
+  EXP.view = S.view;
+  EXP.rulers = S.opt.rulers; EXP.grid = S.opt.grid; EXP.dims = S.opt.dims;
+  $('#expBack').hidden = false;
+  syncExport();
+}
+function closeExport() { $('#expBack').hidden = true; }
 
 function buildSchedule() {
   const objs = S.items.filter(i => i.type === 'object');
@@ -4139,7 +4495,7 @@ function buildSchedule() {
       'Z cm': rnd(f.z, 1),
       'Deck cm': rnd(f.d, 1),
       Lean: o.mount === 'placed' ? leanLabel(o) || '0°' : '—',
-      Wires: o.mount === 'hanging' ? o.wires.map(w => rnd(w.len, 1)).join(' / ') : '—'
+      Wires: o.mount === 'hanging' ? o.wires.map(w => rnd(wireLen(o, w), 1)).join(' / ') : '—'
     };
   });
   const cols = rows.length ? Object.keys(rows[0]) : [];
@@ -4320,9 +4676,9 @@ $('#erode').addEventListener('change', runAuto);
 $('#brush').addEventListener('input', e => { W.brush = +e.target.value; $('#brushVal').textContent = W.brush + ' px'; drawWiz(); });
 $('#btnAuto').onclick = runAuto;
 $('#btnUndo').onclick = wizUndo;
-$('#btnReset').onclick = () => { pushUndo(); W.work = copyCanvas(W.base); W.bb = null; drawWiz(); refreshScale(); };
-$('#btnCropApply').onclick = applyCrop;
-$('#btnCropCancel').onclick = () => { W.crop = null; drawWiz(); };
+$('#btnReset').onclick = () => { pushUndo(); W.work = copyCanvas(W.base); autoBB(); drawWiz(); refreshScale(); };
+$('#btnBBReset').onclick = () => { autoBB(); drawWiz(); refreshScale(); };
+$('#btnBBCrop').onclick = cropToBox;
 $('#rotL').onclick = () => transformWork(rotCanvas(-1));
 $('#rotR').onclick = () => transformWork(rotCanvas(1));
 $('#flipH').onclick = () => transformWork(mirrorCanvas(false));
@@ -4331,7 +4687,6 @@ $('#flipV').onclick = () => transformWork(mirrorCanvas(true));
 $('#brushTools').addEventListener('click', e => {
   const b = e.target.closest('[data-brush]'); if (!b) return;
   W.tool = b.dataset.brush;
-  if (W.tool !== 'crop') W.crop = null;
   syncWizFields(); setWizCursor(); updateHint(); drawWiz();
 });
 $('#cutMode').addEventListener('click', e => {
@@ -4437,7 +4792,25 @@ $('#fileJson').addEventListener('change', async e => {
     toast(`Opened “${S.name}” — it is now one of your cases`);
   } catch (err) { toast('Could not read that file'); }
 });
-$('#btnExportPng').onclick = () => exportPNG(2);
+$('#btnExportPng').onclick = openExport;
+$('#expClose').onclick = closeExport;
+$('#expBack').addEventListener('pointerdown', e => { if (e.target.id === 'expBack') closeExport(); });
+$('#expGo').onclick = runExport;
+$('#expFormat').addEventListener('click', e => {
+  const b = e.target.closest('[data-fmt]'); if (!b) return;
+  EXP.fmt = b.dataset.fmt; syncExport();
+});
+$('#expView').addEventListener('click', e => {
+  const b = e.target.closest('[data-ev]'); if (!b) return;
+  EXP.view = b.dataset.ev; syncExport();
+});
+$('#expScale').addEventListener('click', e => {
+  const b = e.target.closest('[data-sc]'); if (!b) return;
+  EXP.scale = +b.dataset.sc; syncExport();
+});
+for (const [id, key] of [['expRulers', 'rulers'], ['expGrid', 'grid'], ['expDimsOn', 'dims'], ['expCaption', 'caption']]) {
+  $('#' + id).addEventListener('change', e => { EXP[key] = e.target.checked; syncExport(); });
+}
 
 /* ---------- the case library ---------- */
 async function renderCases() {
@@ -4488,13 +4861,6 @@ $('#casesClose').onclick = closeCases;
 $('#casesBack').addEventListener('pointerdown', e => { if (e.target.id === 'casesBack') closeCases(); });
 $('#btnNewCase').onclick = async () => { await newCase(); renderCases(); };
 $('#btnImportCase').onclick = () => $('#fileJson').click();
-
-/* ---------- empty state ---------- */
-$('#esPhoto').onclick = pickImages;
-$('#esShape').onclick = addShape;
-$('#esShelf').onclick = addShelf;
-$('#esPlinth').onclick = addPlinth;
-$('#esCases').onclick = openCases;
 
 /* ---------- folding the left rail ---------- */
 {

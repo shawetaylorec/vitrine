@@ -27,13 +27,13 @@
   function stage(cv, name, mode) {
     W.mode = 'object'; W.editId = null; W.topFor = null;
     W.raw = cv; W.base = cv; W.work = copyCanvas(cv);
-    W.undo = []; W.calib = null; W.points = []; W.bb = null; W.crop = null;
+    W.undo = []; W.calib = null; W.points = []; autoBB();
     W.name = name; W.bgColour = null; W.cutMode = mode || 'edges';
     W.keepAspect = true; W.scaleMode = 'width';
     W.stand = { kind: 'none', w: 0, d: 0, h: 0 };
     W.planShape = 'auto'; W.leanFrom = 'upright'; W.lean = 0; W.spin = 0;
     runAuto();
-    W.bb = contentBBox(W.work);
+    autoBB(); theBB();
   }
 
   await new Promise(r => setTimeout(r, 300));
@@ -47,6 +47,40 @@
   stage(photo(620, 800, { kind: 'ellipse', col: '#6b4a2f' }), 'Manuscript');
   const bb1 = W.bb;
   ok(bb1.w > 300 && bb1.w < 420, `cut-out trimmed to content: ${bb1.w}x${bb1.h} px of 620x800`);
+  /* --- 1b. the measurement box is yours to adjust --- */
+  {
+    W.step = 2;
+    W.widthCm = 34; W.keepAspect = true; W.scaleMode = 'width';
+    const auto = { ...theBB() };
+    const perCm = scaleFactors().kx;
+    /* pull the left edge in 20 px, as if a speck out there had been
+       caught by the automatic box */
+    W.bbDrag = { part: 'w', px: 0, py: 0, box: { x0: auto.x, y0: auto.y, x1: auto.x + auto.w, y1: auto.y + auto.h } };
+    bbDragTo({ x: 20, y: 0 });
+    W.bbDrag = null;
+    ok(W.bbManual && theBB().x === auto.x + 20 && theBB().w === auto.w - 20,
+      `dragging the west edge moves only that edge: ${auto.w} → ${theBB().w} px`);
+    ok(theBB().y === auto.y && theBB().h === auto.h, 'and leaves the other three alone');
+    ok(scaleFactors().kx > perCm, 'a narrower box means more cm per pixel, so the scale follows it');
+    /* moving the whole box keeps its size */
+    W.bbDrag = { part: 'move', px: 0, py: 0, box: { x0: theBB().x, y0: theBB().y, x1: theBB().x + theBB().w, y1: theBB().y + theBB().h } };
+    const wWas = theBB().w, hWas = theBB().h;
+    bbDragTo({ x: 5, y: 7 });
+    W.bbDrag = null;
+    ok(theBB().w === wWas && theBB().h === hWas, 'dragging inside it moves the box without resizing it');
+    /* and it survives a trip to another step */
+    setStep(1); setStep(2);
+    ok(W.bbManual && theBB().w === wWas, 'a box you set by hand is not silently recomputed');
+    /* cropping to it trims the picture to exactly that box */
+    const want = { ...theBB() };
+    cropToBox();
+    ok(W.work.width === want.w && W.work.height === want.h,
+      `"Crop to the box" trims the picture to ${W.work.width}×${W.work.height} px`);
+    ok(!W.bbManual, 'and the box goes back to following the new cut-out');
+    /* start clean for the rest of the run */
+    stage(photo(620, 800, { kind: 'ellipse', col: '#6b4a2f' }), 'Manuscript');
+  }
+
   W.widthCm = 34; W.depthCm = 4;
   W.mount = 'placed'; W.support = 'floor';
   W.leanFrom = 'flat'; W.lean = 90 - 15;          /* 15 degrees up from flat */
@@ -101,11 +135,29 @@
   W.points = [{ x: W.bb.x + W.bb.w * 0.2, y: W.bb.y + W.bb.h * 0.05 }, { x: W.bb.x + W.bb.w * 0.8, y: W.bb.y + W.bb.h * 0.05 }];
   finishWizard();
   const hung = S.items.find(i => i.name === 'Rete');
-  hung.wires[0].len = 26; hung.wires[1].len = 34;
-  const tilt = -layout(hung).rot / DEG;
-  ok(tilt > 12 && tilt < 32, `unequal wires tilt it ${rnd(tilt)}°`);
-  const att = attachWorld(hung, hung.wires[0]);
-  ok(Math.abs(att.y - (hung.rail - 26)) < 0.01, `wire 1 lands ${rnd(hung.rail - att.y)} cm below the rail`);
+  hung.hangY = 100;
+  ok(Math.abs(layout(hung).pivot.y - 100) < 0.01, 'a hung object sits where it is put, not where the wires say');
+  const lenLevel = hung.wires.map(w => rnd(wireLen(hung, w), 2));
+  ok(Math.abs(lenLevel[0] - lenLevel[1]) < 0.01, `hanging level, both wires come out the same — ${lenLevel[0]} cm`);
+  /* the inversion: turn the object and the wires follow it, and the
+     object itself must not budge */
+  const beforeX = layout(hung).pivot.x, beforeY = layout(hung).pivot.y;
+  hung.spin = 15;
+  ok(layout(hung).pivot.x === beforeX && layout(hung).pivot.y === beforeY,
+    'turning it does not move it off its position');
+  const lenTilt = hung.wires.map(w => wireLen(hung, w));
+  ok(Math.abs(lenTilt[0] - lenTilt[1]) > 3, `tilted 15°, the two wires differ by ${rnd(Math.abs(lenTilt[0] - lenTilt[1]), 1)} cm`);
+  for (const w of hung.wires) {
+    const att = attachWorld(hung, w);
+    ok(Math.abs((hung.rail - att.y) - wireLen(hung, w)) < 0.01, `wire drops plumb ${rnd(wireLen(hung, w), 1)} cm to its attachment`);
+  }
+  /* moving it up shortens both wires by the same amount */
+  const up = hung.wires.map(w => wireLen(hung, w));
+  hung.hangY = 110;
+  const now = hung.wires.map(w => wireLen(hung, w));
+  ok(Math.abs((up[0] - now[0]) - 10) < 0.01 && Math.abs((up[1] - now[1]) - 10) < 0.01,
+    'raising it 10 cm takes 10 cm off every wire');
+  hung.spin = 0; hung.hangY = 100;
 
   function countOpaque(cv) {
     const d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, cv.width, cv.height).data;
@@ -120,6 +172,27 @@
   ok(Math.abs(w1 - h0) < 0.05 && Math.abs(h1 - w0) < 0.05, `turning 90° swaps what it occupies: ${rnd(w0)}×${rnd(h0)} → ${rnd(w1)}×${rnd(h1)}`);
   ok(Math.abs(bbox(astro).y0 - (46 + 5)) < 0.05, 'and it still rests on its support');
   astro.spin = 0;
+
+  /* --- 6b. yaw: turning it in plan changes what elevation shows --- */
+  {
+    const wideBefore = bbox(astro).x1 - bbox(astro).x0;
+    const deepBefore = footprint(astro).d;
+    astro.yaw = 90;
+    const wideAfter = bbox(astro).x1 - bbox(astro).x0;
+    const deepAfter = footprint(astro).d;
+    ok(Math.abs(wideAfter - deepBefore) < 0.05,
+      `turned side on, elevation shows its depth: ${rnd(deepBefore)} → ${rnd(wideAfter)} cm wide`);
+    ok(Math.abs(deepAfter - wideBefore) < 0.05,
+      `and the footprint takes its width: ${rnd(wideBefore)} → ${rnd(deepAfter)} cm deep`);
+    astro.yaw = 45;
+    const mid = bbox(astro).x1 - bbox(astro).x0;
+    ok(mid < wideBefore && mid > wideAfter, `half-turned it reads between the two — ${rnd(mid)} cm`);
+    ok(Math.abs(bbox(astro).y0 - (46 + 5)) < 0.05, 'turning in plan never lifts it off its support');
+    /* mirroring lean: the same sum in the other plane */
+    ok(Math.abs(yawParts(astro).width - (astro.w * Math.cos(45 * DEG) + astro.depth * Math.cos(45 * DEG))) < 0.05,
+      'the projection is w·cos + depth·sin, the mirror of the lean');
+    astro.yaw = 0;
+  }
 
   /* --- 7. the shape picker --- */
   ok(SHAPES.length >= 12, `the picker offers ${SHAPES.length} shapes`);
@@ -172,6 +245,22 @@
   panel.text = 'Line one.\nLine two.';
   ctx.font = `${panel.textSize * T.sc}px ${UIFONT}`;
   ok(layoutText(panel.text, 9999).length === 2, 'typed line breaks are kept, not collapsed');
+
+  /* auto-fit and titles */
+  panel.w = 30; panel.h = 20;
+  panel.text = new Array(90).fill('Rudolphine').join(' ');
+  panel.textSize = 0.2;
+  const fitted = bestTextSize(panel);
+  panel.textSize = fitted;
+  ok(panelFits(panel), `auto-fit picks ${rnd(fitted, 2)} cm, which fits`);
+  panel.textSize = rnd(fitted + 0.03, 2);
+  ok(!panelFits(panel), 'and a shade larger does not — so it really is the largest that goes in');
+  panel.textSize = fitted;
+  panel.text = '**Rudolphine Tables**\nPrague, 1627.';
+  const tl = layoutText(panel.text, 9999, 12);
+  ok(tl.length === 2 && tl[0].bold && !tl[1].bold, 'a line wrapped in ** is a title, the rest is not');
+  ok(tl[0].text === 'Rudolphine Tables', 'and the markers themselves are not drawn');
+  panel.text = 'Line one.\nLine two.'; panel.textSize = 0.55;
   ok(ptOf(0.55) === 16, '0.55 cm reads as 16 pt');
 
   /* --- 7c. a panel fixes to the FRONT FACE of a plinth --- */
@@ -557,14 +646,34 @@
   ok(legacy.stand && legacy.leanFrom === 'upright' && legacy.spin === 0, 'a file from the old build opens with sensible defaults');
   await restore(JSON.parse(snap));
 
-  /* --- 12. PNG export --- */
+  /* --- 12. exporting a picture --- */
   const realDownload = download;
-  let exported = null;
-  download = (blob, name) => { exported = { size: blob.size, name }; };
-  exportPNG(2);
-  await new Promise(r => setTimeout(r, 800));
+  let exported = [];
+  download = (blob, name) => { exported.push({ size: blob.size, name }); };
+  /* toBlob is asynchronous and slow enough in headless to race a fixed
+     sleep, so wait on the result rather than on the clock */
+  const waitFiles = async n => {
+    for (let i = 0; i < 120 && exported.length < n; i++) await new Promise(r => setTimeout(r, 50));
+    return exported.length >= n;
+  };
+  EXP.fmt = 'png'; EXP.scale = 2; EXP.view = 'front'; EXP.caption = true;
+  saveSheet('front');
+  ok(await waitFiles(1) && exported[0].size > 20000, `PNG export produced ${exported[0] ? exported[0].size : 0} bytes`);
+  ok(/\.png$/.test(exported[0].name), `and is named for what it is — ${exported[0].name}`);
+
+  exported = [];
+  EXP.fmt = 'jpeg';
+  saveSheet('plan');
+  ok(await waitFiles(1) && /plan\.jpg$/.test(exported[0].name), `JPEG of the plan comes out as ${exported[0] ? exported[0].name : 'nothing'}`);
+  ok(exported[0].size > 5000, `and holds ${exported[0].size} bytes`);
+
+  exported = [];
+  EXP.fmt = 'png'; EXP.view = 'both';
+  runExport();
+  ok(await waitFiles(2), `"Both" writes two files: ${exported.map(f => f.name).join(', ')}`);
+  ok(S.view === 'front', 'and exporting the other view leaves the one on screen alone');
+  EXP.view = 'front';
   download = realDownload;
-  ok(exported && exported.size > 20000, `PNG export produced ${exported ? exported.size : 0} bytes`);
 
   buildSchedule();
   ok(($('#schedTable').dataset.tsv || '').split('\n').length === 7, 'schedule lists 6 objects + header');
@@ -594,7 +703,7 @@
     const a = S.items.find(i => i.name === 'Astrolabe');
     a.z = 10;
     const r = S.items.find(i => i.name === 'Rete');
-    r.x = 62; r.wires[0].len = 24; r.wires[1].len = 24;
+    r.x = 62; r.hangY = 108;
     const p = S.items.find(i => i.render === 'panel');
     setMount(p, 'wall');
     p.face = 'back';
@@ -620,6 +729,12 @@
     W.mount = 'placed'; W.tool = 'erase';
     showWizard('Add object'); setStep(1);
   }
+  if (location.hash === '#wiz2') {
+    stage(photo(620, 800, { kind: 'ellipse', col: '#6b4a2f' }), 'Manuscript');
+    W.mount = 'placed'; W.widthCm = 34;
+    showWizard('Add object'); setStep(2);
+  }
+  if (location.hash === '#export') { openExport(); }
   if (location.hash === '#wiz3') {
     stage(photo(620, 800, { kind: 'ellipse', col: '#6b4a2f' }), 'Manuscript');
     W.mount = 'hanging'; W.points = [{ x: 200, y: 150 }, { x: 420, y: 150 }];
