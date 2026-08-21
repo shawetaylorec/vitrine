@@ -9,7 +9,7 @@ It is built by concatenating the sources. Edit these instead:
 
 | File | Contents |
 | --- | --- |
-| `_shell.html` | markup and all CSS, including the theme tokens |
+| `_shell.html` | markup and all CSS: two palettes, the chrome, and the case's own controls |
 | `_p1.js` | state, geometry, the renderer |
 | `_p2.js` | hit testing, dragging, keyboard, preview, left rail, inspector |
 | `_p3.js` | image wizard, background removal, undo, storage, export |
@@ -44,7 +44,8 @@ change. Run it more than once if a result looks marginal — a real race was fou
 that way. Delete `_t.html` afterwards; it is git-ignored.
 
 Append a hash to the URL to screenshot a state: `#plan`, `#dark`, `#wiz`, `#wiz2`,
-`#wiz3`, `#wiz3p`, `#face`, `#plinth`, `#stand` / `#standplan`, `#measure`, `#export`,
+`#wiz3`, `#wiz3p`, `#face`, `#plinth`, `#stand` / `#standplan`, `#tight`, `#keys`, `#menu`,
+`#measure`, `#export`,
 `#sched`, `#shapes`, `#cases`, `#preview`,
 `#shot` / `#shotplan` / `#shotpreview`. Pass `--screenshot=` a path **outside the
 repo** — writing into the project fails with "Access is denied" and no file, which

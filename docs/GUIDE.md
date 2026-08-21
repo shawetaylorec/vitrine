@@ -2,19 +2,49 @@
 
 A walk through the whole job, in the order you would actually do it.
 
+## 0. Where everything is
+
+Three zones, each with one job.
+
+- **The top bar** is the document: which case you are in, which view you are looking at,
+  what is drawn on the sheet, undo, and — behind the **⋯** — exporting, saving and the
+  keyboard card. The four small toggles are Grid, Dimensions, Rulers and Snap; the fifth
+  arms the measuring line.
+- **The left rail is the register**: everything in this case, grouped as casework,
+  objects and panels, each row carrying the object's own picture. Above it are the five
+  things you can add. A group heading folds its group away.
+
+  **Rows can be dragged into any order you like.** Take the handle on the left of a row,
+  or select it and press <kbd>Alt</kbd> with an arrow. New things arrive at the foot of
+  their group until you move them. It is a filing order and nothing more: it travels with
+  the case when you save it, and it changes **nothing** about the drawing — not where
+  anything sits, not what is drawn in front of what, not what a click picks up. A row
+  stays in its own group, because a panel is a panel wherever you drop it.
+- **The right rail is the inspector**: whatever is selected. Select nothing and it is
+  **the case itself** — its dimensions, its back wall, its measuring lines.
+
+Either rail collapses: press <kbd>[</kbd> or <kbd>]</kbd>, or click the arrow in its
+heading, and the drawing takes the room. The register does not disappear when it
+collapses — it becomes a strip of the objects themselves, still clickable, still showing
+what is selected.
+
 ## 1. The case
 
-Top left, set **W**, **H** and **D** in centimetres. Depth matters as much as the other
-two — it is what the plan view is drawn against and what the overhang warnings check.
+Click an empty part of the sheet, or press <kbd>Esc</kbd>, and the inspector shows the
+case. Set **W**, **H** and **D** in centimetres. Depth matters as much as the other two —
+it is what the plan view is drawn against and what the overhang warnings check.
 
 **Hanging rail height** is where wires attach at the top of the case. Everything hung
 measures its wire lengths down from there, so getting it right once saves correcting
 every object later.
 
-Three toggles control the drawing furniture: **Grid** (the 10 cm squares),
-**Dimensions** (the arrows, and the dashed witness lines off whatever is selected) and
-**Rulers** (the cm scales down the side and across the top). Turning the rulers off
-reclaims the gutter, so the case gets bigger rather than leaving an empty margin.
+Four toggles in the top bar control the drawing furniture: **Grid** (the 10 cm squares),
+**Dimensions** (the arrows, and the dashed witness lines off whatever is selected),
+**Rulers** (the cm scales down the side and across the top) and **Snap**. The first three
+only change what is drawn; **Snap** is the one that changes how things move — on, a drag
+steps in whole centimetres and lines up with its neighbours; off, it moves freely. Hold
+<kbd>Shift</kbd> for tenths either way. Turning the rulers off reclaims the gutter, so
+the case gets bigger rather than leaving an empty margin.
 
 Under **Back wall** you can set a colour, or upload an image of the actual case
 interior with **Whole wall**. It dresses the elevation only — the plan keeps its own
@@ -264,7 +294,8 @@ Those four clearances answer "where is this in the case". For everything else �
 between two objects, the light above a plinth, how far a label sits below the thing it
 describes — draw the dimension yourself.
 
-Press <kbd>M</kbd> or **Measuring line** in the left rail, then drag from one point to
+Press <kbd>M</kbd>, or the measuring button in the top bar — the arrowed line between two
+rules — then drag from one point to
 another. Two things make it a measurement rather than a sketch:
 
 - **It holds to the square.** Come within a few pixels of the vertical or the horizontal
@@ -342,7 +373,7 @@ will help, and the number it gives you is what will.
 To turn something, drag the round handle above it, press <kbd>R</kbd>, or type an angle
 in **Turn**. A turned object still settles properly onto its support.
 
-**Plan filter**, bottom left, limits both views to one level at a time. Working out
+**Showing**, at the foot of the register, limits both views to one level at a time. Working out
 depth on a crowded shelf is much easier with everything else hidden.
 
 Everything is drawn back to front, so what is nearer the glass covers what is behind it,
@@ -363,7 +394,7 @@ Use them to block one out before the photography is done, and swap them for the 
 thing later. **Change shape…** in the inspector swaps one for another without losing
 its position, and there are buttons to turn a shape into a panel and back.
 
-Panels live in their own **Panels** section of the left rail, not among the objects —
+Panels live in their own **Panels** group of the register, not among the objects —
 an object is a real thing in the case, a panel is a caption for one, and casework is
 casework. Every panel is listed there whatever it is mounted on, with its home beside
 its name. **+ Panel** adds an interpretation panel.

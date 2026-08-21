@@ -9,6 +9,26 @@ install, no server, no account, and nothing leaves your machine.
 
 ![The elevation view](docs/images/shot.png)
 
+> The screenshots in this file were taken before the interface was rebuilt and show the
+> old chrome. The drawing itself is unchanged.
+
+## The interface
+
+Three zones, each with one job. **The top bar** is the document: which case, which view,
+what is drawn on the sheet, undo, and — behind the **⋯** — exporting, saving and the
+keyboard card. **The left rail is the register**: everything in this case, grouped as
+casework, objects and panels, every row carrying the object's own cut-out. **The right
+rail is the inspector**: whatever is selected — and when nothing is, the case itself, its
+dimensions and its back wall, which is where they belong.
+
+Either rail collapses with <kbd>[</kbd> or <kbd>]</kbd> and the drawing takes the room.
+The register does not vanish when it collapses: it becomes a strip of the objects
+themselves, still clickable, still showing what is selected.
+
+The chrome is dark, quiet metal and the drawing is the only lit thing in it, which is
+what a vitrine's mount is for. Selection is drawn as light rather than as colour, for the
+same reason. There is a light theme, and it is a cool daylight rather than a second beige.
+
 ## Why
 
 Exhibition design tools are 3D and want a model or a collections-management record
@@ -224,6 +244,10 @@ that survives a cleared browser.
 | <kbd>Ctrl</kbd>+<kbd>V</kbd> | paste a picture, or text into a selected panel |
 | <kbd>M</kbd> | draw a measuring line (<kbd>Esc</kbd> to stop) |
 | <kbd>L</kbd> | lock everything in place |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd> | save the case to a file |
+| <kbd>[</kbd> / <kbd>]</kbd> | collapse the register / the inspector |
+| <kbd>Alt</kbd>+<kbd>↑</kbd><kbd>↓</kbd> | move the selected row up or down the register |
+| <kbd>?</kbd> | the keyboard card |
 | double-click | reopen an object's cut-out, size and mounting pages |
 
 ## Known limits

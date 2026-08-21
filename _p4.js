@@ -367,29 +367,88 @@ $('#casesBack').addEventListener('pointerdown', e => { if (e.target.id === 'case
 $('#btnNewCase').onclick = async () => { await newCase(); renderCases(); };
 $('#btnImportCase').onclick = () => $('#fileJson').click();
 
-/* ---------- folding the left rail ---------- */
+/* ---------- folding a group of the register ---------- */
 {
   const folded = new Set(JSON.parse(localStorage.getItem('vitrine-folded') || '[]'));
-  $$('.rail-left .sect').forEach((sect, i) => {
-    const h = sect.querySelector('h2');
+  $$('#register .grp').forEach((grp, i) => {
+    const h = grp.querySelector('h3');
     if (!h) return;
-    const key = h.textContent.trim() || String(i);
-    const chev = document.createElement('i');
-    chev.className = 'chev';
-    chev.textContent = '▼';
-    h.insertBefore(chev, h.firstChild);
-    if (folded.has(key)) sect.classList.add('folded');
+    const key = grp.dataset.grp || String(i);
+    if (folded.has(key)) grp.classList.add('folded');
     h.setAttribute('role', 'button');
     h.setAttribute('tabindex', '0');
     const toggle = () => {
-      sect.classList.toggle('folded');
-      sect.classList.contains('folded') ? folded.add(key) : folded.delete(key);
+      grp.classList.toggle('folded');
+      grp.classList.contains('folded') ? folded.add(key) : folded.delete(key);
       localStorage.setItem('vitrine-folded', JSON.stringify([...folded]));
     };
     h.addEventListener('click', toggle);
     h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   });
 }
+
+/* ---------- collapsing a rail ----------
+   Not a saved property of the case: how much of the drawing you want to
+   see is a fact about the person and the screen, not about the vitrine,
+   and the case file is compared byte for byte on the way out. It rides
+   in localStorage with the theme.
+
+   Collapsed, the left rail is not empty — it keeps the register as a
+   strip of the objects themselves, still clickable, still showing what
+   is selected. That is all CSS: the same rows, distilled. */
+{
+  const KEY = 'vitrine-rails';
+  const state = { L: false, R: false, ...JSON.parse(localStorage.getItem(KEY) || '{}') };
+  const apply = () => {
+    document.body.classList.toggle('noL', !!state.L);
+    document.body.classList.toggle('noR', !!state.R);
+    const l = $('#togL'), r = $('#togR');
+    if (l) l.title = state.L ? 'Show the register ( [ )' : 'Collapse the register ( [ )';
+    if (r) r.title = state.R ? 'Show the inspector ( ] )' : 'Collapse the inspector ( ] )';
+    for (const [b, on] of [[l, state.L], [r, state.R]]) {
+      if (b) b.style.transform = on ? 'scaleX(-1)' : '';
+    }
+    /* the sheet has just changed width */
+    requestAnimationFrame(() => { resizeCanvas(); draw(); });
+    setTimeout(() => { resizeCanvas(); draw(); }, 260);
+  };
+  window.toggleRail = side => {
+    state[side] = !state[side];
+    localStorage.setItem(KEY, JSON.stringify(state));
+    apply();
+  };
+  $('#togL').onclick = () => toggleRail('L');
+  $('#togR').onclick = () => toggleRail('R');
+  /* collapsed, the header itself is the way back */
+  $('#railLeft').querySelector('.railhead').addEventListener('click', e => {
+    if (document.body.classList.contains('noL') && !e.target.closest('#togL')) toggleRail('L');
+  });
+  $('#railRight').querySelector('.railspine').addEventListener('click', () => toggleRail('R'));
+  apply();
+}
+
+/* ---------- the overflow menu ---------- */
+{
+  const btn = $('#btnMenu'), menu = $('#mainMenu');
+  const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  btn.onclick = e => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+    btn.setAttribute('aria-expanded', String(!menu.hidden));
+  };
+  menu.addEventListener('click', () => close());
+  document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('.menuwrap')) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  $('#btnMenuOpen').onclick = () => $('#fileJson').click();
+}
+
+/* ---------- the keyboard card ---------- */
+$('#btnKeys').onclick = () => { $('#keysBack').hidden = false; };
+$('#keysClose').onclick = () => { $('#keysBack').hidden = true; };
+$('#keysBack').addEventListener('pointerdown', e => { if (e.target.id === 'keysBack') $('#keysBack').hidden = true; });
+
+/* the measuring mode, from the topbar as well as from the case panel */
+$('#btnMeasureTop').onclick = () => setMeasuring();
 
 /* undo */
 $('#btnUndoStep').onclick = undo;

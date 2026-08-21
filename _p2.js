@@ -663,6 +663,14 @@ cvs.addEventListener('wheel', e => {
 }, { passive: false });
 
 document.addEventListener('keydown', e => {
+  /* Saving works from anywhere, a field included: it is the one action
+     you reach for without looking up from what you are typing, and the
+     browser's own Save Page is not what anybody means here. */
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    $('#btnSave').click();
+    return;
+  }
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
     if (e.key === 'Escape') document.activeElement.blur();
@@ -682,6 +690,11 @@ document.addEventListener('keydown', e => {
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
   if (e.key.toLowerCase() === 'p') { enterPreview(); return; }
+  /* the rails: how much of the drawing you want to see */
+  if (e.key === '[') { toggleRail('L'); return; }
+  if (e.key === ']') { toggleRail('R'); return; }
+  if (e.key === '?') { const k = $('#keysBack'); k.hidden = !k.hidden; return; }
+  if (!$('#keysBack').hidden) { if (e.key === 'Escape') { $('#keysBack').hidden = true; return; } }
   if (!$('#shapeBack').hidden) { if (e.key === 'Escape') closeShapePicker(); return; }
   if (!$('#expBack').hidden) {
     if (e.key === 'Escape') closeExport();
@@ -720,6 +733,14 @@ document.addEventListener('keydown', e => {
     commit(); return;
   }
   if (e.key === 'Enter' && o.type === 'object') { openWizard({ edit: o.id, step: 3 }); return; }
+  /* Alt with an arrow moves the row in the register rather than the
+     object in the case — the list has an order of its own now, and a
+     drag is not reachable from the keyboard. */
+  if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault();
+    nudgeRail(e.key === 'ArrowUp' ? -1 : 1);
+    return;
+  }
   if (e.key.startsWith('Arrow')) {
     e.preventDefault();
     const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
@@ -910,6 +931,9 @@ async function duplicate(id) {
   const it = byId(id); if (!it) return;
   const c = JSON.parse(JSON.stringify(it));
   c.id = uid(); c.name = it.name + ' copy';
+  /* a copy joins the end of its group in the register rather than
+     sharing the original's place in the order */
+  delete c.ord;
   S.items.push(c);
   freeSpot(c);
   /* One code path for decoding, and it must not be able to throw past
@@ -1015,8 +1039,22 @@ function objBadge(o) {
 }
 function objGlyph(o) {
   if (o.png) return `<img src="${o.png}" alt="">`;
-  if (o.render === 'panel') return '&#9646;';
+  if (o.render === 'panel') return railGlyph(o);
   return `<img src="${shapeThumb(o.render)}" alt="">`;
+}
+
+/* A drawn mark for the things that have no photograph — casework and
+   panels. They have to survive being the only thing left when the
+   register is collapsed to a strip, which a text glyph does not: at
+   28 px a shelf and a plinth have to be told apart at a glance. */
+function railGlyph(it) {
+  const g = { width: 28, height: 28, viewBox: '0 0 28 28' };
+  const wrap = inner => `<svg viewBox="${g.viewBox}" width="20" height="20" fill="none"
+    stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+  if (it.type === 'shelf') return wrap('<path d="M4 13h20v3H4zM7 16v5M21 16v5"/>');
+  if (it.type === 'plinth') return wrap('<rect x="8" y="8" width="12" height="15" rx="1"/><path d="M3 23h22"/>');
+  /* a panel: a card with wording on it */
+  return wrap('<rect x="4" y="7" width="20" height="14" rx="1.5"/><path d="M8 12h12M8 16h7"/>');
 }
 
 /* the bits of chrome that track the case rather than the selection */
@@ -1033,9 +1071,110 @@ function syncMeasureUI() {
     b.setAttribute('aria-pressed', String(!!MEASURING));
     b.firstChild.nodeValue = MEASURING ? 'Measuring — Esc to stop' : 'Measuring line';
   }
+  /* the same mode, reachable from the topbar without opening anything */
+  const t = $('#btnMeasureTop');
+  if (t) {
+    t.setAttribute('aria-pressed', String(!!MEASURING));
+    t.title = MEASURING ? 'Measuring — Esc to stop' : 'Measuring line (M) — drag between any two things';
+  }
   const n = $('#mCount');
   if (n) n.textContent = (S.measures || []).filter(m => m.view === S.view).length;
   document.body.classList.toggle('measuring', !!MEASURING);
+}
+
+/* ---------- the register's own order ----------
+   Presentation only, and deliberately not the order of `S.items`.
+
+   The elevation sorts items by depth and lets a stable sort break ties
+   by array position; the plan draws them in array order outright; and
+   hitTest resolves a tie by taking the later item, "because that is the
+   one drawn last and so the one you can actually see". Move a row in
+   that array to tidy the list and you would quietly change which of two
+   things at the same depth is drawn on top, and which one a click
+   grabs. Tidying a list must not touch the drawing.
+
+   So `ord` is a separate index that only the rail reads, numbered
+   within a group. Anything that has never been dragged has none, and
+   keeps the order it arrived in, after everything that has. */
+const ORD_END = 1e6;
+const railGroup = it => it.type !== 'object' ? 'struct' : it.render === 'panel' ? 'panel' : 'obj';
+const railOrder = list => list
+  .map((it, i) => ({ it, k: it.ord ?? (ORD_END + i) }))
+  .sort((a, b) => a.k - b.k)
+  .map(e => e.it);
+
+/* Put one row before or after another and renumber that group. Refuses
+   to move a row into a group it does not belong to — a panel is a panel
+   wherever you drop it. */
+function reorderRail(dragId, targetId, after) {
+  const a = byId(dragId), b = byId(targetId);
+  if (!a || !b || a === b) return false;
+  const g = railGroup(a);
+  if (railGroup(b) !== g) return false;
+  const group = railOrder(S.items.filter(i => railGroup(i) === g));
+  group.splice(group.indexOf(a), 1);
+  group.splice(group.indexOf(b) + (after ? 1 : 0), 0, a);
+  group.forEach((it, i) => { it.ord = i; });
+  commit();
+  return true;
+}
+
+/* The same move from the keyboard, since a drag is not reachable from
+   one. Alt is free: the bare arrows nudge the selection in the case. */
+function nudgeRail(dir) {
+  const o = byId(S.sel); if (!o) return false;
+  const group = railOrder(S.items.filter(i => railGroup(i) === railGroup(o)));
+  const i = group.indexOf(o), j = i + dir;
+  if (i < 0 || j < 0 || j >= group.length) return false;
+  group.splice(i, 1); group.splice(j, 0, o);
+  group.forEach((it, k) => { it.ord = k; });
+  commit();
+  toast(`${o.name} moved ${dir < 0 ? 'up' : 'down'} the register`);
+  return true;
+}
+
+/* Rows are dragged with the browser's own drag and drop rather than
+   pointer events: the sheet already owns pointerdown, and a list is the
+   one place where the native behaviour is exactly right. */
+let railDrag = null;
+function wireReorder() {
+  /* the rows have just been replaced, so any drag that was in flight
+     belongs to nodes that no longer exist */
+  railDrag = null;
+  const rows = $$('#register .item');
+  const clear = () => { for (const el of rows) el.classList.remove('over-top', 'over-bot', 'dragging'); };
+  const edge = (el, e) => {
+    const r = el.getBoundingClientRect();
+    return (e.clientY - r.top) > r.height / 2;
+  };
+  for (const el of rows) {
+    el.draggable = true;
+    el.addEventListener('dragstart', e => {
+      railDrag = el.dataset.id;
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      /* some browsers will not start a drag with nothing on it */
+      try { e.dataTransfer.setData('text/plain', railDrag); } catch (x) { }
+    });
+    el.addEventListener('dragend', () => { railDrag = null; clear(); });
+    el.addEventListener('dragover', e => {
+      if (!railDrag || el.dataset.id === railDrag) return;
+      const src = byId(railDrag), dst = byId(el.dataset.id);
+      if (!src || !dst || railGroup(src) !== railGroup(dst)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const after = edge(el, e);
+      el.classList.toggle('over-bot', after);
+      el.classList.toggle('over-top', !after);
+    });
+    el.addEventListener('dragleave', () => el.classList.remove('over-top', 'over-bot'));
+    el.addEventListener('drop', e => {
+      e.preventDefault();
+      const id = railDrag, after = edge(el, e);
+      railDrag = null; clear();
+      if (id) reorderRail(id, el.dataset.id, after);
+    });
+  }
 }
 
 function renderLists() {
@@ -1047,24 +1186,28 @@ function renderLists() {
   const structs = S.items.filter(i => i.type !== 'object');
   const objs = S.items.filter(i => i.type === 'object' && i.render !== 'panel');
   const panels = S.items.filter(i => i.render === 'panel');
+  /* the count beside each group heading — the register says how much is
+     in the case before you have read a single row of it */
+  const count = (id, n) => { const el = $('#' + id); if (el) el.textContent = n; };
+  count('nStruct', structs.length); count('nObj', objs.length); count('nPanel', panels.length);
 
-  $('#listStruct').innerHTML = structs.length ? structs.map(it => `
-    <div class="item${it.hide ? ' off' : ''}" data-id="${it.id}" aria-selected="${it.id === S.sel}">
-      <span class="sw">${it.type === 'shelf' ? '&#9473;' : '&#9646;'}</span>
+  $('#listStruct').innerHTML = structs.length ? railOrder(structs).map(it => `
+    <div class="item${it.hide ? ' off' : ''}" data-id="${it.id}" aria-selected="${it.id === S.sel}" title="${esc(it.name)}">
+      <span class="grip" aria-hidden="true"></span><span class="sw">${railGlyph(it)}</span>
       <span class="nm">${esc(it.name)}</span>
       <span class="mt">${it.type === 'shelf' ? rnd(it.y) + ' cm' : 'h ' + rnd(it.h)}</span>
       <button class="eye" data-eye="${it.id}" title="Show / hide">${it.hide ? '&#9676;' : '&#9679;'}</button>
-    </div>`).join('') : '<p class="empty">No shelves or plinths yet.</p>';
+    </div>`).join('') : '<p class="empty">Add a shelf or a plinth to stand things on.</p>';
 
-  $('#listObj').innerHTML = objs.length ? objs.map(it => `
-    <div class="item${it.hide ? ' off' : ''}" data-id="${it.id}" aria-selected="${it.id === S.sel}">
-      <span class="sw">${objGlyph(it)}</span>
+  $('#listObj').innerHTML = objs.length ? railOrder(objs).map(it => `
+    <div class="item${it.hide ? ' off' : ''}" data-id="${it.id}" aria-selected="${it.id === S.sel}" title="${esc(it.name)}">
+      <span class="grip" aria-hidden="true"></span><span class="sw">${objGlyph(it)}</span>
       <span class="nm">${esc(it.name)}</span>
       <span class="mt">${objBadge(it)}</span>
       <button class="eye" data-eye="${it.id}" title="Show / hide">${it.hide ? '&#9676;' : '&#9679;'}</button>
-    </div>`).join('') : '<p class="empty">No objects yet &mdash; add one from an image, or drop a shape in.</p>';
+    </div>`).join('') : '<p class="empty">Drop a photograph on the sheet, or drop in a shape to stand for one.</p>';
 
-  $('#listPanel').innerHTML = panels.length ? panels.map(it => {
+  $('#listPanel').innerHTML = panels.length ? railOrder(panels).map(it => {
     const f = faceOf(it);
     /* every panel is listed here whatever it is mounted on, so the
        badge has to name all four homes, stands included */
@@ -1073,13 +1216,13 @@ function renderLists() {
         : it.mount === 'placed' ? esc(supportOf(it).name)
           : 'wall';
     return `
-    <div class="item${it.hide ? ' off' : ''}" data-id="${it.id}" aria-selected="${it.id === S.sel}">
-      <span class="sw">&#9646;</span>
+    <div class="item${it.hide ? ' off' : ''}" data-id="${it.id}" aria-selected="${it.id === S.sel}" title="${esc(it.name)}">
+      <span class="grip" aria-hidden="true"></span><span class="sw">${railGlyph(it)}</span>
       <span class="nm">${esc(it.name)}</span>
       <span class="mt">${where}</span>
       <button class="eye" data-eye="${it.id}" title="Show / hide">${it.hide ? '&#9676;' : '&#9679;'}</button>
     </div>`;
-  }).join('') : '<p class="empty">No panels yet.</p>';
+  }).join('') : '<p class="empty">Add a panel for the wording. With a plinth selected it goes on its front.</p>';
 
   for (const el of $$('.item')) {
     el.onclick = ev => { if (ev.target.dataset.eye) return; select(el.dataset.id); };
@@ -1088,6 +1231,7 @@ function renderLists() {
   for (const el of $$('[data-eye]')) {
     el.onclick = ev => { ev.stopPropagation(); const it = byId(el.dataset.eye); it.hide = !it.hide; commit(); };
   }
+  wireReorder();
 
   const sel = $('#levelFilter');
   const opts = [['all', 'All levels'], ['floor', 'Case floor'], ['hung', 'Hung on wires'], ['wall', 'Fixed to the wall']]
@@ -1317,47 +1461,77 @@ const LOCKBAR = `<section class="sect lockbar">
   </div>
 </section>`;
 
+/* The case's own controls are real nodes living in #stash, wired once
+   at boot. The inspector borrows them when nothing is selected and
+   hands them straight back, so the listeners, and everything
+   syncCaseFields() writes into, survive being shown and hidden. */
+function stashCaseTools() {
+  const tools = $('#caseTools'), stash = $('#stash');
+  if (tools && stash && tools.parentNode !== stash) stash.appendChild(tools);
+}
+
+/* What the inspector is looking at, said in two places: the rail's own
+   heading, and the spine that is all you can see once it is collapsed. */
+function inspectorTitle(t) {
+  const h = $('#inspTitle'), s = $('#spineName');
+  if (h) h.textContent = t;
+  if (s) s.textContent = t;
+}
+
+/* Nothing selected is not an empty state — it is the case itself, which
+   is a thing with dimensions like any other. Its controls used to sit
+   in the left rail, one panel away from the readout describing them.
+
+   The borrowed nodes are only moved when this panel is being built from
+   scratch: a commit while you are typing in one of them must not yank
+   it out of the document and take the caret with it. */
+function renderCaseInspector(box) {
+  const n = S.items.filter(i => i.type === 'object' && i.render !== 'panel').length;
+  const np = S.items.filter(i => i.render === 'panel').length;
+  const ns = S.items.filter(i => i.type !== 'object').length;
+  const tally = [[n, 'object', 'objects'], [np, 'panel', 'panels'],
+  [ns, 'shelf or plinth', 'shelves and plinths']]
+    .filter(([c]) => c).map(([c, one, many]) => `${c} ${c === 1 ? one : many}`)
+    .join(' · ') || 'nothing in it yet';
+  const sub = `${rnd(S.cs.w)} &times; ${rnd(S.cs.h)} &times; ${rnd(S.cs.d)} cm &middot; ${tally}`;
+  inspectorTitle('The case');
+
+  const slot = box.querySelector('#caseToolsSlot');
+  const tools = $('#caseTools');
+  const standing = slot && tools && tools.parentNode === slot &&
+    !!box.querySelector('.lockbar') === locked();
+  if (standing) {
+    const nameEl = $('#projName');
+    if (nameEl && document.activeElement !== nameEl) nameEl.value = S.name;
+    box.querySelector('.casehead .sub').innerHTML = sub;
+    return;
+  }
+
+  stashCaseTools();
+  box.innerHTML = (locked() ? LOCKBAR : '') + `
+      <div class="casehead">
+        <span class="eyebrow">Case</span>
+        <input type="text" id="projName" value="${esc(S.name)}" aria-label="Case name">
+        <span class="sub">${sub}</span>
+      </div>
+      <div id="caseToolsSlot"></div>
+      <section class="sect">
+        <p class="note">Select anything in the case, or in the register on the left, to edit
+        it here. Double-click an object to reopen its cut-out, size and mounting pages.</p>
+      </section>`;
+  box.querySelector('#caseToolsSlot').appendChild(tools);
+  $('#projName').onchange = e => { S.name = e.target.value || 'Untitled case'; commit(); };
+  if (locked()) bindInspector(null);
+}
+
 function renderInspector() {
   const box = $('#inspector');
   const sel = byId(S.sel);
   $('#hudSel').textContent = sel ? sel.name : 'Nothing selected';
 
-  if (!sel) {
-    const n = S.items.filter(i => i.type === 'object' && i.render !== 'panel').length;
-    const np = S.items.filter(i => i.render === 'panel').length;
-    box.innerHTML = `
-      <section class="sect">
-        <h2>Case</h2>
-        <div class="readout">
-          <span>W <b>${rnd(S.cs.w)}</b></span><span>H <b>${rnd(S.cs.h)}</b></span><span>D <b>${rnd(S.cs.d)}</b></span>
-          <span>objects <b>${n}</b></span>
-        </div>
-        <p class="note">Select something in the case, or in the lists on the left, to edit it. Double-click an object to reopen its cut-out, size and mounting pages.</p>
-      </section>
-      <section class="sect">
-        <h2>Keys</h2>
-        <p class="note" style="line-height:1.75">
-          <kbd>1</kbd> elevation &nbsp; <kbd>2</kbd> plan &nbsp; <kbd>F</kbd> fit<br>
-          <kbd>&larr;&uarr;&rarr;&darr;</kbd> nudge 1 cm &middot; <kbd>Shift</kbd> 0.1 &middot; <kbd>Ctrl</kbd> 5<br>
-          <kbd>R</kbd> turn 90&deg; &nbsp; <kbd>Enter</kbd> mounting page<br>
-          <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate &nbsp; <kbd>Del</kbd> remove<br>
-          <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo &nbsp; <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo<br>
-          <kbd>Ctrl</kbd>+<kbd>V</kbd> paste a picture straight in<br>
-          <kbd>L</kbd> lock everything in place<br>
-          Drag empty sheet to pan &middot; scroll to zoom
-        </p>
-      </section>
-      <section class="sect">
-        <h2>Project</h2>
-        <label class="f full"><span>Name</span><input type="text" id="projName" value="${esc(S.name)}"></label>
-      </section>`;
-    $('#projName').onchange = e => { S.name = e.target.value || 'Untitled case'; commit(); };
-    if (locked()) {
-      box.insertAdjacentHTML('afterbegin', LOCKBAR);
-      bindInspector(null);
-    }
-    return;
-  }
+  if (!sel) { renderCaseInspector(box); return; }
+  stashCaseTools();
+  inspectorTitle(sel.name);
 
   /* A board applied to a plinth front is that plinth's face, so either
      of them opens the pair: the plinth's own figures, with the board

@@ -1,10 +1,11 @@
-# Handover — the plinth and its face are one job now
+# Handover — the pair, the stand, and a rebuilt interface
 
-Written 2026-08-21, replacing the handover that closed the queue of eight. Two things
-were asked for and both are built, tested and documented. **Nothing has been pushed** —
-that is the standing arrangement, and it is waiting on the owner.
+Written 2026-08-21, replacing the handover that closed the queue of eight. Three things
+were asked for and all three are built, tested and documented. The first two went up as
+**740584d**; the interface rebuild followed once the owner had used it. Everything here
+is pushed.
 
-342 assertions pass, run six times over. `index.html` is rebuilt from the sources.
+363 assertions pass, run repeatedly. `index.html` is rebuilt from the sources.
 
 Read `CLAUDE.md` and `docs/DEVELOPING.md` first — this file assumes both.
 
@@ -87,11 +88,59 @@ After that it is an ordinary placed object: pick what it rests on, lean it furth
 the stand, and the overhang warnings measure the stand as the contact patch. `#stand` and
 `#standplan` screenshot it.
 
+### 3. The interface, rebuilt
+
+The owner's brief: the functionality is right, the thing looks clanky, the layout is not
+intuitive, space is given to what does not need it — the keyboard cheat-sheet had a
+permanent panel — and the rails do not collapse. Nothing was to be lost.
+
+What changed, and why each one:
+
+- **Three zones, each with one job.** The top bar is the document. The left rail is the
+  **register** — everything in the case, grouped, every row carrying the object's own
+  cut-out. The right rail is the inspector. Settings that were scattered down the left
+  rail moved to where they belong.
+- **The case is a thing you inspect.** Nothing selected is no longer an empty state with
+  a readout of dimensions you had to go elsewhere to change: it *is* the case, with those
+  fields in it. Read `docs/DEVELOPING.md` §*The case is a thing you inspect* before
+  touching `renderCaseInspector()` — the controls are borrowed nodes, not markup, and
+  rebuilding them would kill every listener bound at boot.
+- **Both rails collapse**, `[` and `]`. Collapsed, the register becomes a strip of the
+  objects themselves — same rows, all CSS, no second code path. It rides in
+  `localStorage`, never in `S`, because the round-trip test compares the file byte for
+  byte.
+- **The cheat-sheet is a card** behind `?` and the `⋯` menu, not a standing panel. Four
+  drafting toggles and the measuring line became icons in the top bar; export, schedule,
+  save, open, keyboard and theme went behind `⋯`.
+- **The register can be filed by hand.** Drag a row by its handle, or `Alt` with an
+  arrow. Asked for after the rebuild, and the condition was that it change nothing about
+  the design — which rules out reordering `S.items`, since three separate things read
+  that array positionally. `ord` is a per-group index only the rail reads; see
+  `docs/DEVELOPING.md` §*The register has its own order* before touching it.
+- **Two palettes, kept apart** — see `docs/DEVELOPING.md`. The drawing kept every ink it
+  had, which is why a rebuild of this size moved not one drawn pixel.
+
+Two things found while doing it, both fixed: the modal animations had been dead since
+they were written (`@keyframes` was missing from `fadeIn` and `cardIn` was never
+defined), and the menu offered `Ctrl S` for **Save file**, which was not bound to
+anything. It is now, and works from inside a field.
+
 ---
 
 ## What is actually left
 
-**Nothing is queued.** Three things want the owner's eye rather than more work:
+**One job is queued, and only the owner can do it.**
+
+**The documentation screenshots still show the old interface.** `docs/images/*.png` were
+taken from the owner's real case, *The Universe in a Library* — real astrolabes, the real
+interpretation text — and that case is not in this repository, nor should it be. The
+`#shot` hashes build the synthetic Kepler fixture, so retaking them here would replace
+real objects with coloured blobs, which is the regression the *Real screenshots* commit
+existed to fix. The way to redo them: the owner saves that case with **Save file**, drops
+the `.vitrine.json` somewhere reachable, and it can be loaded into the fixture and shot.
+`README.md` carries a note saying the images are of the old chrome until then.
+
+Three more want the owner's eye rather than more work:
 
 1. **The case clearances in the combined inspector**, per the note above. It reads
    correctly and the panel keeps its place on the face either way, but it is the kind of
@@ -104,14 +153,19 @@ the stand, and the overhang warnings measure the stand as the contact patch. `#s
    `faceItemBlock()` and `bindFaceItem()`.
 3. **The lean datum in use** — still carried over from the last handover. The number
    changes when you switch views. That is what was asked for and it is coherent, but it
-   is worth using before pushing. The new panel-on-a-stand inherits it: 10° in the
-   elevation reads as 80° in plan.
+   is the kind of change that reads differently after an hour of real work. The new
+   panel-on-a-stand inherits it: 10° in the elevation reads as 80° in plan.
+4. **The object schedule exports in the case's own order**, not the register's filing
+   order. Left alone because it was not asked for, and the two orders mean different
+   things — one is how you like to read the list, the other is the case's own. If the
+   schedule should follow the register, it is one `railOrder()` call in `buildSchedule()`.
 
 ## When you are done
 
 Rebuild, run the suite two or three times, regenerate the screenshots if anything visual
 changed, update `README.md`, `docs/GUIDE.md` and `docs/DEVELOPING.md` including the
-assertion count, then commit. **Do not push until the owner has looked at it.**
+assertion count, then commit. **Do not push until the owner has looked at it** — that is
+the standing arrangement, and it held for both of this session's commits.
 
 House rules worth repeating: no dependencies, ever; centimetres everywhere; commit
 messages carry no `Co-Authored-By` trailer; and displayed scholarly content — object

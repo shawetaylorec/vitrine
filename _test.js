@@ -1386,10 +1386,17 @@
       `so it reads ${rnd(measureLen(m), 1)} cm, which is the height above the object's middle`);
     ok(m.view === 'front', 'and belongs to the view it was drawn in');
 
-    /* the horizontal is caught the same way */
-    const across = drawLine(w2s(cx, cy), w2s(S.cs.w - 0.5, cy + 0.4));
+    /* The horizontal is caught the same way. End it 0.2 cm short of the
+       side rather than 0.5: an object edge sits at 139, so half a
+       centimetre short is the exact midpoint between two legitimate
+       snap targets and which one wins comes down to sub-pixel noise in
+       the round trip through screen coordinates. It passed for years
+       and then flipped when the rails changed width, which is a test
+       asserting on a coin toss, not an app that changed its mind. */
+    const across = drawLine(w2s(cx, cy), w2s(S.cs.w - 0.2, cy + 0.4));
     ok(Math.abs(across.by - across.ay) < 0.001, 'a near-horizontal drag holds the horizontal');
-    ok(Math.abs(across.bx - S.cs.w) < 0.05, 'and lands on the side of the case');
+    ok(Math.abs(across.bx - S.cs.w) < 0.05,
+      `and lands on the side of the case (${rnd(across.bx, 2)} of ${S.cs.w}, at ${rnd(T.sc, 2)} px/cm)`);
 
     /* an edge of something real, rather than the case */
     const plinth = S.items.find(i => i.type === 'plinth');
@@ -1509,6 +1516,94 @@
   ok(inPanels === realPanels, `panels have a list of their own (${inPanels})`);
   ok($$('#listStruct .item').length === S.items.filter(i => i.type !== 'object').length,
     'and shelves and plinths stay in Structure');
+  ok($('#nObj').textContent === String(realObjects) && $('#nPanel').textContent === String(realPanels),
+    'each group heading carries its own count');
+
+  /* --- 7m2. the case is a thing you inspect, and the chrome gets out
+     of the way ---
+     The case's controls are real nodes that the inspector borrows and
+     hands back. If they were rebuilt from markup on every render, every
+     listener bound at boot would die with the first selection — which
+     is exactly the failure this is here to catch. */
+  {
+    const slotted = () => $('#caseTools').parentNode.id;
+    select(null); renderInspector();
+    ok(slotted() === 'caseToolsSlot',
+      'with nothing selected the inspector is the case itself, borrowing its own controls');
+    const wasW = S.cs.w;
+    const w = $('#caseW');
+    w.value = 150; w.dispatchEvent(new Event('change'));
+    ok(S.cs.w === 150, 'and they still work, because they were moved rather than rebuilt');
+    w.value = wasW; w.dispatchEvent(new Event('change'));
+
+    select(astro.id); renderInspector();
+    ok(slotted() === 'stash', 'selecting something hands them back rather than destroying them');
+    ok(!!$('#caseW') && !!$('#btnMeasure'), 'so they are still in the document, listeners and all');
+    select(null); renderInspector();
+    ok(slotted() === 'caseToolsSlot' && $('#caseW').value === String(wasW),
+      'and deselecting borrows them back, showing the case as it stands');
+
+    /* --- the register can be tidied without touching the drawing ---
+       This is the whole point of `ord`: the elevation breaks depth ties
+       by array position, the plan draws in array order, and hitTest
+       takes the later item on a tie. If reordering the list moved
+       anything in S.items, tidying the rail would silently change what
+       is drawn on top and what a click grabs. */
+    {
+      renderLists();
+      const rowNames = () => $$('#listObj .item').map(el => byId(el.dataset.id).name);
+      const before = rowNames();
+      const arrayBefore = S.items.map(i => i.id).join(',');
+      ok(before.length >= 3, `the objects group has ${before.length} rows to shuffle`);
+
+      /* drag the last row to the top */
+      const last = before[before.length - 1];
+      const first = before[0];
+      const idOf = nm => S.items.find(i => i.name === nm).id;
+      ok(reorderRail(idOf(last), idOf(first), false), 'a row can be dropped above another');
+      renderLists();
+      ok(rowNames()[0] === last, `it is now first in the register (${rowNames()[0]})`);
+      ok(S.items.map(i => i.id).join(',') === arrayBefore,
+        'and the case itself has not moved a single item — the order is the rail’s, not the drawing’s');
+
+      /* it survives being saved and opened again */
+      const orderNow = rowNames();
+      const file = JSON.parse(JSON.stringify(undoState ? JSON.parse(undoState()) : {}));
+      ok(!!file.items && file.items.some(i => i.ord != null),
+        'the order is written into the case, so it comes back with it');
+
+      /* dropping below a row puts it after that row */
+      ok(reorderRail(idOf(orderNow[0]), idOf(orderNow[1]), true), 'and dropped below another');
+      renderLists();
+      ok(rowNames()[1] === orderNow[0], `landing after it (${rowNames().slice(0, 2).join(', ')})`);
+
+      /* groups do not mix: a panel is a panel wherever you drop it */
+      const pan = S.items.find(i => i.render === 'panel');
+      ok(!reorderRail(pan.id, idOf(orderNow[0]), false),
+        'a panel cannot be dropped into the objects group');
+
+      /* and the keyboard reaches it, since a drag does not */
+      select(idOf(rowNames()[2]));
+      const moved = rowNames()[2];
+      ok(nudgeRail(-1), 'Alt with an arrow moves the selected row');
+      renderLists();
+      ok(rowNames()[1] === moved, `up one place in its group (${moved})`);
+      ok(S.items.map(i => i.id).join(',') === arrayBefore, 'still without disturbing the case');
+      select(null);
+    }
+
+    /* the rails: collapsing one is a fact about the screen, not about
+       the case, so it never touches S — and collapsed, the register is
+       still the register */
+    const before = JSON.stringify(S);
+    toggleRail('L');
+    ok(document.body.classList.contains('noL'), 'a rail collapses');
+    ok($$('#listObj .item').length === realObjects,
+      'and the register survives it: collapsed, it is a strip of the objects themselves');
+    toggleRail('L');
+    ok(!document.body.classList.contains('noL'), 'and comes back');
+    ok(JSON.stringify(S) === before, 'without writing a word into the case');
+  }
 
   /* --- 8. out-of-case detection --- */
   const n0 = outOfCase(astro).length;
@@ -1575,7 +1670,14 @@
   buildSchedule();
   ok(($('#schedTable').dataset.tsv || '').split('\n').length === 7, 'schedule lists 6 objects + header');
 
-  if (location.hash === '#dark') document.documentElement.setAttribute('data-theme', 'dark');
+  if (/^#dark/.test(location.hash)) document.documentElement.setAttribute('data-theme', 'dark');
+  /* both rails collapsed — the register distilled to a strip of the
+     objects themselves, which is the state worth looking at */
+  if (/tight/.test(location.hash)) {
+    setTimeout(() => { toggleRail('L'); toggleRail('R'); }, 60);
+  }
+  if (/^#keys/.test(location.hash)) $('#keysBack').hidden = false;
+  if (/^#menu/.test(location.hash)) $('#btnMenu').click();
 
   /* tidy the scene up for the README screenshots */
   if (location.hash.startsWith('#card')) {
