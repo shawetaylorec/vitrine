@@ -546,14 +546,17 @@
     ok(Math.abs(((bbox(panel).y0 + bbox(panel).y1) / 2) - plinth.h / 2) < 0.05,
       'and up it');
 
-    /* the case clearances move the assembly, matching the drag */
+    /* The case clearances in the combined inspector are the plinth's,
+       which is the honest reading: a board glued to a face has no
+       position in the case of its own. They move the assembly, matching
+       the drag. */
     renderInspector();
     const onFace = panel.x - plinth.x;
     type('iFromL', 20);
-    ok(Math.abs(bbox(panel).x0 - 20) < 0.05,
-      `a case clearance still puts the panel's edge where you asked (${rnd(bbox(panel).x0, 2)} cm)`);
+    ok(Math.abs(plinth.x - 20) < 0.05,
+      `a case clearance puts the plinth where you asked (${rnd(plinth.x, 2)} cm)`);
     ok(Math.abs((panel.x - plinth.x) - onFace) < 0.05,
-      'by moving the plinth, so the panel keeps its place on the face');
+      'and the panel travels with it, keeping its place on the face');
 
     /* --- 7c5. grow the board to fit the type — the reverse of auto-fit --- */
     const LONG = 'Astrolabe, brass, Persian, dated 1073 AH. The rete carries twenty-eight star pointers and the plate is engraved for the latitude of Isfahan. Acquired 1897 from the collection of a Cambridge orientalist, and shown here with its original wooden case.';
@@ -593,6 +596,134 @@
     ok(gBad.h <= gBad.cap.h + 0.005, 'while still growing as far as there is room, rather than stopping silently');
     panel.text = ''; panel.w = 14; panel.h = 9;
     landOnFace(panel);
+
+    /* --- 7c6. one inspector for the plinth and the board on its face --- */
+    select(panel.id); renderInspector();
+    ok($('#iName') && $('#iName').value === plinth.name,
+      'clicking the panel opens the plinth it is stuck to');
+    ok($('#iPnlName') && $('#iPnlName').value === panel.name,
+      'with the panel itself nested under Its face');
+    ok(S.sel === panel.id, 'while the selection stays on the panel that was clicked');
+    ok(!!$('#iText') && !!$('#iTextSize') && !!$('#iFaceL') && !!$('#iFaceFit'),
+      'its wording, its type and its four margins all in the one place');
+    ok(!$('#iFromB') && !!$('#iFromL'),
+      'and one set of case clearances, the plinth’s, rather than two that disagree');
+
+    /* the plinth's own fields still drive the plinth */
+    const wasW = plinth.w;
+    type('iW', 34);
+    ok(Math.abs(plinth.w - 34) < 0.001 && Math.abs(panel.w - 14) < 0.05,
+      'the plain width field is the plinth’s, and leaves the board alone');
+    plinth.w = wasW;
+
+    /* and the nested ones drive the panel */
+    select(plinth.id); renderInspector();
+    ok($('#iPnlName') && $('#iPnlName').value === panel.name,
+      'clicking the plinth opens the same pair, from the other end');
+    type('iPnlW', 11);
+    ok(Math.abs(panel.w - 11) < 0.001 && Math.abs(plinth.w - wasW) < 0.001,
+      'the nested width field is the board’s, and leaves the plinth alone');
+    renderInspector();
+    const ta = $('#iText');
+    ta.value = 'Written through the plinth.';
+    ta.dispatchEvent(new Event('input')); ta.dispatchEvent(new Event('change'));
+    ok(panel.text === 'Written through the plinth.',
+      'and the wording can be typed without ever selecting the panel');
+    panel.text = '';
+
+    /* the way off the face — the one thing the nested block hands back
+       to the panel's own inspector */
+    renderInspector();
+    const fsel = $('#iFace');
+    fsel.value = 'back'; fsel.dispatchEvent(new Event('change'));
+    ok(!faceOf(panel) && S.sel === panel.id,
+      'Fixed to → the back wall takes the board off the plinth, and the inspector follows it');
+    renderInspector();
+    ok($('#iName').value === panel.name && !!$('#iMount'),
+      'where it is an ordinary panel again, with its own mounting and turn');
+    panel.face = plinth.id; landOnFace(panel);
+    select(panel.id); renderInspector();
+
+    /* a graphic on the face is the same relationship, so it opens the
+       same way — and with two things on one face there is a row to pick
+       between them */
+    {
+      const g = blankObject({
+        name: 'Crest', render: 'image', mount: 'wall', face: plinth.id,
+        w: 6, h: 6, depth: 0.2, wallY: 2
+      });
+      S.items.push(g);
+      select(g.id); renderInspector();
+      ok($('#iName').value === plinth.name && $('#iPnlName').value === 'Crest',
+        'a graphic stuck to the face opens under the plinth, exactly as a panel does');
+      ok(!$('#iText'), 'without the wording controls, which belong to a panel');
+      ok($$('[data-face-item]').length === 2,
+        'and two things on one face give a row to choose between them');
+      removeItem(g.id);
+    }
+
+    /* a bare face offers a panel, and takes it back */
+    {
+      const p2 = {
+        id: uid(), type: 'plinth', name: 'Plinth B',
+        x: 96, w: 26, h: 24, z: 6, d: 18, colour: '', png: null, fade: 100
+      };
+      S.items.push(p2);
+      select(p2.id); renderInspector();
+      ok(!!$('#iAddPanel') && !$('#iPnlName'),
+        'a plinth with nothing on its face offers a button to add a panel');
+      $('#iAddPanel').click();
+      const added = S.items.find(i => i.render === 'panel' && i.face === p2.id);
+      ok(!!added, 'and pressing it puts one on that face');
+      renderInspector();
+      ok($('#iPnlName') && $('#iPnlName').value === added.name,
+        'which opens straight away, under the plinth it was added to');
+      ok($('#iName').value === p2.name, 'with the plinth still the thing being inspected');
+      $('#iPnlDel').click();
+      ok(!byId(added.id) && S.sel === p2.id,
+        'and the same block takes it off again, leaving the plinth selected');
+      S.items = S.items.filter(i => i.id !== p2.id);
+    }
+
+    /* --- 7c7. a panel stood in an object stand --- */
+    {
+      const card = blankObject({
+        name: 'Card', render: 'panel', mount: 'wall', face: 'back',
+        w: 14, h: 9, depth: 0.4, wallY: 60, text: 'Label', textSize: 0.5
+      });
+      S.items.push(card);
+      select(card.id); renderInspector();
+      ok(!!$('#iMount').querySelector('[data-mount="placed"]'),
+        'a panel is offered a stand as well as the wall and the wires');
+      setMount(card, 'placed');
+      ok(card.mount === 'placed', 'and takes it');
+      ok(Math.abs(card.depth - PANEL_STAND_DEPTH) < 0.001,
+        `arriving as a card, ${card.depth} cm thick, not a board`);
+      ok(card.stand && card.stand.kind === 'stand',
+        'standing in a V stand, like any other object that needs one');
+      ok(Math.abs(card.lean - PANEL_STAND_LEAN) < 0.001,
+        `reclined ${PANEL_STAND_LEAN}° rather than dead upright, which is what a V does`);
+      ok(Math.abs(bbox(card).y0 - (supportOf(card).top + card.stand.h)) < 0.05,
+        'and sitting on the stand rather than on the deck');
+      const deck = footprint(card).d;
+      ok(deck > card.depth + 0.5,
+        `the recline is what takes the deck (${rnd(deck, 2)} cm for a ${card.depth} cm card)`);
+      ok(card.stand.d >= deck, 'and the stand is cut deep enough to hold it');
+      card.lean = 25;
+      ok(footprint(card).d > deck, 'leaning it further takes more deck again');
+      ok(planMode(card) === 'rect', 'seen from above it is still a board');
+      ok(panelFits(card), 'and it is still a panel: the wording is still measured against it');
+      renderInspector();
+      ok(!!$('#iStandKind') && !!$('#iLean') && !!$('#iText'),
+        'the stand, the angle and the wording are all on offer at once');
+      /* the stand it was given is remembered across a change of mind */
+      setMount(card, 'wall'); setMount(card, 'placed');
+      ok(card.stand.kind === 'stand' && Math.abs(card.stand.h - PANEL_STAND_H) < 0.001,
+        'a round trip through another mount keeps the stand it was given');
+      ok(Math.abs(card.lean - PANEL_STAND_LEAN) < 0.001,
+        'and puts the recline back, since leaving the deck is what flattened it');
+      removeItem(card.id);
+    }
     select(null);
   }
 
@@ -1127,6 +1258,21 @@
     /* and the wire dimension it was modelled on is still there */
     ok(/o\.type === 'plinth'/.test(String(drawDimsFor)) && /wireLen/.test(String(drawDimsFor)),
       'alongside the wire length, not instead of it');
+
+    /* Pressing the board glued to its front is the same press. A panel
+       sized to the face takes every click on the plinth, so a height
+       that only appeared for the plinth would be unreachable the moment
+       there was a panel to reach it through. */
+    const board = S.items.find(i => i.render === 'panel' && i.face === pl.id);
+    if (board) {
+      select(board.id); render();
+      ok(warmest(patch()) > bare + 40,
+        `selecting the panel on its front draws the very same height (r−b ${warmest(patch())})`);
+      ok(selected(pl.id) && selected(board.id),
+        'and the pair outlines as one selection rather than two');
+      ok(SELPAIR && SELPAIR.pl.id === pl.id,
+        'because the drawing resolves the pair once a frame, as the inspector does');
+    }
     S.opt.dims = false; render();
     ok(warmest(patch()) <= bare + 40, 'and it answers to the Dimensions tick, like every automatic dimension');
     S.opt.dims = wasDims;
@@ -1502,6 +1648,25 @@
   if (location.hash === '#plinth') {
     setView('front');
     select(S.items.find(i => i.type === 'plinth').id);
+  }
+  /* a panel stood in a V stand on a plinth top, reclined the way a V
+     holds a card — `#standplan` for the same thing looking down, where
+     the recline is the only thing that shows */
+  if (/^#stand/.test(location.hash)) {
+    setView(/plan$/.test(location.hash) ? 'plan' : 'front');
+    const pl = S.items.find(i => i.type === 'plinth');
+    const card = blankObject({
+      name: 'Card', render: 'panel', mount: 'wall', face: 'back',
+      w: 16, h: 10, depth: 0.4, wallY: 60, textSize: 0.42,
+      text: '**Astrolabe**\nBrass, Persian, dated 1073 AH.'
+    });
+    S.items.push(card);
+    setMount(card, 'placed');
+    card.support = pl.id;
+    landOn(card, supportOf(card));
+    card.x = rnd(pl.x + (pl.w - card.w) / 2, 2);
+    card.z = rnd(pl.z + (pl.d - footprint(card).d) / 2, 2);
+    select(card.id); renderInspector();
   }
   /* a panel fixed to a plinth face, with its own clearances */
   if (location.hash === '#face') {

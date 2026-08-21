@@ -48,9 +48,15 @@ Both can be dragged in either view, and the two views do different jobs:
 ### A plinth's face
 
 Select a plinth and there is an **Its face** section: a colour, a picture with a strength
-slider, and **+ Graphic on this face** — which runs the same cut-out and sizing steps as
-any object and then fixes the result to that plinth, so it can be moved and resized
-afterwards. The same three things the back wall has.
+slider, and two ways of putting something on it — **+ Panel** for wording, and
+**+ Graphic**, which runs the same cut-out and sizing steps as any object and then fixes
+the result to that plinth, so it can be moved and resized afterwards.
+
+**Whatever is on the face is shown right there, inside the same section** — its name, its
+wording, its size, its margins. The plinth's own figures are above it. Clicking the panel
+in the case, or in the Panels list, opens the same thing: a plinth and the board applied
+to it are one job, and they are dragged as one, so they are inspected as one. With two
+things on a face, a row of names picks which is open.
 
 A plinth with no colour or picture is drawn hatched. The hatch means "no material
 given", so it disappears once you give it one.
@@ -359,16 +365,25 @@ its position, and there are buttons to turn a shape into a panel and back.
 
 Panels live in their own **Panels** section of the left rail, not among the objects —
 an object is a real thing in the case, a panel is a caption for one, and casework is
-casework. **+ Panel** adds an interpretation panel: a flat card stuck to a vertical
-surface, so its mounting is **Fixed** (or **Wires**) — never *Placed*.
+casework. Every panel is listed there whatever it is mounted on, with its home beside
+its name. **+ Panel** adds an interpretation panel.
 
-- With **a plinth selected**, the new panel goes straight onto that plinth's front face,
-  sized to sit comfortably on it and centred. **Fit the face**, below, takes the whole
-  front if that is what you want.
+- With **a plinth selected** — or with a panel on a plinth selected — the new panel goes
+  straight onto that plinth's front face, sized to sit comfortably on it and centred.
+  **Fit the face**, below, takes the whole front if that is what you want.
 - With nothing selected it goes on the **back wall**.
 
-Either way, **Fixed to** in the inspector moves it between surfaces afterwards. On a
-plinth front it faces you in elevation and is barely a line in plan.
+A panel takes all three mountings:
+
+- **Fixed** — stuck flat to the back wall or to a plinth's front. This is the usual one,
+  and **Fixed to** in the inspector moves it between surfaces afterwards. On a plinth
+  front it faces you in elevation and is barely a line in plan.
+- **Wires** — hung from the rail, like any other object.
+- **On a stand** — stood upright on a deck, a shelf or a plinth top, in an object stand.
+  It arrives 0.3 cm thick, in a V stand, reclined 10° — which is what a V does to a card
+  — and from there it behaves like any placed object: choose what it rests on, set the
+  angle, size the stand, and the overhang warnings measure the stand's own footprint.
+  The angle reads the way the view states it, so 10° in the elevation is 80° in plan.
 
 ### A panel on a plinth face is glued to it
 
@@ -376,9 +391,21 @@ The two travel as one object. **Dragging the panel drags the plinth**, along wit
 everything else riding on it, in both views — which is what stops a panel sized to the
 whole front from swallowing every click and leaving the plinth underneath ungrabbable.
 
-So its place on the face is *typed*, not dragged. An **On the face of…** section appears
-in the inspector with four margins to the plinth's own front — from its left, right, top
-and bottom.
+They are **inspected as one** for the same reason. Click either and the panel on the
+right shows the plinth — its width, depth, height and place in the case — with the board
+itself under **Its face**: name, wording, type size, dimensions and margins. There is one
+set of case clearances, and they are the plinth's, because a board glued to a face has no
+position of its own.
+
+**And they are drawn as one.** Pressing either outlines both and puts the same
+dimensions on the sheet — the plinth's four clearances and, running down beside it, its
+height. It makes no difference which of the two you reach, or whether you reach it in the
+case or in the lists on the left. That matters most when a panel is sized to the whole
+front: it takes every click on the plinth, so if the height only appeared for the plinth
+there would be no way left to see it.
+
+Its place on the face is *typed*, not dragged: four margins to the plinth's own front —
+from its left, right, top and bottom.
 
 **Each moves its own edge and nothing else.** Type 3 into the right margin and the right
 edge goes 3 cm in; the left, top and bottom stay exactly where they were and the board
@@ -392,8 +419,14 @@ Two buttons work on the whole board:
 - **Fit the face** takes the whole front with half a centimetre of plinth showing all
   round.
 
-The Position fields below still measure to the case, and setting one of those moves the
-plinth too, so the panel keeps its place on the face either way.
+The **Position** fields, up in the plinth's own part of the panel, measure to the case as
+always. Setting one of those moves the whole assembly — plinth, board, and whatever is
+standing on top — so the board keeps its place on the face either way.
+
+To take a board off a face, use **Fixed to** inside the same block and send it to the
+back wall. There it is an ordinary panel again, with its own mounting, turn and plan
+settings, and the inspector follows it. **Remove the panel**, in the same place, takes it
+away altogether and leaves the plinth selected.
 
 Panel text is set in **real centimetres**, with the equivalent in points shown beside
 it. This is the point of it: a 30 × 20 cm panel at 0.55 cm (16 pt) holds about ninety

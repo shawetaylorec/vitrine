@@ -561,6 +561,19 @@ function resizeCanvas() {
   mainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
+/* Who reads as selected, worked out once a frame.
+
+   A board glued to a plinth front and the plinth under it are one thing
+   to work on: they drag as one and they are inspected as one, so they
+   have to draw as one. Otherwise pressing the panel and pressing the
+   plinth — which are the same press, since a panel covering the face
+   takes every click — look like two different states, and the plinth's
+   height arrow appears and disappears depending on which of the two you
+   happened to reach. */
+let SELPAIR = null;
+const selected = id => id === S.sel ||
+  (!!SELPAIR && (id === SELPAIR.pl.id || (!!SELPAIR.item && id === SELPAIR.item.id)));
+
 let rafId = 0;
 function draw() { if (!rafId) rafId = requestAnimationFrame(render); }
 
@@ -575,6 +588,7 @@ function render() {
 }
 
 function paint() {
+  SELPAIR = facePair();
   const cw = VW, ch = VH;
   ctx.clearRect(0, 0, cw, ch);
   ctx.fillStyle = PREVIEW ? C.previewBg : C.sheet;
@@ -888,7 +902,7 @@ function drawPlinthFront(p) {
   ctx.strokeRect(a.x + .5, a.y + .5, w - 1, h - 1);
   /* the hatch says "no material given" — once it has one, drop it */
   if (!p.colour && !img) hatch(a.x, a.y, w, h);
-  if (p.id === S.sel) outline(a.x, a.y, w, h);
+  if (selected(p.id)) outline(a.x, a.y, w, h);
   else if (p.id === HOVER) frame(a.x, a.y, w, h, 'hover');
   label(p.name, (a.x + b.x) / 2, a.y + 12, { size: 10, font: UIFONT, fill: p.colour || img ? C.ink2 : C.ink3, box: !!(p.colour || img), bg: p.colour || C.struct });
 }
@@ -899,7 +913,7 @@ function drawShelfFront(s) {
   ctx.fillStyle = C.struct; ctx.fillRect(a.x, a.y, b.x - a.x, hgt);
   ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
   ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, hgt - 1);
-  if (s.id === S.sel) outline(a.x, a.y, b.x - a.x, hgt);
+  if (selected(s.id)) outline(a.x, a.y, b.x - a.x, hgt);
   else if (s.id === HOVER) frame(a.x, a.y, b.x - a.x, hgt, 'hover');
   label(`${s.name} · ${rnd(s.y)}`, b.x - 4, a.y - 8, { size: 10, font: MONO, fill: C.ink3, align: 'right' });
 }
@@ -1085,6 +1099,15 @@ function panelFits(o) {
    wasting face on a margin nobody asked for. */
 const FACE_MARGIN = 0.5;
 
+/* A panel stood in an object stand is a card rather than a board: it
+   has a face and effectively no thickness, and the V it sits in tips it
+   back a little rather than holding it dead upright. These are the
+   defaults the mount arrives with, not a rule — set any of them to
+   whatever the real stand does and they stay set. */
+const PANEL_STAND_DEPTH = 0.3;
+const PANEL_STAND_LEAN = 10;
+const PANEL_STAND_H = 1.5;
+
 /* The board a panel fitted to its plinth face wants: the whole face,
    less the margin, on all four sides. */
 function faceFit(o) {
@@ -1269,7 +1292,7 @@ function paintBody(o, dx, dy, wpx, hpx, forPlan) {
 
 function drawObjectFront(o) {
   const L = layout(o);
-  const sel = !PREVIEW && o.id === S.sel;
+  const sel = !PREVIEW && selected(o.id);
 
   if (o.mount === 'hanging') {
     /* A wire is a wire whether or not the thing is selected. Drawing it
@@ -1368,7 +1391,7 @@ function drawPlan() {
     ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1; ctx.setLineDash([6, 3]);
     ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
     ctx.setLineDash([]);
-    if (it.id === S.sel) outline(a.x, a.y, b.x - a.x, b.y - a.y);
+    if (selected(it.id)) outline(a.x, a.y, b.x - a.x, b.y - a.y);
     else if (it.id === HOVER) frame(a.x, a.y, b.x - a.x, b.y - a.y, 'hover');
     label(`${it.name} @ ${rnd(it.y)} cm`, a.x + 5, a.y + 11, { size: 10, font: MONO, fill: C.ink3, align: 'left', box: true, bg: caseGround() });
   }
@@ -1378,7 +1401,7 @@ function drawPlan() {
     if (!it.colour) hatch(a.x, a.y, b.x - a.x, b.y - a.y);
     ctx.strokeStyle = C.structEdge; ctx.lineWidth = 1;
     ctx.strokeRect(a.x + .5, a.y + .5, b.x - a.x - 1, b.y - a.y - 1);
-    if (it.id === S.sel) outline(a.x, a.y, b.x - a.x, b.y - a.y);
+    if (selected(it.id)) outline(a.x, a.y, b.x - a.x, b.y - a.y);
     else if (it.id === HOVER) frame(a.x, a.y, b.x - a.x, b.y - a.y, 'hover');
     label(it.name, a.x + 5, a.y + 11, { size: 10, font: UIFONT, fill: C.ink3, align: 'left', box: true, bg: caseGround() });
   }
@@ -1387,7 +1410,7 @@ function drawPlan() {
     drawStandPlan(o);
     const f = footprint(o);
     const a = w2s(f.x, f.z), b = w2s(f.x + f.w, f.z + f.d);
-    const sel = o.id === S.sel;
+    const sel = selected(o.id);
     const w = b.x - a.x, h = Math.max(3, b.y - a.y);
     let mode = planMode(o);
     const planImg = mode === 'top' ? TOP.get(o.id) : mode === 'image' ? BMP.get(o.id) : null;
@@ -1484,7 +1507,12 @@ function drawPlan() {
    dozen tags is a schedule you can read off the picture. */
 function drawSelectionDims() {
   if (!S.opt.dims) return;
-  const o = byId(S.sel);
+  /* The pair is dimensioned by the plinth. A board glued to a face has
+     no position in the case of its own — its four clearances are the
+     plinth's, one remove — and the plinth's height is the number the
+     drawing actually needs, which used to vanish the moment a panel
+     covered the front and took the click. */
+  const o = SELPAIR ? SELPAIR.pl : byId(S.sel);
   if (o) drawDimsFor(o);
 }
 

@@ -48,6 +48,10 @@ picture to it and lose the speck for good.
 | On wires | Hangs from a rail at a given height. Put it where you want it, turn it how you want it, and the wire lengths are worked out from that. |
 | Fixed | Stuck flat to a vertical surface — the back wall, or the front face of any plinth. |
 
+A panel takes all three. Stood on a deck it is a card in an object stand: 0.3 cm thick,
+in a V stand, reclined 10° the way a V holds a card — and from there it is an ordinary
+placed object, free to lean further, move to another surface or have its stand resized.
+
 **Stands and cradles belong to the object.** A V stand, a plain block or a book cradle
 is always centred underneath and travels with it. A V stand only splays seen from
 *above*, where it points to the back and opens towards the glass — from the front you
@@ -136,7 +140,8 @@ there, so a second plinth never lands invisibly on the first.
 points, so the panel tells you whether that wording actually fits at 16 pt on a
 30 × 20 cm board before anyone sets it. A line wrapped in `**` is a title and is set
 bold. Paste wording straight in from a label document; line breaks are kept. Select a
-plinth before adding one and it goes on that plinth's front face.
+plinth before adding one and it goes on that plinth's front face. Every panel is listed
+in the rail whatever it is mounted on, with its home beside its name.
 
 **The board and the type can each be solved for the other.** One button sets the type
 as large as it will go and still fit. The reverse button holds the type at the size you
@@ -152,6 +157,14 @@ click and strand the plinth underneath. Where it sits on the face is typed inste
 **four margins to the plinth's own front**, each moving its own edge and leaving the
 other three alone, so the board is whatever they leave. Buttons to centre it on the face
 or take the whole front with half a centimetre showing all round.
+
+**And the pair is inspected and drawn as one.** Click the plinth or the board on it and
+you get the plinth — its size, its place in the case — with the board itself under
+**Its face**: its wording, its type, its dimensions, its margins. One set of case
+clearances rather than two that disagree, because a board glued to a face has no position
+of its own. Both are outlined on the sheet and the same dimensions are drawn, the
+plinth's height among them, so it makes no difference which of the two you press. A bare
+face offers a button to put a panel on it.
 
 **Preview mode** goes full screen and strips every drafting mark — grid, rulers,
 dimensions, labels, handles — leaving the case as it would be seen, lit against a dark

@@ -36,14 +36,16 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 306 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 342 assertions covering the
 cut-out crop, dragging the measurement box, support heights, stand footprints, derived
 wire lengths, lean maths in both reference frames and the datum following the view,
 yaw, rotation, plan-shape selection, panels fixed to plinth faces, panel auto-fit and
 title lines, growing a board to fit the type both ways and its honest failure, depth
 ordering, overhang detection and telling too-big from off-centre, the shape picker,
 support stickiness while dragging, alignment snapping, Snap governing the drag step,
-dragging a face panel by its plinth, plan pick order, cascade placement, base footprints
+dragging a face panel by its plinth, the one inspector that shows a plinth and the board
+on its face together, a panel standing in an object stand, plan pick order, cascade
+placement, base footprints
 and what they excuse, the six clearance fields and the four face margins moving one
 edge each, centring in both views, a selected object's wires staying grey, a selected
 plinth carrying its height, measuring lines with both of their snaps, the case stopping
@@ -85,8 +87,9 @@ Append a hash to the URL to screenshot a different state:
 | `#wiz2` | the size step, with the measurement box and its grips |
 | `#wiz3` | the mounting step, on wires — also asserts the cursor is visible there |
 | `#wiz3p` | the mounting step, placed — where the lean field is |
-| `#face` | a panel fixed to a plinth face, with its own clearances |
-| `#plinth` | a selected plinth, showing its height dimension |
+| `#face` | a panel on a plinth face selected — the pair, inspected and dimensioned as one |
+| `#plinth` | the same pair reached from the plinth instead; the two should draw alike |
+| `#stand` / `#standplan` | a panel stood in a V stand on a plinth top |
 | `#measure` / `#measureplan` | the measuring tool, with lines already drawn |
 | `#export` | the export dialogue |
 | `#sched` | the schedule |
@@ -198,8 +201,19 @@ null for the back wall. A face-mounted object derives its `z` from the plinth's 
 rather than storing one, so it stays on the face wherever the plinth goes, and
 `childrenOf()` counts it among the plinth's passengers.
 
-Panels are `wall`-mounted by default and the *Placed* button is hidden for them — a
-label card is stuck to a surface, not stood on one.
+Panels are `wall`-mounted by default, but they take all three mounts. The third is
+labelled **On a stand** rather than *Placed*, because that is what a panel standing on a
+deck is: a card in an object stand.
+
+`setMount` gives a panel arriving at `placed` the defaults that mount implies —
+`PANEL_STAND_DEPTH` (0.3 cm, a card rather than a board), a V `stand` sized to it, and
+`PANEL_STAND_LEAN` (10°). The card and the stand arrive **once**, keyed on the panel not
+having a stand yet, so a stand you have sized is never overwritten. The recline is
+re-applied every time it lands in a stand with no lean, because leaving `placed` is what
+zeroed the lean in the first place — `lean` only means anything for something standing on
+a surface — and a V does not hold a card dead upright. Everything after that is the
+ordinary placed machinery: the support, the angle, the stand's own fields, the overhang
+warnings measuring the stand as the contact patch.
 
 ## The shape library
 
@@ -695,3 +709,48 @@ That leaves the panel with no way to be positioned on its face by dragging, whic
 `faceFields()` exists. It was the owner's own suggestion and it is the better half of
 the trade: a clearance from the plinth's edge is what a drawing for a fabricator wants
 anyway, and it is not something a drag was ever good at expressing.
+
+## One inspector for the pair
+
+Once the two move as one, showing them as two is a lie the interface tells. Clicking the
+panel used to open the panel alone: its size, its wording, and six case clearances that
+silently moved the plinth. The plinth's own height and width — the numbers you actually
+want while sizing a board to a face — were a click away, and reaching them meant losing
+sight of the board.
+
+`facePair()` resolves the selection to `{ pl, item, items }`: click either the plinth or
+anything stuck to its front, and the inspector renders the **plinth**, with that item
+nested inside its *Its face* section by `faceItemBlock()`. `S.sel` is untouched — the
+selection is still whatever was clicked, so the sheet outlines it, the keyboard nudges
+it and Delete removes it. Only the inspector is rearranged.
+
+Three consequences worth knowing before changing this:
+
+- **The plinth owns the plain ids.** `iName`, `iW`, `iH`, `iD`, `iDup`, `iDel` are the
+  plinth's; the nested item answers to `iPnlName`, `iPnlW`, `iPnlH`, `iPnlD`, `iPnlDel`.
+  Everything with no collision — `iText`, `iTextSize`, `iColour`, `iFace`, the four
+  `iFace*` margins — keeps the id it always had, which is what lets `bindPanelText()` and
+  `bindFaceMargins()` serve both layouts instead of being copied. `bindInspector()` gates
+  those shared bindings on `o.type === 'object'` so it cannot bind the nested block's
+  fields to the plinth; `bindFaceItem()` takes them on the pass afterwards.
+- **There is one set of case clearances, and they are the plinth's.** Two sets that both
+  claimed to place the same assembly was the confusion this replaces. `syncInspector()`
+  resolves through `facePair()` for the same reason — mid-drag it must update the fields
+  the panel is actually showing.
+- **The sheet draws the pair as one too.** `paint()` resolves `SELPAIR` once a frame and
+  every selection test goes through `selected(id)`, so pressing the panel outlines the
+  plinth as well; `drawSelectionDims()` dimensions `SELPAIR.pl`. Without that last part
+  the plinth's **height** — the one number a plinth contributes to a drawing — vanished
+  the moment a panel covered its front, because the panel took every click and the panel
+  was what got dimensioned. Which is to say the pair was already one object under the
+  pointer and one in the inspector, and the drawing was the last place still treating it
+  as two.
+- **`facePair()` returns null unless the host is a plinth.** A board stuck to a *shelf*
+  front is possible in an old or hand-edited file, and a shelf has no face section to
+  nest it in, so it keeps its own inspector. That is why the panel branch still carries
+  its face handling rather than treating it as dead code.
+
+The escape hatch is *Fixed to* inside the nested block: send the board to the back wall
+and it is an ordinary panel again, with its own mounting, turn and plan settings. The
+inspector follows it there. The same section carries **+ Panel** and **+ Graphic**, so a
+bare face is one click from having something on it.

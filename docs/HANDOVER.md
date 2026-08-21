@@ -1,10 +1,10 @@
-# Handover — the eight are done
+# Handover — the plinth and its face are one job now
 
-Written 2026-08-20, replacing the queue of eight that this file carried before. All
-eight are built, tested and documented. **Nothing has been pushed** — that is the
-standing arrangement, and it is waiting on the owner.
+Written 2026-08-21, replacing the handover that closed the queue of eight. Two things
+were asked for and both are built, tested and documented. **Nothing has been pushed** —
+that is the standing arrangement, and it is waiting on the owner.
 
-267 assertions pass, run six times over. `index.html` is rebuilt from the sources.
+342 assertions pass, run six times over. `index.html` is rebuilt from the sources.
 
 Read `CLAUDE.md` and `docs/DEVELOPING.md` first — this file assumes both.
 
@@ -15,7 +15,7 @@ Read `CLAUDE.md` and `docs/DEVELOPING.md` first — this file assumes both.
 
 { cat _shell.html; echo '<script>'; cat _p1.js _p2.js _p3.js _p4.js _test.js; echo '</script>'; } > _t.html
 "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu \
-  --window-size=1600,1000 --screenshot=shot.png --virtual-time-budget=25000 \
+  --window-size=1600,1000 --virtual-time-budget=25000 \
   --enable-logging=stderr --log-level=0 "file:///C:/Users/shawe/code/vitrine/_t.html"
 ```
 
@@ -31,82 +31,81 @@ The three traps, all still live:
   "Access is denied" and no file appears, which looks exactly like a screenshot that
   rendered nothing. Write them to a scratch directory outside the project.
 
-The method that keeps earning its keep: **reproduce the reported glitch with a throwaway
-probe before changing a line.** It paid twice more this session — see items 2 and 5.
+One correction to the file this replaces: it claimed **267** assertions. The suite at
+that commit actually reported **306**. The count here was taken from a real run.
 
 ---
 
-## What was decided, and by whom
+## What was asked, and what landed
 
-Four of the eight had decisions the old handover said to settle first. The owner chose:
+### 1. One inspector for a plinth and the board on its face
 
-| | Decision |
-| --- | --- |
-| 6 | **Snap** governs free movement, relabelled; Grid stays purely visual |
-| 8 | The lean **input** flips with the view as well as the display, with the field naming its datum |
-| 5 | **Both** growth modes offered on the back wall, proportional first |
-| 4 | Dragging either the panel or the plinth moves both; the panel is placed on the face by typing |
+The complaint was that clicking a panel on a plinth showed the panel alone, which is not
+how the pair behaves: dragging either already moves both. Now clicking **either** opens
+the plinth — name, width, depth, height, its place in the case — with the board itself
+nested inside the **Its face** section: its name, its wording, its type size, its
+dimensions, the four margins, and *Fixed to*. `S.sel` is untouched, so the sheet still
+outlines what you clicked, the arrow keys still nudge it and Delete still removes it.
 
-Three smaller ones were taken here rather than asked, and are recorded in
-`docs/DEVELOPING.md` with their reasoning: the wizard's mounting step states **lean from
-upright**; the schedule's column is headed **`Lean from upright`**, since a document that
-leaves the app cannot rely on which way somebody was looking; and for a face panel the
-*case* clearance fields move the plinth, so typing and dragging agree.
+`facePair()` in `_p2.js` is the whole idea; `faceItemBlock()` and `faceSection()` draw
+it, `bindFaceItem()` wires it. The rule that matters if you touch it: **the plinth owns
+the plain ids** (`iName`, `iW`, `iH`, `iD`, `iDup`, `iDel`) and the nested board answers
+to `iPnl…`; everything with no collision keeps the id it always had, which is what lets
+`bindPanelText()` and `bindFaceMargins()` serve both layouts rather than being copied.
+`docs/DEVELOPING.md` §*One inspector for the pair* has the rest, including why
+`facePair()` refuses a board stuck to a *shelf*.
 
-## The eight, and where they landed
+A graphic on a face gets the same treatment. Two things on one face give a row of names
+to pick between them. A bare face offers **+ Panel** and **+ Graphic**.
 
-1. **Size a panel to its plinth.** `faceFit()` and `FACE_MARGIN` in `_p1.js`; the
-   *Fit the face* button in the new face section of the inspector. One constant shared
-   with item 5, so the two cannot disagree about the margin.
-2. **"Centre it" does not centre properly.** It centred *x* always and *z* only in plan;
-   it now does both axes in both views, at two decimals rather than one.
-   **The suspected second fault does not exist.** A probe over 540 configurations of
-   yaw, spin, lean, stands and feet found no case where centring left a contact patch
-   that would have fitted — the geometry is concentric by construction. What the owner
-   was seeing was a *true* message with no useful content: a foot wider than the plinth
-   reported as "overhanging", which invites you to hunt for a position that is not there.
-   `outOfCase()` now separates too-big from off-centre and gives both measurements.
-3. **Real text in exports.** `greeked()` in `_p1.js` multiplies by `EXPORT_SC`, which
-   `renderSheet` sets and restores. A ×4 export now writes words the screen was greeking.
-4. **Moving a plinth that carries a panel.** `pointerdown` redirects the drag to the
-   plinth via `faceOf(hit)` while the selection stays on the panel, so everything
-   downstream sees an ordinary plinth drag. `faceFields()` gives the four typed
-   clearances that replace the drag, plus *Centre on the face* and *Fit the face*.
-5. **Grow the panel to fit the type.** `panelGrow(o, mode)` in `_p1.js`. Width-fixed
-   growth is closed form, not bisection — with the width settled the line count is
-   already decided, and bisecting would be a slower route to the same number. Only
-   proportional growth is lumpy enough to need the bisection, and that one rounds **up**
-   and verifies. It has the honest failure the old handover asked for.
-6. **Dragging is jumpy even with the grid off.** `fine` is now `0.01` with Snap off, `1`
-   with it on, `0.1` under Shift. The label reads **Snap to 1 cm** and the rail carries a
-   line saying which toggles move things and which only draw.
-7. **Wires stay grey.** `drawObjectFront` in `_p1.js`; weight alone carries the
-   selection. The wire's dimension in `drawDimsFor` is still accent, because it is one.
-8. **Angles stated by the view.** `shownLean()` / `storedLean()` / `leanDatum()` in
-   `_p2.js`. `leanFrom` is still stored and still read by `upgrade()`, so older files
-   open unchanged; it no longer decides anything.
+**The drawing was a second pass, after the owner tested it.** The inspector had been
+unified but the sheet had not: pressing the panel outlined the panel and dimensioned the
+panel, so the plinth's **height** — the one number a plinth contributes to a drawing —
+disappeared exactly when a panel covered the front and took every click. `paint()` now
+resolves `SELPAIR` once a frame, every selection test goes through `selected(id)`, and
+`drawSelectionDims()` dimensions the plinth. Press either, in the case or in the lists,
+and the sheet is identical. Hover was deliberately left alone: it reports what is under
+the pointer, which really is the panel.
 
-One thing beyond the eight: **the suite had two long-standing flakes**, and running it
-ten times to check this work is what finally pinned them. Both were the test's fault,
-not the app's — PNG export racing the virtual clock, and `boot()`'s storage read landing
-after the case-library test had swapped in its stub. `docs/DEVELOPING.md` has both
-diagnoses. Ten consecutive clean runs since. The suite can now be trusted to mean what
-it says when it is run repeatedly, which it could not before.
+**The one behaviour change beyond the rearrangement**: the case clearances in the
+combined view are the plinth's, not the panel's. Typing 20 into *From the left* puts the
+*plinth's* edge at 20 and the board travels with it. It used to put the panel's edge
+there, by moving the plinth by the difference. Two sets of clearances both claiming to
+place one assembly was the confusion being removed, so this is deliberate — but it is the
+thing to watch for in use, and the old assertion was rewritten rather than deleted.
+
+### 2. A panel can stand in an object stand
+
+*Placed* used to be hidden for panels. It is now offered, labelled **On a stand**, and a
+panel arriving there is given what that mount implies: `PANEL_STAND_DEPTH` 0.3 cm — a
+card, not a board — a V `stand`, and `PANEL_STAND_LEAN` 10°, since a V does not hold
+anything dead upright. The card and the stand arrive once, keyed on the panel not having
+a stand yet, so a stand you have sized is never overwritten; the recline comes back every
+time it lands in a stand with no lean, because leaving `placed` is what zeroes `lean`.
+
+After that it is an ordinary placed object: pick what it rests on, lean it further, size
+the stand, and the overhang warnings measure the stand as the contact patch. `#stand` and
+`#standplan` screenshot it.
 
 ---
 
 ## What is actually left
 
-**Nothing is queued.** Two things want the owner's eye rather than more work:
+**Nothing is queued.** Three things want the owner's eye rather than more work:
 
-1. **Item 2 against the owner's real case.** The probe clears the geometry in general,
-   but the specific case — a 21 × 20.64 × 20 cm object with a 15 cm foot on "Plinth 1" —
-   was never in hand. If Plinth 1 is narrower than 15 cm across, the new message will now
-   say so in as many words and the matter is closed. If it says something else, that is a
-   genuine new finding and worth a probe.
-2. **The lean datum in use.** The number changes when you switch views. That is what was
-   asked for and it is coherent, but it is the kind of change that reads differently
-   after an hour of real work than it does in a description. Worth using before pushing.
+1. **The case clearances in the combined inspector**, per the note above. It reads
+   correctly and the panel keeps its place on the face either way, but it is the kind of
+   change that lands differently after an hour of real work.
+2. **What the nested block does not carry.** A board on a face no longer offers turn,
+   flip, plan shape, top-view picture or duplicate — they are a plinth face's least
+   likely needs and the block was going to be long enough. *Fixed to → the back wall*
+   hands it back to its own full inspector and the inspector follows it there. If any of
+   them turns out to be wanted in place, adding it back is a few lines in
+   `faceItemBlock()` and `bindFaceItem()`.
+3. **The lean datum in use** — still carried over from the last handover. The number
+   changes when you switch views. That is what was asked for and it is coherent, but it
+   is worth using before pushing. The new panel-on-a-stand inherits it: 10° in the
+   elevation reads as 80° in plan.
 
 ## When you are done
 

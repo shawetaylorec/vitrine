@@ -141,6 +141,10 @@ label.chk input{accent-color:var(--accent)}
 .sect.folded{gap:0;padding-bottom:11px}
 .sect.folded>h2 .chev{transform:rotate(-90deg)}
 .sect.folded>*:not(h2){display:none}
+/* a block that belongs to the section above it — the board applied to a
+   plinth, shown inside that plinth's own face section */
+.subsect{display:flex;flex-direction:column;gap:9px;border-left:2px solid var(--line);padding:2px 0 4px 10px}
+.subsect>h3{margin:0;font-size:10px;letter-spacing:.17em;text-transform:uppercase;color:var(--ink-2);font-weight:600}
 .fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
 .fields.two{grid-template-columns:1fr 1fr}
 .f{display:flex;flex-direction:column;gap:3px;min-width:0}

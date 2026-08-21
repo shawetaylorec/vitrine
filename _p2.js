@@ -356,6 +356,31 @@ function childrenOf(id) {
     ((i.mount === 'placed' && i.support === id) || (i.mount === 'wall' && i.face === id)));
 }
 
+/* everything stuck flat to one plinth's front */
+const faceItems = id => S.items.filter(i => i.type === 'object' && i.mount === 'wall' && i.face === id);
+
+/* A panel stuck to a plinth front is not a separate thing to fiddle
+   with — it is that plinth's face. Dragging either already moves both,
+   so inspecting either shows both: the plinth, with the panel nested
+   under Its face. Returns the plinth to inspect and the face item to
+   open under it, or null when the selection is neither. */
+function facePair() {
+  const o = byId(S.sel);
+  if (!o) return null;
+  if (o.type === 'plinth') {
+    const items = faceItems(o.id);
+    return { pl: o, item: items[0] || null, items };
+  }
+  const f = o.type === 'object' ? faceOf(o) : null;
+  const pl = f ? byId(f.id) : null;
+  /* only a plinth has a face section to nest in — a board stuck to a
+     shelf front, which only an old or hand-edited file can hold, keeps
+     its own inspector rather than disappearing into one that has
+     nowhere to show it */
+  if (!pl || pl.type !== 'plinth') return null;
+  return { pl, item: o, items: faceItems(pl.id) };
+}
+
 function pick(it) {
   const k = { x: it.x, z: it.z };
   if (it.type === 'shelf') k.y = it.y;
@@ -845,11 +870,18 @@ function choseShape(id) {
 }
 
 function addShape() { openShapePicker('new'); }
-function addPanel() {
+/* `onto` is the plinth to stick it to, when something already knows —
+   the button in a plinth's face section. Wired straight to a click
+   handler it arrives as an event, hence the type check rather than a
+   bare truth test. */
+function addPanel(onto) {
   const n = S.items.filter(i => i.render === 'panel').length + 1;
   /* with a plinth selected you almost certainly want the panel on it */
   const sel = byId(S.sel);
-  const host = sel && sel.type === 'plinth' ? sel : null;
+  const host = (onto && onto.type === 'plinth') ? onto
+    : sel && sel.type === 'plinth' ? sel
+      : sel && sel.type === 'object' && faceOf(sel) ? byId(faceOf(sel).id)
+        : null;
   const it = blankObject({
     name: `Panel ${n}`, render: 'panel', mount: 'wall', face: 'back',
     w: 30, h: 21, depth: 0.4, wallY: rnd(S.cs.h * 0.55), z: 0,
@@ -1034,11 +1066,17 @@ function renderLists() {
 
   $('#listPanel').innerHTML = panels.length ? panels.map(it => {
     const f = faceOf(it);
+    /* every panel is listed here whatever it is mounted on, so the
+       badge has to name all four homes, stands included */
+    const where = f ? esc(f.name)
+      : it.mount === 'hanging' ? 'wire'
+        : it.mount === 'placed' ? esc(supportOf(it).name)
+          : 'wall';
     return `
     <div class="item${it.hide ? ' off' : ''}" data-id="${it.id}" aria-selected="${it.id === S.sel}">
       <span class="sw">&#9646;</span>
       <span class="nm">${esc(it.name)}</span>
-      <span class="mt">${f ? esc(f.name) : it.mount === 'hanging' ? 'wire' : 'wall'}</span>
+      <span class="mt">${where}</span>
       <button class="eye" data-eye="${it.id}" title="Show / hide">${it.hide ? '&#9676;' : '&#9679;'}</button>
     </div>`;
   }).join('') : '<p class="empty">No panels yet.</p>';
@@ -1129,6 +1167,118 @@ function faceFields(o) {
       the whole front with ${FACE_MARGIN} cm showing all round.</p>`;
 }
 
+/* The wording and the type it is set in. One block, used both by a
+   panel being inspected on its own and by one nested under the plinth
+   it is stuck to, so the two can never drift apart. */
+function panelTextFields(o) {
+  return `
+      <label class="f full"><span>Text &mdash; paste straight in</span><textarea id="iText" rows="4" placeholder="Interpretation text">${esc(o.text || '')}</textarea></label>
+      <div class="row">
+        <button class="btn sm" id="iBold" style="flex:1"><b>B</b>&nbsp; Make this line a title</button>
+      </div>
+      <div class="fields">
+        ${fld('Text size cm', 'iTextSize', rnd(textSizeOf(o), 2), { step: 0.05, min: 0.1 })}
+        <label class="f"><span>&asymp; points</span><input type="text" id="iTextPt" value="${ptOf(textSizeOf(o))} pt" disabled></label>
+        <label class="f"><span>Fill</span><input type="color" id="iColour" value="${o.colour || '#ffffff'}"></label>
+      </div>
+      <button class="btn sm" id="iFitText">Set the type as large as it will go</button>
+      ${faceOf(o)
+      ? `<button class="btn sm" id="iGrowFace">Grow the panel to fit the text</button>
+         <p class="note">Takes the plinth's width, less ${FACE_MARGIN} cm each side, and finds the
+         height the wording needs at ${rnd(textSizeOf(o), 2)} cm type. Capped by the plinth's own height.</p>`
+      : `<div class="row">
+           <button class="btn sm" id="iGrowProp" style="flex:1">Grow to fit &mdash; keep proportions</button>
+           <button class="btn sm" id="iGrowTall" style="flex:1">Grow taller only</button>
+         </div>
+         <p class="note">The reverse of the button above: the type stays at ${rnd(textSizeOf(o), 2)} cm and the
+         board grows to suit it. Keeping proportions gives the smallest enlargement of the same shape,
+         which may be taller than strictly needed; growing taller keeps the width you chose.</p>`}
+      ${panelFits(o) ? '' : '<p class="warnbox">The text runs past the bottom of the panel. Make the panel taller, or the type smaller.</p>'}`;
+}
+
+/* Everything about the thing stuck to a plinth's front, written to sit
+   inside that plinth's face section rather than to stand on its own.
+
+   Where an id would collide with the plinth's — name, width, height,
+   depth, remove — the face item takes an `iPnl` one, because the plinth
+   is the thing being inspected and it owns the plain names. Everything
+   unique to a panel keeps the id it has always had, so the handlers are
+   shared with the panel's own inspector rather than copied. */
+function faceItemBlock(pl, it) {
+  const b = bbox(it), warn = outOfCase(it);
+  const isImg = it.render === 'image';
+  const kind = it.render === 'panel' ? 'Panel' : isImg ? 'Graphic' : 'Shape';
+  return `
+    <div class="subsect">
+      <h3>${kind} &mdash; ${esc(it.name)}</h3>
+      ${isImg ? `<div class="thumb" id="iThumb" title="Click to reopen the cut-out">${it.png ? `<img src="${it.png}" alt="">` : ''}</div>` : ''}
+      <label class="f full"><span>Name</span><input type="text" id="iPnlName" value="${esc(it.name)}"></label>
+      ${it.render === 'panel' ? panelTextFields(it) : ''}
+      ${isShape(it) ? `<div class="row">
+        <span class="sw" style="width:36px;height:36px;flex:none;border:1px solid var(--line);border-radius:4px;overflow:hidden;display:grid;place-items:center"><img src="${shapeThumb(it.render, 36)}" alt="" style="width:100%;height:100%"></span>
+        <button class="btn" id="iShape" style="flex:1">Change shape&hellip;</button>
+        <label class="f" style="width:56px"><span>Fill</span><input type="color" id="iColour" value="${it.colour || '#b9b2a0'}"></label>
+      </div>` : ''}
+      <div class="fields">
+        ${fld('Width cm', 'iPnlW', rnd(it.w, 2), { step: 0.1, min: 0.1 })}
+        ${fld('Height cm', 'iPnlH', rnd(it.h, 2), { step: 0.1, min: 0.1 })}
+        ${fld('Depth cm', 'iPnlD', rnd(it.depth, 2), { step: 0.1, min: 0.1 })}
+      </div>
+      <label class="chk"><input type="checkbox" id="iPnlAspect" ${it.keepAspect === false ? '' : 'checked'}>Keep proportions when I change one</label>
+      <div class="readout">
+        <span>occupies <b>${rnd(b.x1 - b.x0)} &times; ${rnd(b.y1 - b.y0)}</b> cm</span>
+        <span>base <b>${rnd(b.y0)}</b> &middot; top <b>${rnd(b.y1)}</b></span>
+      </div>
+      ${warn.length ? `<p class="warnbox">Sticks out: ${warn.join('; ')}.</p>` : ''}
+      ${faceFields(it)}
+      <label class="f full"><span>Fixed to</span><select id="iFace">
+        <option value="back">The back wall</option>
+        ${S.items.filter(i => i.type === 'plinth').map(p =>
+    `<option value="${p.id}"${p.id === pl.id ? ' selected' : ''}>Front of ${esc(p.name)}</option>`).join('')}
+      </select></label>
+      ${isImg ? `<div class="row">
+        <button class="btn sm" id="iEditCut" style="flex:1">Cut-out</button>
+        <button class="btn sm" id="iEditScale" style="flex:1">Size</button>
+      </div>` : ''}
+      <button class="btn sm ghost danger" id="iPnlDel">Remove the ${kind.toLowerCase()}</button>
+      <p class="note">Take it off the front with <b>Fixed to</b> &mdash; on the back wall, or in a
+      stand, it is an ordinary ${kind.toLowerCase()} again with its own mounting, turn and plan
+      settings.</p>
+    </div>`;
+}
+
+/* The face section of a plinth: its colour or picture, then whatever is
+   stuck to it, then the two ways of adding something. With more than
+   one thing on the face the row of names picks which is open. */
+function faceSection(pl, pair) {
+  const items = pair ? pair.items : faceItems(pl.id);
+  const open = pair && pair.item;
+  return `
+    <section class="sect">
+      <h2>Its face</h2>
+      <div class="swatchrow">
+        <input type="color" id="iPlinthColour" title="Front colour" value="${pl.colour || '#cdc5b2'}">
+        <button class="btn sm" id="iPlinthImg" style="flex:1">${pl.png ? 'Replace' : 'Image'}&hellip;</button>
+        <button class="btn sm ghost" id="iPlinthClear">Clear</button>
+      </div>
+      ${pl.png ? `<div class="slid">
+        <label>Image strength <b>${pl.fade ?? 100}%</b></label>
+        <input type="range" id="iPlinthFade" min="10" max="100" value="${pl.fade ?? 100}">
+      </div>` : ''}
+      ${items.length > 1 ? `<div class="tools" id="iFaceItems">
+        ${items.map(i => `<button data-face-item="${i.id}" aria-pressed="${!!open && i.id === open.id}">${esc(i.name)}</button>`).join('')}
+      </div>` : ''}
+      ${open ? faceItemBlock(pl, open) : ''}
+      <div class="row">
+        <button class="btn sm" id="iAddPanel" style="flex:1">+ Panel</button>
+        <button class="btn sm" id="iPlinthGraphic" style="flex:1">+ Graphic&hellip;</button>
+      </div>
+      <p class="note">${open
+      ? 'A colour or picture for the front, and above it the board applied to it. The two travel as one: drag either in the case and the plinth moves, and the four margins put the board on the face.'
+      : 'A colour or picture for the front. Add a panel for the wording, or a graphic from an image &mdash; either becomes a normal object fixed to this plinth, so it can be moved and resized.'}</p>
+    </section>`;
+}
+
 /* the same four clearances for a shelf or a plinth, which have no
    orientation to complicate them */
 function structPosition(o) {
@@ -1169,10 +1319,10 @@ const LOCKBAR = `<section class="sect lockbar">
 
 function renderInspector() {
   const box = $('#inspector');
-  const o = byId(S.sel);
-  $('#hudSel').textContent = o ? o.name : 'Nothing selected';
+  const sel = byId(S.sel);
+  $('#hudSel').textContent = sel ? sel.name : 'Nothing selected';
 
-  if (!o) {
+  if (!sel) {
     const n = S.items.filter(i => i.type === 'object' && i.render !== 'panel').length;
     const np = S.items.filter(i => i.render === 'panel').length;
     box.innerHTML = `
@@ -1209,6 +1359,12 @@ function renderInspector() {
     return;
   }
 
+  /* A board applied to a plinth front is that plinth's face, so either
+     of them opens the pair: the plinth's own figures, with the board
+     under Its face. Anything else inspects itself, as it always did. */
+  const pair = facePair();
+  const o = pair ? pair.pl : sel;
+
   const warn = outOfCase(o);
   let html = '';
 
@@ -1220,30 +1376,8 @@ function renderInspector() {
       <h2>${o.render === 'panel' ? 'Panel' : isImg ? 'Object' : 'Shape'}</h2>
       ${isImg ? `<div class="thumb" id="iThumb" title="Click to reopen the cut-out">${o.png ? `<img src="${o.png}" alt="">` : ''}</div>` : ''}
       <label class="f full"><span>Name</span><input type="text" id="iName" value="${esc(o.name)}"></label>
-      ${o.render === 'panel' ? `
-        <label class="f full"><span>Text &mdash; paste straight in</span><textarea id="iText" rows="4" placeholder="Interpretation text">${esc(o.text || '')}</textarea></label>
-        <div class="row">
-          <button class="btn sm" id="iBold" style="flex:1"><b>B</b>&nbsp; Make this line a title</button>
-        </div>
-        <div class="fields">
-          ${fld('Text size cm', 'iTextSize', rnd(textSizeOf(o), 2), { step: 0.05, min: 0.1 })}
-          <label class="f"><span>&asymp; points</span><input type="text" id="iTextPt" value="${ptOf(textSizeOf(o))} pt" disabled></label>
-          <label class="f"><span>Fill</span><input type="color" id="iColour" value="${o.colour || '#ffffff'}"></label>
-        </div>
-        <button class="btn sm" id="iFitText">Set the type as large as it will go</button>
-        ${faceOf(o)
-        ? `<button class="btn sm" id="iGrowFace">Grow the panel to fit the text</button>
-           <p class="note">Takes the plinth's width, less ${FACE_MARGIN} cm each side, and finds the
-           height the wording needs at ${rnd(textSizeOf(o), 2)} cm type. Capped by the plinth's own height.</p>`
-        : `<div class="row">
-             <button class="btn sm" id="iGrowProp" style="flex:1">Grow to fit &mdash; keep proportions</button>
-             <button class="btn sm" id="iGrowTall" style="flex:1">Grow taller only</button>
-           </div>
-           <p class="note">The reverse of the button above: the type stays at ${rnd(textSizeOf(o), 2)} cm and the
-           board grows to suit it. Keeping proportions gives the smallest enlargement of the same shape,
-           which may be taller than strictly needed; growing taller keeps the width you chose.</p>`}
-        ${panelFits(o) ? '' : '<p class="warnbox">The text runs past the bottom of the panel. Make the panel taller, or the type smaller.</p>'}
-        <button class="btn sm ghost" id="iToShape">Turn it into a shape&hellip;</button>` : ''}
+      ${o.render === 'panel' ? panelTextFields(o) +
+      '<button class="btn sm ghost" id="iToShape">Turn it into a shape&hellip;</button>' : ''}
       ${isShape(o) ? `<div class="row">
         <span class="sw" style="width:36px;height:36px;flex:none;border:1px solid var(--line);border-radius:4px;overflow:hidden;display:grid;place-items:center"><img src="${shapeThumb(o.render, 36)}" alt="" style="width:100%;height:100%"></span>
         <button class="btn" id="iShape" style="flex:1">Change shape&hellip;</button>
@@ -1285,10 +1419,14 @@ function renderInspector() {
     <section class="sect">
       <h2>Mounting</h2>
       <div class="tools" id="iMount">
-        ${o.render === 'panel' ? '' : `<button data-mount="placed" aria-pressed="${o.mount === 'placed'}">Placed</button>`}
+        <button data-mount="placed" aria-pressed="${o.mount === 'placed'}">${o.render === 'panel' ? 'On a stand' : 'Placed'}</button>
         <button data-mount="hanging" aria-pressed="${o.mount === 'hanging'}">Wires</button>
         <button data-mount="wall" aria-pressed="${o.mount === 'wall'}">Fixed</button>
-      </div>`;
+      </div>
+      ${o.render === 'panel' && o.mount === 'placed' ? `<p class="note">A card standing on the deck or on a
+      plinth top, held in an object stand. It arrives ${PANEL_STAND_DEPTH} cm thick and reclined
+      ${PANEL_STAND_LEAN}&deg;, which is what a V stand does to a card; the angle is below, the stand
+      itself further down, and both are yours to change.</p>` : ''}`;
 
     if (o.mount === 'placed') {
       html += `
@@ -1447,24 +1585,11 @@ function renderInspector() {
       <p class="note">Dragging it in elevation takes whatever is on it along. In plan it moves alone, so you can slide things about its top.</p>
     </section>
 
-    <section class="sect">
-      <h2>Its face</h2>
-      <div class="swatchrow">
-        <input type="color" id="iPlinthColour" title="Front colour" value="${o.colour || '#cdc5b2'}">
-        <button class="btn sm" id="iPlinthImg" style="flex:1">${o.png ? 'Replace' : 'Image'}&hellip;</button>
-        <button class="btn sm ghost" id="iPlinthClear">Clear</button>
-      </div>
-      ${o.png ? `<div class="slid">
-        <label>Image strength <b>${o.fade ?? 100}%</b></label>
-        <input type="range" id="iPlinthFade" min="10" max="100" value="${o.fade ?? 100}">
-      </div>` : ''}
-      <button class="btn sm" id="iPlinthGraphic">+ Graphic on this face&hellip;</button>
-      <p class="note">A colour or picture for the front. Add a graphic and it becomes a normal object fixed to this plinth, so it can be moved and resized.</p>
-    </section>
+    ${faceSection(o, pair)}
     <section class="sect">
       <div class="row">
-        <button class="btn ghost" id="iDup" style="flex:1">Duplicate</button>
-        <button class="btn ghost danger" id="iDel" style="flex:1">Remove</button>
+        <button class="btn ghost" id="iDup" style="flex:1">Duplicate the plinth</button>
+        <button class="btn ghost danger" id="iDel" style="flex:1">Remove the plinth</button>
       </div>
     </section>`;
   }
@@ -1474,22 +1599,24 @@ function renderInspector() {
      things, rewrite a panel and change colours, because none of that can
      happen by accident the way a stray drag can. */
   if (locked()) {
-    const stillYours = new Set(['iUnlock', 'iName', 'iText', 'iBold', 'iFitText', 'iTextSize', 'iTextPt', 'iColour', 'iPlinthColour', 'iThumb']);
+    const stillYours = new Set(['iUnlock', 'iName', 'iPnlName', 'iText', 'iBold', 'iFitText', 'iTextSize', 'iTextPt', 'iColour', 'iPlinthColour', 'iThumb']);
     for (const el of $$('#inspector input, #inspector select, #inspector button, #inspector textarea')) {
-      if (!stillYours.has(el.id)) el.disabled = true;
+      /* the row that picks which thing on a face is open only looks —
+         it changes the selection, not the layout */
+      if (!stillYours.has(el.id) && !el.dataset.faceItem) el.disabled = true;
     }
   }
   bindInspector(o);
+  /* the board on the face is bound separately: the plinth owns the
+     panel's old ids now, so it cannot ride on the same pass */
+  if (pair && pair.item) bindFaceItem(pair.pl, pair.item);
 }
 
-function bindInspector(o) {
+/* The wording controls, wherever the block was drawn — the panel's own
+   inspector, or the one nested under a plinth's face. The ids are the
+   same in both, which is the point of sharing this. */
+function bindPanelText(o) {
   const on = (id, ev, fn) => { const el = $('#' + id); if (el) el.addEventListener(ev, fn); };
-  const unlock = $('#iUnlock');
-  if (unlock) unlock.onclick = () => toggleLock(false);
-  if (!o) return;
-  const setNum = (id, fn) => on(id, 'change', e => { fn(num(e.target.value)); commit(); });
-
-  on('iName', 'change', e => { o.name = e.target.value || o.name; commit(); });
   /* live on input so a paste shows up at once, saved on blur —
      commit() rebuilds this panel and would steal the caret */
   on('iText', 'input', e => { o.text = e.target.value; draw(); });
@@ -1523,25 +1650,154 @@ function bindInspector(o) {
   on('iGrowProp', 'click', grow('prop'));
   on('iGrowTall', 'click', grow('tall'));
   on('iGrowFace', 'click', grow('face'));
-
   on('iBold', 'click', () => toggleTitleLine(o));
-  on('iColour', 'input', e => { o.colour = e.target.value; draw(); });
+}
+
+/* The four clearances measured to the plinth face — but they are
+   margins, not a position, and each one moves its own edge and nothing
+   else.
+
+   They used to slide the whole board, which made them two ways of
+   saying one thing: left + width + right is the face, so setting one
+   shoved the opposite one. On a panel fitted to the face there is
+   nothing to shove into, and typing 3 into the right margin put −1 in
+   the left. Moving an edge instead makes all four independent, and four
+   margins are how you would specify a board applied to a plinth anyway.
+   The size follows from them, which is the honest direction: the board
+   is whatever the margins leave. */
+function bindFaceMargins(o) {
+  const on = (id, ev, fn) => { const el = $('#' + id); if (el) el.addEventListener(ev, fn); };
+  const setNum = (id, fn) => on(id, 'change', e => { fn(num(e.target.value)); commit(); });
+  const F = () => faceOf(o);
+  if (!F()) return;
+  const MIN_BOARD = 0.5;
+  /* Work in edges and scale the stored size by the ratio, so a panel
+     that happens to be spun keeps behaving sensibly rather than
+     assuming w is the width you see. */
+  const moveEdgeX = (which, target) => {
+    const b = bbox(o);
+    let lo = b.x0, hi = b.x1;
+    if (which === 'lo') lo = Math.min(target, hi - MIN_BOARD);
+    else hi = Math.max(target, lo + MIN_BOARD);
+    const cur = b.x1 - b.x0;
+    if (cur > 0.001) o.w = rnd(Math.max(MIN_BOARD, o.w * (hi - lo) / cur), 2);
+    o.x = rnd(o.x + (lo - bbox(o).x0), 2);
+  };
+  const moveEdgeY = (which, target) => {
+    const b = bbox(o);
+    let lo = b.y0, hi = b.y1;
+    if (which === 'lo') lo = Math.min(target, hi - MIN_BOARD);
+    else hi = Math.max(target, lo + MIN_BOARD);
+    const cur = b.y1 - b.y0;
+    if (cur > 0.001) o.h = rnd(Math.max(MIN_BOARD, o.h * (hi - lo) / cur), 2);
+    o.wallY = rnd((o.wallY || 0) + (lo - bbox(o).y0), 2);
+  };
+  setNum('iFaceL', v => { const f = F(); moveEdgeX('lo', f.x + v); });
+  setNum('iFaceR', v => { const f = F(); moveEdgeX('hi', f.x + f.w - v); });
+  setNum('iFaceB', v => moveEdgeY('lo', v));
+  setNum('iFaceT', v => { const f = F(); moveEdgeY('hi', f.top - v); });
+  /* the two buttons still work on the whole board, since that is the
+     point of them */
+  on('iFaceCentre', 'click', () => {
+    const f = F(), b = bbox(o);
+    o.x = rnd(o.x + (f.x + (f.w - (b.x1 - b.x0)) / 2 - b.x0), 2);
+    o.wallY = rnd((o.wallY || 0) + ((f.top - (b.y1 - b.y0)) / 2 - bbox(o).y0), 2);
+    commit();
+    toast(`Centred on the front of ${f.name}`);
+  });
+  on('iFaceFit', 'click', () => {
+    const fit = faceFit(o); if (!fit) return;
+    o.w = fit.w; o.h = fit.h;
+    const f = F();
+    o.x = rnd(o.x + (f.x + FACE_MARGIN - bbox(o).x0), 2);
+    o.wallY = rnd((o.wallY || 0) + (FACE_MARGIN - bbox(o).y0), 2);
+    commit();
+    toast(`Sized to the front of ${f.name} — ${fit.w} × ${fit.h} cm, ${FACE_MARGIN} cm showing all round`);
+  });
+}
+
+/* The board on a plinth's front, bound where it is drawn: inside the
+   plinth's own inspector. It answers to `iPnl` ids wherever the plinth
+   already owns the plain one, and to the panel's usual ids everywhere
+   else, so the wording and the margins go through the same handlers as
+   they always did. */
+function bindFaceItem(pl, it) {
+  const on = (id, ev, fn) => { const el = $('#' + id); if (el) el.addEventListener(ev, fn); };
+  const setNum = (id, fn) => on(id, 'change', e => { fn(num(e.target.value)); commit(); });
+
+  for (const el of $$('[data-face-item]')) {
+    el.addEventListener('click', () => select(el.dataset.faceItem));
+  }
+  on('iPnlName', 'change', e => { it.name = e.target.value || it.name; commit(); });
+  bindPanelText(it);
+  bindFaceMargins(it);
+  on('iColour', 'input', e => { it.colour = e.target.value; draw(); });
   on('iColour', 'change', () => commit());
-  on('iShape', 'click', () => openShapePicker('change'));
-  on('iToShape', 'click', () => openShapePicker('change'));
-  on('iToPanel', 'click', () => {
-    o.render = 'panel';
-    if (!o.text) o.text = 'Interpretation text goes here.';
-    o.depth = Math.min(o.depth, 1);
+  on('iShape', 'click', () => { select(it.id); openShapePicker('change'); });
+  on('iThumb', 'click', () => openWizard({ edit: it.id, step: 1 }));
+  on('iEditCut', 'click', () => openWizard({ edit: it.id, step: 1 }));
+  on('iEditScale', 'click', () => openWizard({ edit: it.id, step: 2 }));
+  on('iFace', 'change', e => {
+    it.face = e.target.value;
+    landOnFace(it);
+    /* it has just left this plinth: follow it, or the inspector would
+       be showing a face it is no longer on */
+    if (it.face !== pl.id) select(it.id);
     commit();
   });
+  const aspect = it.h / it.w;
+  setNum('iPnlW', v => {
+    if (v <= 0) return;
+    if ($('#iPnlAspect')?.checked) it.h = rnd(v * aspect, 2);
+    it.w = v;
+  });
+  setNum('iPnlH', v => {
+    if (v <= 0) return;
+    if ($('#iPnlAspect')?.checked) it.w = rnd(v / aspect, 2);
+    it.h = v;
+  });
+  setNum('iPnlD', v => it.depth = Math.max(0.1, v));
+  on('iPnlAspect', 'change', e => { it.keepAspect = e.target.checked; });
+  on('iPnlDel', 'click', () => {
+    /* leave the plinth selected, since that is what is left */
+    if (S.sel === it.id) S.sel = pl.id;
+    removeItem(it.id);
+  });
+}
+
+function bindInspector(o) {
+  const on = (id, ev, fn) => { const el = $('#' + id); if (el) el.addEventListener(ev, fn); };
+  const unlock = $('#iUnlock');
+  if (unlock) unlock.onclick = () => toggleLock(false);
+  if (!o) return;
+  const setNum = (id, fn) => on(id, 'change', e => { fn(num(e.target.value)); commit(); });
+
+  on('iName', 'change', e => { o.name = e.target.value || o.name; commit(); });
+  /* Inspecting a plinth now draws the board on its front inside the
+     same panel, and that block carries iText, iColour, iShape and iFace
+     of its own. They belong to the board, so bind them only when this
+     really is the object being inspected — bindFaceItem takes the
+     nested ones on the pass after this one. */
+  if (o.type === 'object') {
+    bindPanelText(o);
+    on('iColour', 'input', e => { o.colour = e.target.value; draw(); });
+    on('iColour', 'change', () => commit());
+    on('iShape', 'click', () => openShapePicker('change'));
+    on('iToShape', 'click', () => openShapePicker('change'));
+    on('iToPanel', 'click', () => {
+      o.render = 'panel';
+      if (!o.text) o.text = 'Interpretation text goes here.';
+      o.depth = Math.min(o.depth, 1);
+      commit();
+    });
+    on('iFace', 'change', e => { o.face = e.target.value; landOnFace(o); commit(); });
+  }
   setNum('iT', v => o.t = Math.max(0.1, v));
   setNum('iY', v => o.y = clamp(v, 0, S.cs.h));
   setNum('iRail', v => o.rail = v);
   setNum('iHangY', v => o.hangY = v);
   setNum('iWallY', v => o.wallY = v);
   setNum('iZ2', v => o.z = Math.max(0, v));
-  on('iFace', 'change', e => { o.face = e.target.value; landOnFace(o); commit(); });
 
   /* moving a support carries its objects */
   const moveWithKids = (axis) => (v) => {
@@ -1587,64 +1843,7 @@ function bindInspector(o) {
     setNum('iFromB', v => shiftY(v - bbox(o).y0));
     setNum('iFromT', v => shiftY((S.cs.h - v) - bbox(o).y1));
 
-    /* The same four measured to the plinth face — but they are margins,
-       not a position, and each one moves its own edge and nothing else.
-
-       They used to slide the whole board, which made them two ways of
-       saying one thing: left + width + right is the face, so setting
-       one shoved the opposite one. On a panel fitted to the face there
-       is nothing to shove into, and typing 3 into the right margin put
-       −1 in the left. Moving an edge instead makes all four
-       independent, and four margins are how you would specify a board
-       applied to a plinth anyway. The size follows from them, which is
-       the honest direction: the board is whatever the margins leave. */
-    if (facePl) {
-      const F = () => faceOf(o);
-      const MIN_BOARD = 0.5;
-      /* Work in edges and scale the stored size by the ratio, so a
-         panel that happens to be spun keeps behaving sensibly rather
-         than assuming w is the width you see. */
-      const moveEdgeX = (which, target) => {
-        const b = bbox(o);
-        let lo = b.x0, hi = b.x1;
-        if (which === 'lo') lo = Math.min(target, hi - MIN_BOARD);
-        else hi = Math.max(target, lo + MIN_BOARD);
-        const cur = b.x1 - b.x0;
-        if (cur > 0.001) o.w = rnd(Math.max(MIN_BOARD, o.w * (hi - lo) / cur), 2);
-        o.x = rnd(o.x + (lo - bbox(o).x0), 2);
-      };
-      const moveEdgeY = (which, target) => {
-        const b = bbox(o);
-        let lo = b.y0, hi = b.y1;
-        if (which === 'lo') lo = Math.min(target, hi - MIN_BOARD);
-        else hi = Math.max(target, lo + MIN_BOARD);
-        const cur = b.y1 - b.y0;
-        if (cur > 0.001) o.h = rnd(Math.max(MIN_BOARD, o.h * (hi - lo) / cur), 2);
-        o.wallY = rnd((o.wallY || 0) + (lo - bbox(o).y0), 2);
-      };
-      setNum('iFaceL', v => { const f = F(); moveEdgeX('lo', f.x + v); });
-      setNum('iFaceR', v => { const f = F(); moveEdgeX('hi', f.x + f.w - v); });
-      setNum('iFaceB', v => moveEdgeY('lo', v));
-      setNum('iFaceT', v => { const f = F(); moveEdgeY('hi', f.top - v); });
-      /* the two buttons still work on the whole board, since that is
-         the point of them */
-      on('iFaceCentre', 'click', () => {
-        const f = F(), b = bbox(o);
-        o.x = rnd(o.x + (f.x + (f.w - (b.x1 - b.x0)) / 2 - b.x0), 2);
-        o.wallY = rnd((o.wallY || 0) + ((f.top - (b.y1 - b.y0)) / 2 - bbox(o).y0), 2);
-        commit();
-        toast(`Centred on the front of ${f.name}`);
-      });
-      on('iFaceFit', 'click', () => {
-        const fit = faceFit(o); if (!fit) return;
-        o.w = fit.w; o.h = fit.h;
-        const f = F();
-        o.x = rnd(o.x + (f.x + FACE_MARGIN - bbox(o).x0), 2);
-        o.wallY = rnd((o.wallY || 0) + (FACE_MARGIN - bbox(o).y0), 2);
-        commit();
-        toast(`Sized to the front of ${f.name} — ${fit.w} × ${fit.h} cm, ${FACE_MARGIN} cm showing all round`);
-      });
-    }
+    if (facePl) bindFaceMargins(o);
   }
 
   if (o.type === 'object') {
@@ -1778,6 +1977,7 @@ function bindInspector(o) {
       wallGraphicNext = { mount: 'wall', face: o.id, planShape: 'rect' };
       $('#fileImg').click();
     });
+    on('iAddPanel', 'click', () => addPanel(o));
   }
 
   on('iDup', 'click', () => duplicate(o.id));
@@ -1829,13 +2029,34 @@ function setMount(o, mount) {
     const best = bestSupport(o, b.y0);
     o.support = best ? best.s.id : 'floor';
     o.lean = o.lean || 0;
+    /* A panel stood on a surface is a card in an object stand: a face
+       with no thickness to speak of, held at a slight recline by the V
+       it sits in. The card and the stand arrive once, so a stand you
+       have sized is never overwritten; the recline comes back every
+       time, because leaving `placed` is what flattened it and a V does
+       not hold anything dead upright. */
+    if (o.render === 'panel') {
+      const first = !standOf(o);
+      if (first) o.depth = Math.min(o.depth || PANEL_STAND_DEPTH, PANEL_STAND_DEPTH);
+      if (!o.lean) o.lean = PANEL_STAND_LEAN;
+      if (first) o.stand = {
+        kind: 'stand',
+        w: rnd(Math.max(4, o.w * 0.6)),
+        d: rnd(Math.max(4, footprint(o).d + 2)),
+        h: PANEL_STAND_H
+      };
+    }
     landOn(o, supportOf(o));
   }
 }
 
 /* light-touch update of inspector numbers during a drag */
 function syncInspector() {
-  const o = byId(S.sel); if (!o) return;
+  /* whatever the inspector is actually showing: with a board on a
+     plinth front selected, that is the plinth */
+  const pair = facePair();
+  const o = pair ? pair.pl : byId(S.sel);
+  if (!o) return;
   const set = (id, v) => { const el = $('#' + id); if (el && document.activeElement !== el) el.value = v; };
   set('iX', rnd(o.x)); set('iZ', rnd(o.z));
   if (o.type !== 'object') {
