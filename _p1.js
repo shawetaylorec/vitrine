@@ -1382,6 +1382,25 @@ function planMode(o) {
   return 'rect';
 }
 
+/* Whether an object says its name on the plan.
+
+   Every object carrying its name at all times turned the deck into a
+   heap of overlapping boxes with the layout underneath them — in the
+   one view whose whole job is showing you what covers what. So the name
+   is on demand: point at a thing and it says what it is, whatever size
+   it is drawn at and whatever it is drawn as, and the selection keeps
+   its name so the drawing stays readable while you work on it.
+
+   A picture leaving the app is the exception and names everything it
+   has room for, because a sheet on a bench cannot be hovered and the
+   name is half the point of an install drawing. Preview names nothing:
+   it is the case as it would be seen, and a label is drafting
+   furniture. */
+function namesInPlan(o, wide, mode) {
+  if (EXPORTING) return wide && mode !== 'image' && mode !== 'top' && mode !== 'panel';
+  return !PREVIEW && (selected(o.id) || o.id === HOVER);
+}
+
 function drawPlan() {
   for (const it of S.items.filter(i => i.type === 'shelf' && visible(i))) {
     const a = w2s(it.x, it.z), b = w2s(it.x + it.w, it.z + it.d);
@@ -1490,8 +1509,9 @@ function drawPlan() {
         { size: 9, font: MONO, fill: tint, box: true, bg: caseGround() });
     }
 
-    if (w > 26 && mode !== 'image' && mode !== 'top' && mode !== 'panel') {
-      label(o.name, a.x + w / 2, a.y + h / 2, { size: 10, font: UIFONT, fill: C.ink2, box: true, bg: caseGround() });
+    if (namesInPlan(o, w > 26, mode)) {
+      label(o.name, a.x + w / 2, a.y + h / 2,
+        { size: 10, font: UIFONT, fill: C.ink, box: true, bg: caseGround() });
     }
     drawBasePlan(o);
     if (sel) outline(a.x, a.y, w, h);

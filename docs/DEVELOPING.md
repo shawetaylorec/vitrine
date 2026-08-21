@@ -36,7 +36,7 @@ geometry and the cut-out pipeline rather than the DOM.
   --enable-logging=stderr --log-level=0 "file:///$PWD/_t.html"
 ```
 
-Console lines are tagged `[PASS]` / `[FAIL]`. There are 364 assertions covering the
+Console lines are tagged `[PASS]` / `[FAIL]`. There are 371 assertions covering the
 cut-out crop, dragging the measurement box, support heights, stand footprints, derived
 wire lengths, lean maths in both reference frames and the datum following the view,
 yaw, rotation, plan-shape selection, panels fixed to plinth faces, panel auto-fit and
@@ -53,7 +53,8 @@ them and the readout when they reach it, duplication keeping its picture, the lo
 export crop and the export scale reaching the greeking threshold, undo and redo, the case
 library, the save/open round trip, opening a file written by an older build, PNG and
 JPEG export, the register's counts and its own drag order leaving the drawing untouched,
-and the case inspector borrowing its own controls rather than rebuilding them.
+names in plan appearing only on demand, and the case inspector borrowing its own controls
+rather than rebuilding them.
 
 The suite is run several times before anything is committed — a real race was found that
 way, and two long-standing flakes were tracked down the same way. Both were the test's

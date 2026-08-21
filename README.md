@@ -97,6 +97,11 @@ writes the angle beside it.
 astrolabe round to face the corner and the elevation narrows by exactly as much as the
 footprint deepens. Drag the handle in plan, or type the angle.
 
+**In plan, names are on demand.** That view's whole job is showing what covers what, and
+a label on every object buried the layout under a heap of overlapping boxes. Point at
+something and it says what it is; the selection keeps its name. An exported plan still
+names everything it has room for, because a sheet on a bench cannot be hovered.
+
 ![The plan view](docs/images/shotplan.png)
 
 **Everything is depth-sorted.** Objects, plinths and shelves are drawn back to front in

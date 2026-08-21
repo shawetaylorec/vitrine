@@ -502,6 +502,16 @@ To get wording in, either type into the box, or **select the panel and press
 
 ## 8. Seen from above
 
+**Names are on demand here.** The plan's whole job is showing you what covers what, and
+every object standing there holding up a label buried the layout underneath a heap of
+overlapping boxes. So point at something and it says what it is — whatever size it is
+drawn at, and whether it is a rectangle or the photograph itself — and whatever is
+selected keeps its name while you work on it. Shelves and plinths keep theirs in the
+corner, since they are the frame you are reading the deck against.
+
+An **exported** plan is the exception and names everything it has room for: a sheet on a
+bench cannot be hovered, and the name is half the point of an install drawing.
+
 Each object has a **plan shape**:
 
 - **Automatic** — a rectangle, or the picture itself once it leans past halfway to flat

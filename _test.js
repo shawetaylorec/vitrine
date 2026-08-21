@@ -1667,6 +1667,32 @@
   EXP.view = 'front';
   download = realDownload;
 
+  /* --- names in plan are on demand --- */
+  {
+    const a = S.items.find(i => i.name === 'Astrolabe');
+    const wasView = S.view, wasHover = HOVER;
+    S.view = 'plan'; select(null); HOVER = null;
+    ok(!namesInPlan(a, true, 'rect'),
+      'in plan an object does not stand there shouting its name over the layout');
+    HOVER = a.id;
+    ok(namesInPlan(a, true, 'rect'), 'pointing at it says what it is');
+    ok(namesInPlan(a, false, 'image'),
+      'however small it is drawn, and whatever it is drawn as — both of which used to silence it');
+    HOVER = null;
+    select(a.id);
+    ok(namesInPlan(a, true, 'rect'), 'and the selection keeps its name while you work on it');
+    select(null);
+    EXPORTING = true;
+    ok(namesInPlan(a, true, 'rect'),
+      'a picture leaving the app names everything — a sheet on a bench cannot be hovered');
+    ok(!namesInPlan(a, false, 'rect'), 'except where there is no room to write it');
+    EXPORTING = false;
+    PREVIEW = true; HOVER = a.id;
+    ok(!namesInPlan(a, true, 'rect'), 'and preview names nothing: a label is drafting furniture');
+    PREVIEW = false;
+    HOVER = wasHover; S.view = wasView;
+  }
+
   buildSchedule();
   ok(($('#schedTable').dataset.tsv || '').split('\n').length === 7, 'schedule lists 6 objects + header');
   /* and it reads in the order the register was filed in, objects then

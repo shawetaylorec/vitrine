@@ -5,7 +5,7 @@ were asked for and all three are built, tested and documented. The first two wen
 **740584d**; the interface rebuild followed once the owner had used it. Everything here
 is pushed.
 
-364 assertions pass, run repeatedly. `index.html` is rebuilt from the sources.
+371 assertions pass, run repeatedly. `index.html` is rebuilt from the sources.
 
 Read `CLAUDE.md` and `docs/DEVELOPING.md` first — this file assumes both.
 
@@ -119,6 +119,11 @@ What changed, and why each one:
   `docs/DEVELOPING.md` §*The register has its own order* before touching it.
   **The object schedule follows it**, objects then panels: once a list can be arranged by
   hand, the arrangement is the answer to what order the exported list should be in.
+- **Names in plan are on demand.** `namesInPlan()` in `_p1.js`. Every object holding up a
+  label buried the layout under overlapping boxes, in the one view whose job is showing
+  what covers what. Hover or selection on screen; an export still names everything it has
+  room for, because a sheet on a bench cannot be hovered; preview names nothing. Casework
+  keeps its corner labels — they are the frame you read the deck against.
 - **Two palettes, kept apart** — see `docs/DEVELOPING.md`. The drawing kept every ink it
   had, which is why a rebuild of this size moved not one drawn pixel.
 
