@@ -172,8 +172,8 @@ in the rail whatever it is mounted on, with its home beside its name.
 **The board and the type can each be solved for the other.** One button sets the type
 as large as it will go and still fit. The reverse button holds the type at the size you
 chose and grows the board to suit it &mdash; keeping the panel's proportions, or growing
-it taller only, or on a plinth face taking the plinth's own width less half a centimetre each
-side. If the wording will not fit even at the largest the case or the plinth allows, it
+it taller only, or on a plinth face taking the plinth's own full width. If the wording
+will not fit even at the largest the case or the plinth allows, it
 says so and gives the size it would have needed, rather than stopping at the limit
 without a word.
 
@@ -182,7 +182,7 @@ everything riding on it, so a panel sized to the whole face can no longer swallo
 click and strand the plinth underneath. Where it sits on the face is typed instead:
 **four margins to the plinth's own front**, each moving its own edge and leaving the
 other three alone, so the board is whatever they leave. Buttons to centre it on the face
-or take the whole front with half a centimetre showing all round.
+or take the whole front, edge to edge.
 
 **And the pair is inspected and drawn as one.** Click the plinth or the board on it and
 you get the plinth — its size, its place in the case — with the board itself under

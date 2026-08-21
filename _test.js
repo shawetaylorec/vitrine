@@ -426,13 +426,13 @@
     ok(press('iFaceFit'), 'a panel on a plinth face is offered a fit-the-face button');
     ok(Math.abs(panel.w - (plinth.w - FACE_MARGIN * 2)) < 0.02 &&
       Math.abs(panel.h - (plinth.h - FACE_MARGIN * 2)) < 0.02,
-      `and it takes the face less ${FACE_MARGIN} cm each side (${rnd(panel.w, 2)} × ${rnd(panel.h, 2)} cm)`);
+      `and it takes the whole face, ${FACE_MARGIN_PHRASE} (${rnd(panel.w, 2)} × ${rnd(panel.h, 2)} cm)`);
     const fb = bbox(panel);
     ok(Math.abs((fb.x0 - plinth.x) - FACE_MARGIN) < 0.02 &&
       Math.abs((plinth.x + plinth.w - fb.x1) - FACE_MARGIN) < 0.02 &&
       Math.abs(fb.y0 - FACE_MARGIN) < 0.02 &&
       Math.abs((plinth.h - fb.y1) - FACE_MARGIN) < 0.02,
-      'with an even margin on all four sides');
+      `with the same ${FACE_MARGIN} cm on all four sides`);
     ok(!outOfCase(panel).some(m => /wider than|above the top/.test(m)),
       'a fitted panel does not report itself as off its own face');
 
@@ -563,7 +563,7 @@
     panel.w = 10; panel.h = 3; panel.text = LONG; panel.textSize = 0.5;
     const gFace = panelGrow(panel, 'face');
     ok(Math.abs(gFace.w - (plinth.w - FACE_MARGIN * 2)) < 0.02,
-      `growing a face panel takes the plinth width, less the margin (${rnd(gFace.w, 2)} cm)`);
+      `growing a face panel takes the plinth's width, ${FACE_MARGIN_PHRASE} (${rnd(gFace.w, 2)} cm)`);
     ok(gFace.ok && panelFitsAt({ ...panel, w: gFace.w, h: gFace.h }, panel.textSize),
       `and the height it returns really does hold the wording (${rnd(gFace.h, 2)} cm)`);
     ok(!panelFitsAt({ ...panel, w: gFace.w, h: rnd(gFace.h - 0.05, 2) }, panel.textSize),

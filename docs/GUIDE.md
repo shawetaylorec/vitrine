@@ -447,8 +447,8 @@ fields above follow from the margins rather than fighting them.
 Two buttons work on the whole board:
 
 - **Centre on the face** puts it in the middle of the front, both ways.
-- **Fit the face** takes the whole front with half a centimetre of plinth showing all
-  round.
+- **Fit the face** takes the whole front, edge to edge: the board becomes the plinth's
+  front rather than something applied to it.
 
 The **Position** fields, up in the plinth's own part of the panel, measure to the case as
 always. Setting one of those moves the whole assembly — plinth, board, and whatever is
@@ -484,9 +484,9 @@ chose and finds the board that suits it.
 - On the **back wall** you get two: *keep proportions*, which is the smallest
   enlargement of the same shape that fits and may come out taller than strictly needed,
   and *grow taller only*, which keeps the width you drew.
-- On a **plinth face** there is one, and it takes the plinth's width less half a
-  centimetre each side — the measurement **Fit the face** uses — so only the height is
-  free, capped by the plinth's own height.
+- On a **plinth face** there is one, and it takes the plinth's full width — the same
+  measurement **Fit the face** uses — so only the height is free, capped by the plinth's
+  own height.
 
 It never shrinks a board you drew. And if the wording will not fit even at the largest
 the case or the plinth allows, it grows as far as there is room and then tells you the

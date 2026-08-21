@@ -1094,10 +1094,20 @@ function panelFits(o) {
 }
 
 /* How much plinth is left showing round a panel fitted to its face.
-   Half a centimetre all round — enough that the board reads as a board
-   applied to the plinth rather than as the plinth's own front, without
-   wasting face on a margin nobody asked for. */
-const FACE_MARGIN = 0.5;
+
+   Zero: fitting the face means filling it, edge to edge. It was half a
+   centimetre, on the reasoning that a reveal makes the board read as a
+   board applied to the plinth rather than as the plinth's own front —
+   which is a graphic designer's instinct and not what the owner wants
+   from the button. Fit the face is the button you press when the panel
+   *is* the front.
+
+   It stays a constant, and every phrase that describes the button reads
+   it, so setting it back to a reveal cannot leave the wording lying. */
+const FACE_MARGIN = 0;
+const FACE_MARGIN_PHRASE = FACE_MARGIN > 0
+  ? `${FACE_MARGIN} cm showing all round`
+  : 'edge to edge';
 
 /* A panel stood in an object stand is a card rather than a board: it
    has a face and effectively no thickness, and the V it sits in tips it

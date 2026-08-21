@@ -550,6 +550,14 @@ auto-fit fell into before it learned to verify.
 `FACE_MARGIN` is one constant shared by `faceFit()` and `panelGrow`'s `face` mode, so
 *Fit the face* and *Grow the panel* cannot disagree about how much plinth shows.
 
+**It is now zero: fitting the face means filling it, edge to edge.** It was half a
+centimetre, on the reasoning that a reveal makes the board read as applied to the plinth
+rather than as the plinth's own front. That is a designer's instinct rather than what the
+button is for — *Fit the face* is what you press when the panel **is** the front — and the
+owner asked for it gone. The constant stays, because it is the single place the reveal
+lives; `FACE_MARGIN_PHRASE` beside it is what every note, toast and test message reads,
+so putting a reveal back cannot leave the wording describing the old one.
+
 ## Choosing a support
 
 An object's support is deliberately sticky. `supportAfterDrag()` ignores sideways

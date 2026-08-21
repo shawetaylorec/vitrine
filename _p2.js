@@ -1308,7 +1308,7 @@ function faceFields(o) {
       only</b>, so the board grows or shrinks to suit and the other three stay where you put
       them &mdash; set all four and the panel is fully specified. Dragging it in the case moves
       the plinth instead: they are glued together and travel as one. <b>Fit the face</b> takes
-      the whole front with ${FACE_MARGIN} cm showing all round.</p>`;
+      the whole front, ${FACE_MARGIN_PHRASE}.</p>`;
 }
 
 /* The wording and the type it is set in. One block, used both by a
@@ -1328,8 +1328,9 @@ function panelTextFields(o) {
       <button class="btn sm" id="iFitText">Set the type as large as it will go</button>
       ${faceOf(o)
       ? `<button class="btn sm" id="iGrowFace">Grow the panel to fit the text</button>
-         <p class="note">Takes the plinth's width, less ${FACE_MARGIN} cm each side, and finds the
-         height the wording needs at ${rnd(textSizeOf(o), 2)} cm type. Capped by the plinth's own height.</p>`
+         <p class="note">Takes the plinth's width${FACE_MARGIN > 0 ? `, less ${FACE_MARGIN} cm each side,` : ''}
+         and finds the height the wording needs at ${rnd(textSizeOf(o), 2)} cm type. Capped by the
+         plinth's own height.</p>`
       : `<div class="row">
            <button class="btn sm" id="iGrowProp" style="flex:1">Grow to fit &mdash; keep proportions</button>
            <button class="btn sm" id="iGrowTall" style="flex:1">Grow taller only</button>
@@ -1886,7 +1887,7 @@ function bindFaceMargins(o) {
     o.x = rnd(o.x + (f.x + FACE_MARGIN - bbox(o).x0), 2);
     o.wallY = rnd((o.wallY || 0) + (FACE_MARGIN - bbox(o).y0), 2);
     commit();
-    toast(`Sized to the front of ${f.name} — ${fit.w} × ${fit.h} cm, ${FACE_MARGIN} cm showing all round`);
+    toast(`Sized to the front of ${f.name} — ${fit.w} × ${fit.h} cm, ${FACE_MARGIN_PHRASE}`);
   });
 }
 

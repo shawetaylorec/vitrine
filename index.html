@@ -2331,10 +2331,20 @@ function panelFits(o) {
 }
 
 /* How much plinth is left showing round a panel fitted to its face.
-   Half a centimetre all round — enough that the board reads as a board
-   applied to the plinth rather than as the plinth's own front, without
-   wasting face on a margin nobody asked for. */
-const FACE_MARGIN = 0.5;
+
+   Zero: fitting the face means filling it, edge to edge. It was half a
+   centimetre, on the reasoning that a reveal makes the board read as a
+   board applied to the plinth rather than as the plinth's own front —
+   which is a graphic designer's instinct and not what the owner wants
+   from the button. Fit the face is the button you press when the panel
+   *is* the front.
+
+   It stays a constant, and every phrase that describes the button reads
+   it, so setting it back to a reveal cannot leave the wording lying. */
+const FACE_MARGIN = 0;
+const FACE_MARGIN_PHRASE = FACE_MARGIN > 0
+  ? `${FACE_MARGIN} cm showing all round`
+  : 'edge to edge';
 
 /* A panel stood in an object stand is a card rather than a board: it
    has a face and effectively no thickness, and the V it sits in tips it
@@ -4216,7 +4226,7 @@ function faceFields(o) {
       only</b>, so the board grows or shrinks to suit and the other three stay where you put
       them &mdash; set all four and the panel is fully specified. Dragging it in the case moves
       the plinth instead: they are glued together and travel as one. <b>Fit the face</b> takes
-      the whole front with ${FACE_MARGIN} cm showing all round.</p>`;
+      the whole front, ${FACE_MARGIN_PHRASE}.</p>`;
 }
 
 /* The wording and the type it is set in. One block, used both by a
@@ -4236,8 +4246,9 @@ function panelTextFields(o) {
       <button class="btn sm" id="iFitText">Set the type as large as it will go</button>
       ${faceOf(o)
       ? `<button class="btn sm" id="iGrowFace">Grow the panel to fit the text</button>
-         <p class="note">Takes the plinth's width, less ${FACE_MARGIN} cm each side, and finds the
-         height the wording needs at ${rnd(textSizeOf(o), 2)} cm type. Capped by the plinth's own height.</p>`
+         <p class="note">Takes the plinth's width${FACE_MARGIN > 0 ? `, less ${FACE_MARGIN} cm each side,` : ''}
+         and finds the height the wording needs at ${rnd(textSizeOf(o), 2)} cm type. Capped by the
+         plinth's own height.</p>`
       : `<div class="row">
            <button class="btn sm" id="iGrowProp" style="flex:1">Grow to fit &mdash; keep proportions</button>
            <button class="btn sm" id="iGrowTall" style="flex:1">Grow taller only</button>
@@ -4794,7 +4805,7 @@ function bindFaceMargins(o) {
     o.x = rnd(o.x + (f.x + FACE_MARGIN - bbox(o).x0), 2);
     o.wallY = rnd((o.wallY || 0) + (FACE_MARGIN - bbox(o).y0), 2);
     commit();
-    toast(`Sized to the front of ${f.name} — ${fit.w} × ${fit.h} cm, ${FACE_MARGIN} cm showing all round`);
+    toast(`Sized to the front of ${f.name} — ${fit.w} × ${fit.h} cm, ${FACE_MARGIN_PHRASE}`);
   });
 }
 
