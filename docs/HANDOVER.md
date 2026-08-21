@@ -5,7 +5,7 @@ were asked for and all three are built, tested and documented. The first two wen
 **740584d**; the interface rebuild followed once the owner had used it. Everything here
 is pushed.
 
-363 assertions pass, run repeatedly. `index.html` is rebuilt from the sources.
+364 assertions pass, run repeatedly. `index.html` is rebuilt from the sources.
 
 Read `CLAUDE.md` and `docs/DEVELOPING.md` first — this file assumes both.
 
@@ -117,6 +117,8 @@ What changed, and why each one:
   the design — which rules out reordering `S.items`, since three separate things read
   that array positionally. `ord` is a per-group index only the rail reads; see
   `docs/DEVELOPING.md` §*The register has its own order* before touching it.
+  **The object schedule follows it**, objects then panels: once a list can be arranged by
+  hand, the arrangement is the answer to what order the exported list should be in.
 - **Two palettes, kept apart** — see `docs/DEVELOPING.md`. The drawing kept every ink it
   had, which is why a rebuild of this size moved not one drawn pixel.
 
@@ -155,10 +157,10 @@ Three more want the owner's eye rather than more work:
    changes when you switch views. That is what was asked for and it is coherent, but it
    is the kind of change that reads differently after an hour of real work. The new
    panel-on-a-stand inherits it: 10° in the elevation reads as 80° in plan.
-4. **The object schedule exports in the case's own order**, not the register's filing
-   order. Left alone because it was not asked for, and the two orders mean different
-   things — one is how you like to read the list, the other is the case's own. If the
-   schedule should follow the register, it is one `railOrder()` call in `buildSchedule()`.
+Nothing else is queued. The object schedule, which this file briefly listed as an open
+question, now reads in the register's order too — the owner's call, and the right one:
+once a list can be arranged by hand, the arrangement *is* the answer to what order the
+exported list should be in.
 
 ## When you are done
 

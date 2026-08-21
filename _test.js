@@ -1669,6 +1669,16 @@
 
   buildSchedule();
   ok(($('#schedTable').dataset.tsv || '').split('\n').length === 7, 'schedule lists 6 objects + header');
+  /* and it reads in the order the register was filed in, objects then
+     panels — not the order things happened to be added */
+  {
+    renderLists();
+    const rail = $$('#listObj .item').map(el => byId(el.dataset.id).name)
+      .concat($$('#listPanel .item').map(el => byId(el.dataset.id).name));
+    const sched = ($('#schedTable').dataset.tsv || '').split('\n').slice(1).map(r => r.split('\t')[0]);
+    ok(sched.join('|') === rail.join('|'),
+      `the schedule comes out in the register's own order (${sched.slice(0, 3).join(', ')}…)`);
+  }
 
   if (/^#dark/.test(location.hash)) document.documentElement.setAttribute('data-theme', 'dark');
   /* both rails collapsed — the register distilled to a strip of the

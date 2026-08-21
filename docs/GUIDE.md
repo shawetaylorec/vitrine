@@ -594,8 +594,10 @@ not get the grey drafting plane from round the outside.
 
 Other ways out:
 - **Export TSV** — every object with its size, mount, support, stand, position, base and
-  top heights, deck used, lean and wire lengths. **Copy as TSV** puts it on the
-  clipboard, tab separated, which pastes straight into Excel or Sheets as columns.
+  top heights, deck used, lean and wire lengths. It reads in the order you filed the
+  register in — objects first, then panels — so the list you arranged is the list that
+  leaves the app. **Copy as TSV** puts it on the clipboard, tab separated, which pastes
+  straight into Excel or Sheets as columns.
 - **Save file** — a `.vitrine.json` holding the entire case including the cut-outs.
   The library keeps your cases in the browser; this is the copy that leaves the machine.
 

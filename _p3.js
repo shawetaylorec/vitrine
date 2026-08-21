@@ -1463,7 +1463,17 @@ function closeExport() { $('#expBack').hidden = true; }
 
 /* one row per object, shared by the schedule window and the document */
 function scheduleRows() {
-  return S.items.filter(i => i.type === 'object').map(o => {
+  /* The schedule reads in the order the register reads: the objects as
+     you have filed them, then the panels. It used to come out in the
+     order things were added, which is nobody's order — and once the
+     register could be arranged by hand, the arrangement is the answer
+     to "what order should this list be in". Casework is not scheduled,
+     so those two groups are the whole of it. */
+  const filed = [
+    ...railOrder(S.items.filter(i => railGroup(i) === 'obj')),
+    ...railOrder(S.items.filter(i => railGroup(i) === 'panel'))
+  ];
+  return filed.map(o => {
     const b = bbox(o), f = footprint(o), st = standOf(o);
     return {
       Object: o.name,

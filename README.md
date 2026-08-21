@@ -142,7 +142,8 @@ it to somebody else. It saves with the case, so it arrives locked.
 
 **It produces an install schedule** — every object's size, base height, top height,
 distance from the left and back, lean and wire lengths, tab separated and copyable
-straight into a spreadsheet.
+straight into a spreadsheet. It comes out in the order you filed the register in, objects
+then panels, so the list you arranged is the list that leaves the app.
 
 **Stand-in shapes for anything not yet photographed.** A picker of twelve — box, disc,
 cylinder, sphere, cone, bowl, triangle, hexagon, arched tablet, book, ring, tapered
